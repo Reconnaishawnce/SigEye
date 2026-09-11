@@ -42,6 +42,8 @@ object Experiments {
     const val INSPECTOR = "inspector"
     const val WATCHLIST = "watchlist"
     const val BEACONS = "beacons"
+    const val DWELL = "dwell"
+    const val CROWD = "crowd"
 
     val all: List<Experiment> = listOf(
 
@@ -85,22 +87,23 @@ object Experiments {
             status = Experiment.Status.PLANNED,
         ),
         Experiment(
-            id = "crowd",
+            id = CROWD,
             title = "Crowd Counter",
-            blurb = "Roughly how many people are in this room.",
+            blurb = "Roughly how many people are around you.",
             teaches = "Devices are a proxy for people, and a bad one until calibrated " +
                 "against a headcount you actually know.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
         ),
         Experiment(
-            id = "dwell",
+            id = DWELL,
             title = "Dwell Time",
-            blurb = "Passers-by versus residents.",
-            teaches = "Sort devices by how long they linger. Under a minute is traffic, " +
-                "over twenty is a neighbour.",
+            blurb = "Who is passing through, and who lives here.",
+            teaches = "Sort devices by how long they stay. Under two minutes is traffic, " +
+                "over twenty is a fixture - and only the fixtures are trustworthy, " +
+                "because a phone changes address before it can become one.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
         ),
         Experiment(
             id = "motion",

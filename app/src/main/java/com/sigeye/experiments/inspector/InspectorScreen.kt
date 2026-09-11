@@ -124,6 +124,7 @@ private fun Live() {
     var onlyList by remember { mutableStateOf<String?>(null) }
     var devices by remember { mutableStateOf<List<SeenDevice>>(emptyList()) }
     var showNewList by remember { mutableStateOf(false) }
+    var paused by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -135,9 +136,10 @@ private fun Live() {
         BleScanHub.adverts.collect { table.record(it) }
     }
 
-    // Snapshot on a timer rather than per advertisement - see REFRESH_MS.
-    LaunchedEffect(Unit) {
-        while (true) {
+    // Snapshot on a timer rather than per advertisement - see REFRESH_MS. Pausing stops
+    // the redraw, not the recording.
+    LaunchedEffect(paused) {
+        while (!paused) {
             delay(REFRESH_MS)
             devices = table.snapshot().freshWithin(FRESH_MILLIS, System.currentTimeMillis())
         }
@@ -155,13 +157,9 @@ private fun Live() {
     if (health.starved) {
         Banner("Signal starved. Restarting the scan automatically.", error = true)
     }
-    if (devices.any { it.isAxon }) {
-        Banner(
-            "Axon hardware in range. That block covers body cameras, docks, TASERs and " +
-                "fleet gear alike, and says nothing about whether anything is recording.",
-            error = true,
-        )
-    }
+    devices.firstNotNullOfOrNull { device ->
+        Vendors.surveillanceNote(device.address, device.companyId, device.name)
+    }?.let { note -> Banner(note, error = true) }
 
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -212,6 +210,12 @@ private fun Live() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row {
+            TextButton(onClick = { paused = !paused }) {
+                Text(
+                    if (paused) "Resume" else "Pause",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
             TextButton(onClick = { showNewList = true }) {
                 Text("New list", style = MaterialTheme.typography.labelSmall)
             }
@@ -316,7 +320,7 @@ private fun DeviceRow(
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = if (device.isAxon) {
+            containerColor = if (device.flagged) {
                 MaterialTheme.colorScheme.errorContainer
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
@@ -522,11 +526,14 @@ private fun DeviceDetail(
                 }
                 device.manufacturerData?.let { Field("Mfg data", it.toHex()) }
 
-                if (device.isAxon) {
+                Vendors.surveillanceNote(
+                    device.address,
+                    device.companyId,
+                    device.name,
+                )?.let { note ->
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "On Axon Enterprise's IEEE block. Could be a body camera, a dock, " +
-                            "a TASER or fleet gear - and presence is not recording.",
+                        note,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )

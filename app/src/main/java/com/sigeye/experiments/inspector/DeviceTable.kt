@@ -29,6 +29,10 @@ data class SeenDevice(
 
     val isAxon: Boolean get() = Vendors.isAxon(address)
 
+    /** Worth highlighting in the list: a vendor we have something to say about. */
+    val flagged: Boolean
+        get() = Vendors.surveillanceNote(address, companyId, name) != null
+
     /** Best label when the user has not supplied one of their own. */
     val fallbackName: String
         get() = name?.takeIf { it.isNotBlank() } ?: vendor ?: address

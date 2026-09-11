@@ -123,6 +123,7 @@ private fun Live() {
     var devices by remember { mutableStateOf<List<DecodedDevice>>(emptyList()) }
     var protocolFilter by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<String?>(null) }
+    var paused by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -145,8 +146,10 @@ private fun Live() {
         }
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
+    // Scanning continues while paused; it is only the rendered snapshot that freezes, so
+    // nothing is missed and a row stays still long enough to read and tap.
+    LaunchedEffect(paused) {
+        while (!paused) {
             delay(REFRESH_MS)
             val now = System.currentTimeMillis()
             devices = decoded.values
@@ -198,12 +201,31 @@ private fun Live() {
         Spacer(Modifier.height(8.dp))
     }
 
-    Text(
-        "${visible.size} decoding · ${protocols.size} formats · " +
-            String.format(Locale.US, "%.0f/s", health.advertsPerSecond),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${visible.size} decoding · ${protocols.size} formats · " +
+                String.format(Locale.US, "%.0f/s", health.advertsPerSecond),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = { paused = !paused }) {
+            Text(
+                if (paused) "Resume" else "Pause",
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+    if (paused) {
+        Text(
+            "Frozen. Still listening in the background, so nothing is missed.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+    }
 
     if (devices.isEmpty()) {
         Spacer(Modifier.height(20.dp))
