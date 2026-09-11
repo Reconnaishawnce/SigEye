@@ -28,7 +28,10 @@ android {
         // Derived from the CI run so every published build is strictly newer than the
         // last, which is what Android and Obtainium compare when offering an update.
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
-        versionName = System.getenv("GITHUB_SHA")?.take(7) ?: "dev"
+        // Monotonic on purpose. A git SHA has no ordering, so anything comparing APK
+        // versions rather than release tags cannot tell which build is newer.
+        versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0") +
+            (System.getenv("GITHUB_SHA")?.take(7)?.let { " ($it)" } ?: " (dev)")
     }
 
     signingConfigs {
