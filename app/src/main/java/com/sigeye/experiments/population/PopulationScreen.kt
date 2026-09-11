@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
+import com.sigeye.core.IgnoreList
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.DwellClass
@@ -45,8 +48,13 @@ import com.sigeye.core.analysis.PopulationSnapshot
 import com.sigeye.core.analysis.PopulationTracker
 import com.sigeye.core.analysis.TrackedDevice
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.DetailField
+import com.sigeye.ui.DeviceActions
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RadarTarget
+import com.sigeye.ui.SignalRadar
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -125,6 +133,9 @@ private fun Live(dwell: Boolean) {
     var rssiFloor by remember { mutableStateOf(-85f) }
     var perPerson by remember { mutableStateOf(2.0f) }
     var showSettings by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<String?>(null) }
+    var showNewList by remember { mutableStateOf(false) }
+    val ignoreList = remember { IgnoreList.get(context) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -139,6 +150,8 @@ private fun Live(dwell: Boolean) {
                 rssi = advert.rssi,
                 nowMs = advert.atMs,
                 isRandomAddress = advert.isRandomAddress,
+                name = advert.name,
+                companyId = advert.companyId,
             )
         }
     }
@@ -212,6 +225,23 @@ private fun Live(dwell: Boolean) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+
+    if (!dwell) {
+        Spacer(Modifier.height(12.dp))
+        val present = snap.devices
+            .filter { it.isPresent(System.currentTimeMillis(), tracker.config) }
+            .map { RadarTarget(it.address, it.lastRssi) }
+        SignalRadar(targets = present)
+        Text(
+            "Rings are signal strength, strongest at the centre. Direction is not shown " +
+                "because one antenna cannot know it - the angle is only there to keep " +
+                "each device in its own spot.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 
     Spacer(Modifier.height(16.dp))
@@ -334,26 +364,55 @@ private fun Live(dwell: Boolean) {
         }
         LazyColumn(
             modifier = Modifier.fillMaxWidth().height(420.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(longest, key = { it.address }) { device ->
                 DwellRow(
                     device = device,
                     nickname = notes[device.address.uppercase()]?.nickname,
+                    muted = ignoreList.isIgnored(device.address),
                     config = tracker.config,
+                    onClick = { selected = device.address },
                 )
             }
         }
     }
+
+    selected?.let { address ->
+        snap.devices.firstOrNull { it.address == address }?.let { device ->
+            DwellDetail(
+                device = device,
+                title = notes[address.uppercase()]?.nickname ?: device.fallbackName,
+                config = tracker.config,
+                onRequestNewList = { showNewList = true },
+                onDismiss = { selected = null },
+            )
+        }
+    }
+
+    if (showNewList) {
+        NewListDialog(
+            onCreate = { book.createList(it) },
+            onDismiss = { showNewList = false },
+        )
+    }
 }
 
 @Composable
-private fun DwellRow(device: TrackedDevice, nickname: String?, config: PopulationConfig) {
+private fun DwellRow(
+    device: TrackedDevice,
+    nickname: String?,
+    muted: Boolean,
+    config: PopulationConfig,
+    onClick: () -> Unit,
+) {
     val dwellClass = device.dwellClass(config)
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp),
+    ) {
         Column(Modifier.weight(1f)) {
             Text(
-                nickname ?: Vendors.byAddress(device.address) ?: device.address,
+                nickname ?: device.fallbackName,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -362,6 +421,22 @@ private fun DwellRow(device: TrackedDevice, nickname: String?, config: Populatio
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // The line that makes a row worth reading: who made it, how loud, how often.
+            val tags = buildList {
+                device.vendor?.let { add(it) }
+                add("${device.lastRssi} dBm")
+                add("${device.sightings}x")
+                if (muted) add("muted")
+            }
+            Text(
+                tags.joinToString("  ·  "),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (muted) {
+                    MaterialTheme.colorScheme.tertiary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -377,6 +452,77 @@ private fun DwellRow(device: TrackedDevice, nickname: String?, config: Populatio
             )
         }
     }
+}
+
+@Composable
+private fun DwellDetail(
+    device: TrackedDevice,
+    title: String,
+    config: PopulationConfig,
+    onRequestNewList: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                DeviceActions(
+                    address = device.address,
+                    displayName = device.fallbackName,
+                    isRandomAddress = device.isRandomAddress,
+                    onRequestNewList = onRequestNewList,
+                )
+
+                Spacer(Modifier.height(14.dp))
+                DetailField(
+                    "Address",
+                    device.address + if (device.isRandomAddress) "  (random)" else "",
+                )
+                device.vendor?.let { DetailField("Vendor", it) }
+                device.name?.let { DetailField("Advertised name", it) }
+                device.companyId?.let {
+                    DetailField(
+                        "Company ID",
+                        Vendors.companyIdHex(it) +
+                            (Vendors.byCompanyId(it)?.let { n -> "  $n" } ?: ""),
+                    )
+                }
+                DetailField(
+                    "Dwell",
+                    formatDuration(device.dwellMs) + "  (" +
+                        device.dwellClass(config).label.lowercase(Locale.US) + ")",
+                )
+                DetailField("Sightings", device.sightings.toString())
+                DetailField("Signal", "${device.lastRssi} dBm now, best ${device.bestRssi}")
+                DetailField("First heard", formatDuration(
+                    System.currentTimeMillis() - device.firstSeenMs) + " ago")
+                DetailField("Last heard", formatDuration(
+                    System.currentTimeMillis() - device.lastSeenMs) + " ago")
+
+                Vendors.surveillanceNote(
+                    device.address,
+                    device.companyId,
+                    device.name,
+                )?.let { note ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    device.dwellClass(config).blurb,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 @Composable

@@ -44,6 +44,7 @@ object Experiments {
     const val BEACONS = "beacons"
     const val DWELL = "dwell"
     const val CROWD = "crowd"
+    const val CELLS = "cells"
 
     val all: List<Experiment> = listOf(
 
@@ -227,13 +228,15 @@ object Experiments {
             status = Experiment.Status.PLANNED,
         ),
         Experiment(
-            id = "cells",
+            id = CELLS,
             title = "Cell Handovers",
-            blurb = "How often your phone changes tower on a trip.",
-            teaches = "The macro network: cell density, signal quality, and where the " +
-                "operator has gaps.",
+            blurb = "How often your phone changes tower.",
+            teaches = "Standing still, handovers are rare. On a train they come every " +
+                "minute or two, and a handover taken while signal was still strong is " +
+                "load balancing rather than lost coverage.",
             category = Experiment.Category.MAPPING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "A SIM. Nothing to read in aeroplane mode.",
         ),
 
         // ----------------------------------------------------------- privacy

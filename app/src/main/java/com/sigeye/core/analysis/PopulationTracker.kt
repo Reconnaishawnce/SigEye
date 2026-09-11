@@ -15,7 +15,18 @@ data class TrackedDevice(
     val bestRssi: Int,
     val lastRssi: Int,
     val isRandomAddress: Boolean,
+    /** Advertised name, when it gives one. */
+    val name: String? = null,
+    val companyId: Int? = null,
 ) {
+    val vendor: String?
+        get() = com.sigeye.core.Vendors.byAddress(address)
+            ?: companyId?.let { com.sigeye.core.Vendors.byCompanyId(it) }
+
+    /** What to call it before the user names it themselves. */
+    val fallbackName: String
+        get() = name?.takeIf { it.isNotBlank() } ?: vendor ?: address
+
     /** How long between the first and last time we heard it. */
     val dwellMs: Long get() = lastSeenMs - firstSeenMs
 
@@ -89,7 +100,14 @@ class PopulationTracker(var config: PopulationConfig = PopulationConfig()) {
         startedAtMs = 0L
     }
 
-    fun observe(address: String, rssi: Int, nowMs: Long, isRandomAddress: Boolean) {
+    fun observe(
+        address: String,
+        rssi: Int,
+        nowMs: Long,
+        isRandomAddress: Boolean,
+        name: String? = null,
+        companyId: Int? = null,
+    ) {
         if (rssi < config.rssiFloor) return
         if (startedAtMs == 0L) startedAtMs = nowMs
 
@@ -103,6 +121,8 @@ class PopulationTracker(var config: PopulationConfig = PopulationConfig()) {
                 bestRssi = rssi,
                 lastRssi = rssi,
                 isRandomAddress = isRandomAddress,
+                name = name,
+                companyId = companyId,
             )
         } else {
             existing.copy(
@@ -110,6 +130,9 @@ class PopulationTracker(var config: PopulationConfig = PopulationConfig()) {
                 sightings = existing.sightings + 1,
                 bestRssi = maxOf(existing.bestRssi, rssi),
                 lastRssi = rssi,
+                // Names and company ids arrive on some packets and not others.
+                name = name?.takeIf { it.isNotBlank() } ?: existing.name,
+                companyId = companyId ?: existing.companyId,
             )
         }
     }
