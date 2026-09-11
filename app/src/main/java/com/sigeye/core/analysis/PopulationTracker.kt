@@ -93,11 +93,14 @@ data class PopulationSnapshot(
 class PopulationTracker(var config: PopulationConfig = PopulationConfig()) {
 
     private val devices = HashMap<String, TrackedDevice>()
-    private var startedAtMs = 0L
+
+    // Nullable rather than a zero sentinel: zero is a legitimate timestamp, and treating
+    // it as "unset" would make the observation window read zero forever.
+    private var startedAtMs: Long? = null
 
     fun reset() {
         devices.clear()
-        startedAtMs = 0L
+        startedAtMs = null
     }
 
     fun observe(
@@ -109,7 +112,7 @@ class PopulationTracker(var config: PopulationConfig = PopulationConfig()) {
         companyId: Int? = null,
     ) {
         if (rssi < config.rssiFloor) return
-        if (startedAtMs == 0L) startedAtMs = nowMs
+        if (startedAtMs == null) startedAtMs = nowMs
 
         val existing = devices[address]
         devices[address] = if (existing == null) {
@@ -172,7 +175,7 @@ class PopulationTracker(var config: PopulationConfig = PopulationConfig()) {
             resident = resident,
             randomAddressShare = randomShare,
             estimatedPeople = estimatePeople(present.size),
-            observedForMs = if (startedAtMs == 0L) 0L else nowMs - startedAtMs,
+            observedForMs = startedAtMs?.let { nowMs - it } ?: 0L,
         )
     }
 

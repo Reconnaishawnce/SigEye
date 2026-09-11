@@ -70,44 +70,56 @@ class CellTracker(private val maxHandovers: Int = 500) {
     private val handovers = ArrayDeque<Handover>()
     private val seenKeys = LinkedHashSet<String>()
 
-    private var current: CellSample? = null
-    private var currentSinceMs = 0L
-    private var startedAtMs = 0L
+    /** Most recent reading of any kind, for display. May have no identity. */
+    private var latest: CellSample? = null
+
+    /**
+     * Most recent reading that actually identified a cell.
+     *
+     * Kept separately from [latest] because modems return partial identities regularly.
+     * If a blank reading were allowed to become the comparison point, the next real
+     * reading would have nothing to compare against and the handover would be swallowed -
+     * so a single blank would silently eat a transition.
+     */
+    private var lastIdentified: CellSample? = null
+
+    // Nullable rather than a zero sentinel: zero is a legitimate timestamp, and treating
+    // it as "unset" made the observation window measure zero forever.
+    private var identifiedSinceMs: Long? = null
+    private var startedAtMs: Long? = null
 
     fun reset() {
         handovers.clear()
         seenKeys.clear()
-        current = null
-        currentSinceMs = 0L
-        startedAtMs = 0L
+        latest = null
+        lastIdentified = null
+        identifiedSinceMs = null
+        startedAtMs = null
     }
 
     /**
      * Feeds one reading. Returns the handover it caused, or null.
      *
-     * A sample with no identity at all is recorded as the current reading but never
-     * counted as a handover - modems return partial identities regularly, and treating
-     * those as movement would invent handovers that never happened.
+     * A sample with no identity is recorded for display but never compared, so it can
+     * neither cause a handover nor hide one.
      */
     fun observe(sample: CellSample): Handover? {
-        if (startedAtMs == 0L) startedAtMs = sample.atMs
+        if (startedAtMs == null) startedAtMs = sample.atMs
+        latest = sample
 
-        val previous = current
+        if (!sample.hasIdentity) return null
+
+        val previous = lastIdentified
         if (previous == null) {
-            current = sample
-            currentSinceMs = sample.atMs
-            if (sample.hasIdentity) seenKeys.add(sample.key)
+            lastIdentified = sample
+            identifiedSinceMs = sample.atMs
+            seenKeys.add(sample.key)
             return null
         }
 
         if (previous.key == sample.key) {
             // Same cell, fresher reading.
-            current = sample
-            return null
-        }
-
-        if (!sample.hasIdentity || !previous.hasIdentity) {
-            current = sample
+            lastIdentified = sample
             return null
         }
 
@@ -116,7 +128,7 @@ class CellTracker(private val maxHandovers: Int = 500) {
             toKey = sample.key,
             at = sample,
             previous = previous,
-            heldPreviousMs = sample.atMs - currentSinceMs,
+            heldPreviousMs = sample.atMs - (identifiedSinceMs ?: sample.atMs),
             areaChanged = previous.areaCode != null &&
                 sample.areaCode != null &&
                 previous.areaCode != sample.areaCode,
@@ -126,16 +138,18 @@ class CellTracker(private val maxHandovers: Int = 500) {
         while (handovers.size > maxHandovers) handovers.removeFirst()
         seenKeys.add(sample.key)
 
-        current = sample
-        currentSinceMs = sample.atMs
+        lastIdentified = sample
+        identifiedSinceMs = sample.atMs
         return handover
     }
 
     fun stats(nowMs: Long): CellStats = CellStats(
-        current = current,
+        // Prefer the identified cell for display; fall back to the raw reading so the
+        // screen can still show the technology when identity is withheld.
+        current = lastIdentified ?: latest,
         handovers = handovers.toList().asReversed(),
         distinctCells = seenKeys.size,
-        observedForMs = if (startedAtMs == 0L) 0L else nowMs - startedAtMs,
-        currentHeldMs = if (currentSinceMs == 0L) 0L else nowMs - currentSinceMs,
+        observedForMs = startedAtMs?.let { nowMs - it } ?: 0L,
+        currentHeldMs = identifiedSinceMs?.let { nowMs - it } ?: 0L,
     )
 }
