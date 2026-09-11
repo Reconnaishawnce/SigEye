@@ -210,7 +210,12 @@ private fun Live() {
     Button(
         onClick = {
             watching = !watching
-            if (!watching) tracks.clear()
+            // Stopping discards the tally as well as the tracks, so the counters below
+            // describe the run you are about to start rather than the last one.
+            if (!watching) {
+                watcher.reset()
+                stats = WatcherStats()
+            }
         },
         modifier = Modifier.fillMaxWidth(),
     ) { Text(if (watching) "Stop watching" else "Watch for passes") }
