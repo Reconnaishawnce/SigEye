@@ -41,6 +41,21 @@ data class SweepResult(
         }
 
     /**
+     * Direction of the strongest region, not merely the strongest sector.
+     *
+     * A shadow is a wedge, not a line - a torso blocks forty degrees or so - which means
+     * peak and notch are plateaus. Picking the single best sector puts the bearing at
+     * whichever end of the plateau happened to win by noise, so both bearings are the
+     * centroid of everything within a quarter of the range of the extreme.
+     */
+    val peakBearingDegrees: Float?
+        get() = regionBearing(strong = true)
+
+    /** Direction of the weakest region. See [peakBearingDegrees]. */
+    val notchBearingDegrees: Float?
+        get() = regionBearing(strong = false)
+
+    /**
      * How far apart the strongest and weakest directions are, 0 to 180.
      *
      * With the phone held against your chest, facing the source gives line of sight and
@@ -50,12 +65,41 @@ data class SweepResult(
      */
     val peakToNotchDegrees: Float?
         get() {
-            val high = peak ?: return null
-            val low = notch ?: return null
-            var difference = kotlin.math.abs(high.centreDegrees - low.centreDegrees) % 360f
+            val high = peakBearingDegrees ?: return null
+            val low = notchBearingDegrees ?: return null
+            var difference = kotlin.math.abs(high - low) % 360f
             if (difference > 180f) difference = 360f - difference
             return difference
         }
+
+    private fun regionBearing(strong: Boolean): Float? {
+        val high = peak?.meanRssi ?: return null
+        val low = notch?.meanRssi ?: return null
+        val range = (high - low).coerceAtLeast(0.001)
+        val margin = range * REGION_FRACTION
+
+        val settled = sectors.filter { it.samples > 0 }
+        val region = settled.filter {
+            if (strong) it.meanRssi >= high - margin else it.meanRssi <= low + margin
+        }
+        if (region.isEmpty()) return null
+
+        // Circular mean: 350 and 10 average to 0, not to 180.
+        var sumSin = 0.0
+        var sumCos = 0.0
+        region.forEach {
+            val radians = Math.toRadians(it.centreDegrees.toDouble())
+            sumSin += Math.sin(radians)
+            sumCos += Math.cos(radians)
+        }
+        val degrees = Math.toDegrees(Math.atan2(sumSin, sumCos)).toFloat()
+        return ((degrees % 360f) + 360f) % 360f
+    }
+
+    private companion object {
+        /** How far down from the extreme still counts as part of that region. */
+        const val REGION_FRACTION = 0.25
+    }
 
     /** Near-opposite peak and notch is the signature of a body rather than a room. */
     val looksLikeBodyShadow: Boolean

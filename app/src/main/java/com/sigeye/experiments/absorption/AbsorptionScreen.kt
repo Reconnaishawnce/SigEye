@@ -422,7 +422,9 @@ private fun Sweeping(
     CompassBanner(quality)
 
     val coverage = result?.coverage ?: 0f
-    val sourceBearing = result?.peak?.centreDegrees
+    // The region centroid, not the single best sector - it does not jump between
+    // near-tied sectors while you turn.
+    val sourceBearing = result?.peakBearingDegrees
     val blocking = sourceBearing != null && isBlocking(heading, sourceBearing)
 
     // The picture first, the plot second. The polar trace is the measurement, but this is
@@ -654,7 +656,8 @@ private fun interpret(result: SweepResult, session: SessionResult): String {
             "which is not enough to call a direction. Turn further, and more slowly."
     }
     val difference = result.frontToBackDb ?: return "Not enough readings."
-    val notch = result.notch?.centreDegrees?.roundToInt() ?: 0
+    val notch = result.notchBearingDegrees?.roundToInt()
+        ?: result.notch?.centreDegrees?.roundToInt() ?: 0
 
     val depth = when {
         difference < 3.0 ->
