@@ -256,23 +256,11 @@ private fun Live() {
     )
 
     Spacer(Modifier.height(14.dp))
-    Text("Alert on a pass", style = MaterialTheme.typography.labelLarge)
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        AlertStyle.entries.forEach { style ->
-            FilterChip(
-                selected = alertStyle == style,
-                onClick = { alertStyle = style },
-                label = { Text(style.label, style = MaterialTheme.typography.labelSmall) },
-            )
-        }
-    }
-    Text(
-        alertStyle.hint,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    AlertPicker(
+        style = alertStyle,
+        onStyle = { alertStyle = it },
+        feedback = feedback,
+        title = "Alert on a pass",
     )
 
     Spacer(Modifier.height(16.dp))

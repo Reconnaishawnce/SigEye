@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
+import com.sigeye.core.DeviceNote
+import com.sigeye.core.DeviceRanking
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
@@ -57,6 +59,9 @@ import com.sigeye.core.analysis.MotionEvent
 import com.sigeye.core.analysis.MotionReading
 import com.sigeye.core.analysis.MotionState
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.experiments.watchlist.MatchKind
+import com.sigeye.experiments.watchlist.WatchStore
+import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
@@ -69,6 +74,40 @@ import kotlin.math.roundToInt
 
 private const val HUB_TAG = "motion"
 private const val TICK_MS = 500L
+
+/** Slow enough that a row stays under the finger long enough to be tapped. */
+private const val PICKER_REFRESH_MS = 2_500L
+
+private data class Candidate(
+    val address: String,
+    val name: String?,
+    val vendor: String?,
+    val rssi: Int,
+    val lastSeenMs: Long,
+    val sightings: Int,
+) {
+    /** Anything better than raw hex. */
+    val hasIdentity: Boolean get() = !name.isNullOrBlank() || !vendor.isNullOrBlank()
+
+    fun label(nickname: String?): String =
+        nickname ?: name?.takeIf { it.isNotBlank() } ?: vendor ?: address
+}
+
+/** Adapts what this screen knows about a device to the shared ordering. */
+private fun pickerRank(
+    candidate: Candidate,
+    notes: Map<String, DeviceNote>,
+    watched: Set<String>,
+): Int {
+    val key = candidate.address.uppercase(Locale.US)
+    val note = notes[key]
+    return DeviceRanking.rank(
+        watched = watched.contains(key),
+        nickname = note?.nickname,
+        lists = note?.lists.orEmpty(),
+        hasIdentity = candidate.hasIdentity,
+    )
+}
 
 @Composable
 fun MotionScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -114,6 +153,12 @@ private fun Live() {
 
     val notes by book.notes.collectAsStateWithLifecycle()
     val health by BleScanHub.health.collectAsStateWithLifecycle()
+    val watchRules by remember { WatchStore.get(context) }.rules.collectAsStateWithLifecycle()
+    val watchedAddresses = remember(watchRules) {
+        watchRules.filter { it.kind == MatchKind.ADDRESS }
+            .map { it.value.uppercase(Locale.US) }
+            .toSet()
+    }
 
     val feedback = remember { Feedback(context) }
 
@@ -131,14 +176,24 @@ private fun Live() {
     var calibrationSeconds by remember { mutableStateOf(20f) }
     var agreement by remember { mutableStateOf(2f) }
     var holdTicks by remember { mutableStateOf(2f) }
+    // Long enough to walk out and shut a door. Zero restores the old behaviour for
+    // anyone calibrating a room they are not in.
+    var headStart by remember { mutableStateOf(10f) }
     var alertStyle by remember { mutableStateOf(AlertStyle.BOTH) }
     var manual by remember { mutableStateOf<Set<String>>(emptySet()) }
     var useManual by remember { mutableStateOf(false) }
 
+    // Seconds left before calibration starts, or null when not counting down.
+    var countdown by remember { mutableStateOf<Int?>(null) }
+
     // Candidate picker, for choosing links by hand.
-    var candidates by remember { mutableStateOf<Map<String, Pair<Int, Long>>>(emptyMap()) }
+    //
+    // A plain map rather than Compose state: writing it back on every advertisement
+    // recomposed the screen continuously and reshuffled the list under the finger, which
+    // made a device almost impossible to tap.
+    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
     var pickerPaused by remember { mutableStateOf(false) }
-    var frozenCandidates by remember { mutableStateOf<List<Triple<String, Int, Long>>>(emptyList()) }
+    var frozenCandidates by remember { mutableStateOf<List<Candidate>>(emptyList()) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -149,18 +204,34 @@ private fun Live() {
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
             detector.observe(advert.address, advert.rssi, advert.atMs)
-            candidates = candidates + (advert.address to (advert.rssi to advert.atMs))
+            synchronized(candidateTable) {
+                val existing = candidateTable[advert.address]
+                candidateTable[advert.address] = Candidate(
+                    address = advert.address,
+                    name = advert.name?.takeIf { it.isNotBlank() } ?: existing?.name,
+                    vendor = advert.vendor ?: existing?.vendor,
+                    rssi = advert.rssi,
+                    lastSeenMs = advert.atMs,
+                    sightings = (existing?.sightings ?: 0) + 1,
+                )
+            }
         }
     }
 
-    LaunchedEffect(pickerPaused, candidates, running) {
-        if (!pickerPaused && !running) {
+    // Snapshotted on a slow timer so a row stays put long enough to be tapped, and
+    // ordered so the devices you can actually reason about are not buried under a wall of
+    // hex. Watched and listed things first, then anything with a name, then the rest.
+    LaunchedEffect(pickerPaused, running, notes, watchedAddresses) {
+        while (!pickerPaused && !running) {
             val now = System.currentTimeMillis()
-            frozenCandidates = candidates.entries
-                .filter { now - it.value.second < 12_000 }
-                .sortedByDescending { it.value.first }
-                .take(20)
-                .map { Triple(it.key, it.value.first, it.value.second) }
+            frozenCandidates = synchronized(candidateTable) { candidateTable.values.toList() }
+                .filter { now - it.lastSeenMs < 20_000 && it.sightings >= 2 }
+                .sortedWith(
+                    compareBy<Candidate> { pickerRank(it, notes, watchedAddresses) }
+                        .thenByDescending { it.rssi },
+                )
+                .take(30)
+            delay(PICKER_REFRESH_MS)
         }
     }
 
@@ -182,6 +253,26 @@ private fun Live() {
 
     DisposableEffect(Unit) { onDispose { feedback.release() } }
 
+    // The head start. Calibration used to begin on the same line as the button press, so
+    // whatever you did next - which is walk out of the room - was learned as the room's
+    // normal behaviour, inflating every link's baseline until nothing could cross it.
+    LaunchedEffect(countdown != null) {
+        var left = countdown ?: return@LaunchedEffect
+        while (left > 0) {
+            // Count the last three seconds out loud, so you know from the hallway.
+            if (left <= 3) feedback.buzz(0.4)
+            delay(1_000)
+            left--
+            countdown = left
+        }
+        countdown = null
+        feedback.alert(alertStyle, urgent = false)
+        detector.startCalibration(System.currentTimeMillis())
+        history = emptyList()
+        events = emptyList()
+        running = true
+    }
+
     LaunchedEffect(running) {
         while (running) {
             delay(TICK_MS)
@@ -194,6 +285,13 @@ private fun Live() {
             // for as long as someone stands in the room.
             if (previous != MotionState.MOTION && next.state == MotionState.MOTION) {
                 feedback.alert(alertStyle, urgent = true)
+            }
+            // "Calibration is over, you can come back in." Without it the only way to know
+            // is to walk in and look, which is itself the thing being measured.
+            if (previous == MotionState.CALIBRATING &&
+                next.state != MotionState.CALIBRATING
+            ) {
+                feedback.alert(alertStyle, urgent = false)
             }
             if (next.state != MotionState.CALIBRATING) {
                 history = (history + next.score).takeLast(160)
@@ -281,7 +379,9 @@ private fun Live() {
                 summary = "${manual.size} chosen of ${frozenCandidates.size} nearby",
             )
             Spacer(Modifier.height(4.dp))
-            frozenCandidates.forEach { (address, rssi, _) ->
+            frozenCandidates.forEach { candidate ->
+                val address = candidate.address
+                val rssi = candidate.rssi
                 val chosen = manual.contains(address)
                 Row(
                     Modifier
@@ -300,10 +400,15 @@ private fun Live() {
                     )
                     Column(Modifier.weight(1f)) {
                         Text(
-                            notes[address.uppercase()]?.nickname
-                                ?: Vendors.byAddress(address)
-                                ?: address,
+                            candidate.label(notes[address.uppercase(Locale.US)]?.nickname),
                             style = MaterialTheme.typography.bodySmall,
+                            fontWeight = if (
+                                watchedAddresses.contains(address.uppercase(Locale.US))
+                            ) {
+                                FontWeight.Bold
+                            } else {
+                                FontWeight.Normal
+                            },
                         )
                         Text(
                             address,
@@ -317,15 +422,54 @@ private fun Live() {
             }
         }
 
+        countdown?.let { left ->
+            Spacer(Modifier.height(12.dp))
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "$left",
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        "Leave the room now. Learning the room starts when this reaches " +
+                            "zero, and anything moving while it learns is learned as " +
+                            "normal.",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = { countdown = null },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Cancel") }
+        }
+
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
-                detector.startCalibration(System.currentTimeMillis())
-                history = emptyList()
-                events = emptyList()
-                running = true
+                if (headStart < 1f) {
+                    detector.startCalibration(System.currentTimeMillis())
+                    history = emptyList()
+                    events = emptyList()
+                    running = true
+                } else {
+                    countdown = headStart.roundToInt()
+                }
             },
-            enabled = !useManual || manual.isNotEmpty(),
+            enabled = (!useManual || manual.isNotEmpty()) && countdown == null,
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Calibrate and start") }
         Spacer(Modifier.height(6.dp))
@@ -345,7 +489,9 @@ private fun Live() {
                 onCalibrationSeconds = { calibrationSeconds = it },
                 agreement = agreement, onAgreement = { agreement = it },
                 holdTicks = holdTicks, onHoldTicks = { holdTicks = it },
+                headStart = headStart, onHeadStart = { headStart = it },
                 alertStyle = alertStyle, onAlertStyle = { alertStyle = it },
+                feedback = feedback,
             )
         }
         return
@@ -459,7 +605,9 @@ private fun Live() {
             onCalibrationSeconds = { calibrationSeconds = it },
             agreement = agreement, onAgreement = { agreement = it },
             holdTicks = holdTicks, onHoldTicks = { holdTicks = it },
+            headStart = headStart, onHeadStart = { headStart = it },
             alertStyle = alertStyle, onAlertStyle = { alertStyle = it },
+            feedback = feedback,
         )
         Text(
             "Sensitivity, weights and alerts take effect immediately. Calibration length " +
@@ -556,12 +704,17 @@ private fun Live() {
     Spacer(Modifier.height(14.dp))
     OutlinedButton(
         onClick = {
-            detector.startCalibration(System.currentTimeMillis())
-            history = emptyList()
-            events = emptyList()
+            if (headStart < 1f) {
+                detector.startCalibration(System.currentTimeMillis())
+                history = emptyList()
+                events = emptyList()
+            } else {
+                countdown = headStart.roundToInt()
+            }
         },
+        enabled = countdown == null,
         modifier = Modifier.fillMaxWidth(),
-    ) { Text("Recalibrate") }
+    ) { Text(if (headStart < 1f) "Recalibrate" else "Recalibrate in ${headStart.roundToInt()} s") }
     Spacer(Modifier.height(6.dp))
     OutlinedButton(
         onClick = {
@@ -737,7 +890,9 @@ private fun Settings(
     calibrationSeconds: Float, onCalibrationSeconds: (Float) -> Unit,
     agreement: Float, onAgreement: (Float) -> Unit,
     holdTicks: Float, onHoldTicks: (Float) -> Unit,
+    headStart: Float, onHeadStart: (Float) -> Unit,
     alertStyle: AlertStyle, onAlertStyle: (AlertStyle) -> Unit,
+    feedback: Feedback,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Setting(
@@ -846,26 +1001,31 @@ private fun Settings(
             )
         }
 
-        Text("Alert", style = MaterialTheme.typography.labelLarge)
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        Setting(
+            label = "Head start",
+            value = if (headStart < 1f) "None" else "${headStart.roundToInt()} s",
+            advice = "How long to wait after you press the button before it starts " +
+                "learning the room. Calibration used to begin the instant you tapped, " +
+                "which meant you walking out of the room was learned as normal - and a " +
+                "baseline that includes someone moving is a baseline that will not " +
+                "notice someone moving. Ten seconds is enough to get out and close a " +
+                "door. It buzzes when the waiting ends and again when calibration is " +
+                "done, so you can tell from outside.",
         ) {
-            AlertStyle.entries.forEach { style ->
-                FilterChip(
-                    selected = alertStyle == style,
-                    onClick = { onAlertStyle(style) },
-                    label = {
-                        Text(style.label, style = MaterialTheme.typography.labelSmall)
-                    },
-                )
-            }
+            Slider(
+                value = headStart,
+                onValueChange = onHeadStart,
+                valueRange = 0f..60f,
+                steps = 11,
+            )
         }
-        Text(
-            alertStyle.hint + " It fires once when motion starts, not continuously while " +
-                "someone is there.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+        AlertPicker(
+            style = alertStyle,
+            onStyle = onAlertStyle,
+            feedback = feedback,
+            note = "It fires once when motion starts, not continuously while someone is " +
+                "there.",
         )
     }
 }

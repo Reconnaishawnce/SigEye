@@ -48,6 +48,29 @@ class Feedback(context: Context) {
 
     val hasVibrator: Boolean get() = vibrator?.hasVibrator() == true
 
+    /**
+     * Why an alert might not be heard or felt, or null if it should be.
+     *
+     * Worth surfacing rather than leaving to be discovered: the whole point of an alert is
+     * that you are not looking at the screen, so a silent failure is invisible by
+     * construction. It was invisible here for four releases.
+     */
+    fun trouble(style: AlertStyle): String? {
+        if (style.vibrates && !hasVibrator) {
+            return "This phone reports no vibrator, so the buzz will do nothing."
+        }
+        if (style.beeps && alarmVolume() == 0) {
+            return "Alarm volume is at zero, so the beep will be silent. Turn it up with " +
+                "the volume keys while an alarm is playing, or in Sound settings."
+        }
+        return null
+    }
+
+    private fun alarmVolume(): Int = runCatching {
+        (appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+            .getStreamVolume(AudioManager.STREAM_ALARM)
+    }.getOrDefault(-1)
+
     /** A single short pulse. [strength] 0..1 scales the duration. */
     fun buzz(strength: Double = 0.6) {
         val device = vibrator ?: return
@@ -69,10 +92,17 @@ class Feedback(context: Context) {
         }
     }
 
+    /**
+     * A beep on the alarm stream.
+     *
+     * Not the notification stream, which is where this started: these alerts exist to reach
+     * you in another room, and the notification stream is the first thing people turn down.
+     * The alarm stream is the one that survives a quiet phone.
+     */
     fun beep(durationMs: Int = 150) {
         runCatching {
             val generator = tones ?: ToneGenerator(
-                AudioManager.STREAM_NOTIFICATION,
+                AudioManager.STREAM_ALARM,
                 TONE_VOLUME,
             ).also { tones = it }
             generator.startTone(ToneGenerator.TONE_PROP_BEEP, durationMs)
