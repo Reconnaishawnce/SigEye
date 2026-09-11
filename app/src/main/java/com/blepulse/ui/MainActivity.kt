@@ -2,7 +2,10 @@ package com.blepulse.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -28,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +44,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.blepulse.core.PulseState
 import com.blepulse.core.ScanUiState
@@ -71,10 +78,27 @@ private fun RootScreen() {
     val state by PulseState.state.collectAsStateWithLifecycle()
 
     var hasPermissions by remember { mutableStateOf(Permissions.canScan(context)) }
+    var wasRefused by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { hasPermissions = Permissions.canScan(context) }
+    ) {
+        hasPermissions = Permissions.canScan(context)
+        // A second denial is permanent: Android stops showing the dialog and the button
+        // would silently do nothing from here on. Send them to Settings instead.
+        if (!hasPermissions) wasRefused = true
+    }
+
+    // Re-check when the user comes back from the Settings screen. Doing this inline in
+    // the composable body would be a state write during composition.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hasPermissions = Permissions.canScan(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold { padding ->
         Column(
@@ -98,7 +122,11 @@ private fun RootScreen() {
             Spacer(Modifier.height(20.dp))
 
             if (!hasPermissions) {
-                PermissionGate(onGrant = { launcher.launch(Permissions.required()) })
+                PermissionGate(
+                    refused = wasRefused,
+                    onGrant = { launcher.launch(Permissions.required()) },
+                    onOpenSettings = { openAppSettings(context) },
+                )
             } else {
                 MonitorScreen(state = state, context = context)
             }
@@ -108,7 +136,11 @@ private fun RootScreen() {
 }
 
 @Composable
-private fun PermissionGate(onGrant: () -> Unit) {
+private fun PermissionGate(
+    refused: Boolean,
+    onGrant: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp)) {
             Text("Three permissions needed", style = MaterialTheme.typography.titleMedium)
@@ -136,8 +168,29 @@ private fun PermissionGate(onGrant: () -> Unit) {
             Button(onClick = onGrant, modifier = Modifier.fillMaxWidth()) {
                 Text("Grant permissions")
             }
+            if (refused) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Android will not ask again after a second refusal. Grant them in " +
+                        "Settings instead.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open app settings")
+                }
+            }
         }
     }
+}
+
+private fun openAppSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null),
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
 }
 
 @Composable
@@ -313,11 +366,17 @@ private fun compact(value: Long): String = when {
 }
 
 private fun shareCsv(context: Context) {
-    val dir: File = context.getExternalFilesDir(null) ?: return
+    val dir: File = context.getExternalFilesDir(null) ?: run {
+        Toast.makeText(context, "External storage unavailable.", Toast.LENGTH_SHORT).show()
+        return
+    }
     val files = dir.listFiles { f -> f.name.startsWith("blepulse-") && f.name.endsWith(".csv") }
         ?.sortedBy { it.name }
         .orEmpty()
-    if (files.isEmpty()) return
+    if (files.isEmpty()) {
+        Toast.makeText(context, "No logs yet. Start scanning first.", Toast.LENGTH_SHORT).show()
+        return
+    }
 
     val uris = ArrayList(
         files.map {
@@ -330,5 +389,9 @@ private fun shareCsv(context: Context) {
         putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(intent, "Export BLEPulse logs"))
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, "Export BLEPulse logs"))
+    }.onFailure {
+        Toast.makeText(context, "No app available to receive the file.", Toast.LENGTH_SHORT).show()
+    }
 }

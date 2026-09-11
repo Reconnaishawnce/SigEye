@@ -80,6 +80,13 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
             currentBinStart = nowMs
             return null
         }
+        // The clock can move backwards (NTP correction, manual change). Treat that as
+        // the start of a fresh bin rather than emitting a negative-length one.
+        if (nowMs < currentBinStart) {
+            currentBinStart = nowMs
+            currentNew = 0
+            return null
+        }
 
         forgetStaleAddresses(nowMs)
 

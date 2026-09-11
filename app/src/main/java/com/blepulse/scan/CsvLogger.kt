@@ -54,6 +54,21 @@ class CsvLogger(context: Context) {
             ?.sortedBy { it.name }
             .orEmpty()
 
+    /**
+     * Drops logs older than [days]. One bin every five seconds is about 700 KB a day,
+     * which is harmless for a week and less so after a year of unattended running.
+     */
+    fun pruneOlderThan(days: Int) {
+        val cutoff = System.currentTimeMillis() - days * 86_400_000L
+        listFiles().forEach { file ->
+            if (file.name == currentFile?.name) return@forEach
+            if (file.lastModified() < cutoff) {
+                val deleted = file.delete()
+                Log.i(TAG, "Pruned " + file.name + ", deleted=" + deleted)
+            }
+        }
+    }
+
     fun close() {
         try {
             writer?.flush()

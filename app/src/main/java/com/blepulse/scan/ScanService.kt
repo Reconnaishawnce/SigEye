@@ -65,7 +65,12 @@ class ScanService : Service() {
 
     private var scanner: BluetoothLeScanner? = null
     private var scanning = false
+    /** True between a successful START and a STOP. Distinct from [scanning], which
+     *  tracks only whether the BLE stack currently has our callback registered. */
+    private var active = false
     private var scanStartedAtMs = 0L
+    private var lastScanAttemptMs = 0L
+    private var lastRestartAtMs = 0L
     private var nextCloseAtMs = 0L
     private var lastAlertMs = 0L
     private var restarts = 0
@@ -82,7 +87,7 @@ class ScanService : Service() {
 
                 BluetoothAdapter.STATE_ON -> {
                     PulseState.setError(null)
-                    startScan()
+                    if (active) startScan()
                 }
             }
         }
@@ -108,6 +113,10 @@ class ScanService : Service() {
             }
 
             ACTION_LABEL -> {
+                if (!active) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 aggregator.markLabel("TRAIN")
                 Log.i(TAG, "Manual TRAIN label queued for next bin")
                 return START_STICKY
@@ -117,8 +126,20 @@ class ScanService : Service() {
                 config = settings.load()
                 aggregator.reconfigure(config)
                 PulseState.update { it.copy(config = config) }
+                if (!active) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 return START_STICKY
             }
+        }
+
+        // START_STICKY redelivers a NULL intent after the process is killed, and the user
+        // can double-tap Start. Neither should wipe the history or double-register the scan.
+        if (active) {
+            Log.i(TAG, "Start ignored, already active (intent=" + intent?.action + ")")
+            if (!scanning) startScan()
+            return START_STICKY
         }
 
         if (!Permissions.canScan(this)) {
@@ -145,11 +166,14 @@ class ScanService : Service() {
             return START_NOT_STICKY
         }
 
+        active = true
         config = settings.load()
         aggregator.reconfigure(config)
         aggregator.reset()
         queue.clear()
+        csv.pruneOlderThan(CSV_RETENTION_DAYS)
         lastAlertMs = 0L
+        lastRestartAtMs = 0L
         restarts = 0
         nextCloseAtMs = System.currentTimeMillis() + config.binMillis
 
@@ -175,6 +199,7 @@ class ScanService : Service() {
     }
 
     override fun onDestroy() {
+        active = false
         stopScan()
         loopJob?.cancel()
         scope.cancel()
@@ -204,7 +229,12 @@ class ScanService : Service() {
             val device = result?.device ?: return
             val now = System.currentTimeMillis()
             lastResultMs.set(now)
-            queue.add(Advert(device.address, result.rssi, now))
+            // Bounded so a stalled loop coroutine cannot grow this without limit in a
+            // dense RF environment. Dropping the newest advert is harmless: the same
+            // address will re-advertise within seconds.
+            if (queue.size < MAX_QUEUED_ADVERTS) {
+                queue.add(Advert(device.address, result.rssi, now))
+            }
         }
 
         override fun onBatchScanResults(results: MutableList<ScanResult>?) {
@@ -235,6 +265,7 @@ class ScanService : Service() {
 
     @SuppressLint("MissingPermission") // guarded by Permissions.canScan above every call
     private fun startScan() {
+        lastScanAttemptMs = System.currentTimeMillis()
         if (!Permissions.canScan(this)) {
             PulseState.setError("Missing Bluetooth or location permission.")
             return
@@ -287,13 +318,21 @@ class ScanService : Service() {
         scanning = false
     }
 
+    /**
+     * Android 12+ allows only five scan starts per 30 seconds per app, and silently
+     * throttles an app that exceeds it. The cooldown keeps a persistent failure - a dead
+     * adapter, a revoked permission - from burning that budget in a tight loop.
+     */
     private fun restartScan(why: String) {
-        Log.i(TAG, "Restarting scan: " + why)
+        val now = System.currentTimeMillis()
+        if (now - lastRestartAtMs < MIN_RESTART_GAP_MS) return
+        lastRestartAtMs = now
         restarts++
+        Log.i(TAG, "Restarting scan: " + why)
         stopScan()
         scope.launch {
             delay(1_200)
-            startScan()
+            if (active) startScan()
             PulseState.update { it.copy(scanRestarts = restarts) }
         }
     }
@@ -307,6 +346,13 @@ class ScanService : Service() {
                 delay(TICK_MS)
                 val now = System.currentTimeMillis()
                 drainQueue()
+
+                // A backwards clock jump would otherwise park nextCloseAtMs in the far
+                // future and stall binning indefinitely.
+                if (nextCloseAtMs - now > config.binMillis * 2) {
+                    Log.w(TAG, "Clock moved backwards, resyncing bin schedule")
+                    nextCloseAtMs = now + config.binMillis
+                }
 
                 if (now >= nextCloseAtMs) {
                     nextCloseAtMs = now + config.binMillis
@@ -358,7 +404,7 @@ class ScanService : Service() {
         if (bt == null || !bt.isEnabled) return
 
         if (!scanning) {
-            if (now - scanStartedAtMs > SILENCE_RESTART_MS) restartScan("scanner not running")
+            if (now - lastScanAttemptMs > RETRY_GAP_MS) restartScan("scanner not running")
             return
         }
         if (now - lastResultMs.get() > SILENCE_RESTART_MS) {
@@ -388,6 +434,7 @@ class ScanService : Service() {
     }
 
     private fun stopEverything() {
+        active = false
         stopScan()
         loopJob?.cancel()
         csv.close()
@@ -433,7 +480,7 @@ class ScanService : Service() {
             state.binsUntilWarm > 0 -> "Warming up, " + state.binsUntilWarm + " bins to go"
             else -> state.currentCount.toString() + " new now, usual " + format1(state.baseline)
         }
-        val stopIntent = PendingIntent.getService(
+        val stopIntent = PendingIntent.getForegroundService(
             this,
             1,
             Intent(this, ScanService::class.java).setAction(ACTION_STOP),
@@ -490,6 +537,10 @@ class ScanService : Service() {
         private const val TICK_MS = 500L
         private const val SILENCE_RESTART_MS = 90_000L
         private const val PERIODIC_RESTART_MS = 25 * 60_000L
+        private const val RETRY_GAP_MS = 30_000L
+        private const val MIN_RESTART_GAP_MS = 30_000L
+        private const val MAX_QUEUED_ADVERTS = 20_000
+        private const val CSV_RETENTION_DAYS = 30
 
         const val ACTION_START = "com.blepulse.START"
         const val ACTION_STOP = "com.blepulse.STOP"

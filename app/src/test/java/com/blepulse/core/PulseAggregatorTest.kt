@@ -3,6 +3,7 @@ package com.blepulse.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -182,6 +183,18 @@ class PulseAggregatorTest {
             agg.closeBin(now)
         }
         assertEquals(12, agg.history().size)
+    }
+
+    @Test
+    fun `a backwards clock jump does not emit a bin or stall`() {
+        val agg = PulseAggregator(config)
+        agg.observe("A", -60, 1_000_000L)
+        assertNotNull(agg.closeBin(1_005_000L))
+        // Clock yanked back an hour mid-run.
+        assertNull(agg.closeBin(1_005_000L - 3_600_000L))
+        // The very next bin closes normally against the new reference.
+        agg.observe("B", -60, 1_005_000L - 3_600_000L + 1_000L)
+        assertNotNull(agg.closeBin(1_005_000L - 3_600_000L + 5_000L))
     }
 
     @Test

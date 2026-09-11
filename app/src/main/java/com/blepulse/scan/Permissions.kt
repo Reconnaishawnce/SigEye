@@ -22,10 +22,21 @@ object Permissions {
         }
     }.toTypedArray()
 
-    /** The subset we genuinely cannot scan without. Notifications are optional. */
-    fun blocking(): Array<String> = required()
-        .filterNot { it == Manifest.permission.POST_NOTIFICATIONS }
-        .toTypedArray()
+    /**
+     * The subset we genuinely cannot scan without.
+     *
+     * Notably NOT BLUETOOTH_CONNECT: scanning needs only BLUETOOTH_SCAN, and gating on
+     * CONNECT would let a user brick the app by declining a permission it never uses.
+     * It is still requested, for reading device names in later experiments.
+     * POST_NOTIFICATIONS is likewise optional - a denied notification costs the alert,
+     * not the data.
+     */
+    fun blocking(): Array<String> = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_SCAN)
+        }
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
+    }.toTypedArray()
 
     fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
