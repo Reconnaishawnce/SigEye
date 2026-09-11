@@ -131,11 +131,10 @@ class MotionDetectorTest {
         var now = d.feedSteady(three, 11, 0L)
         now = d.run(three, 4, now).second
 
-        // Someone stands in the path: every link drops hard.
-        repeat(4) {
-            now = d.feedSteady(three, 1, now, rssi = -85)
-        }
-        assertEquals(MotionState.MOTION, d.tick(now).state)
+        // Someone stands in the path: every link drops hard. Feed *and* tick - the
+        // detector needs consecutive ticks above threshold, which is the glitch debounce.
+        val (disturbed, _) = d.run(three, 4, now, rssi = -85)
+        assertEquals(MotionState.MOTION, disturbed.state)
     }
 
     @Test
@@ -176,14 +175,19 @@ class MotionDetectorTest {
     }
 
     @Test
-    fun `a single glitchy tick does not fire on its own`() {
+    fun `firing needs sustained disturbance, not one hot tick`() {
         val d = MotionDetector(config.copy(ticksToFire = 3))
         d.startCalibration(0L)
         var now = d.feedSteady(three, 11, 0L)
         now = d.run(three, 4, now).second
 
-        now = d.feedSteady(three, 1, now, rssi = -88)
-        assertNotEquals(MotionState.MOTION, d.tick(now).state)
+        // Two hot ticks is one short of the threshold.
+        val (almost, after) = d.run(three, 2, now, rssi = -88)
+        assertNotEquals(MotionState.MOTION, almost.state)
+
+        // The third tips it over.
+        val (fired, _) = d.run(three, 1, after, rssi = -88)
+        assertEquals(MotionState.MOTION, fired.state)
     }
 
     @Test
@@ -218,8 +222,7 @@ class MotionDetectorTest {
 
         // Someone stands there for a long time. If the baseline adapted, the detector
         // would decide this was the new normal and stop reporting them.
-        repeat(30) { now = d.feedSteady(three, 1, now, rssi = -88) }
-        val reading = d.tick(now)
+        val (reading, _) = d.run(three, 30, now, rssi = -88)
         val drifted = reading.references.first { it.address == "A" }.baselineMean
 
         assertEquals(MotionState.MOTION, reading.state)
@@ -251,10 +254,10 @@ class MotionDetectorTest {
         var now = d.feedSteady(listOf("solo"), 11, 0L)
         now = d.run(listOf("solo"), 4, now).second
 
-        repeat(5) { now = d.feedSteady(listOf("solo"), 1, now, rssi = -90) }
         // Agreement cannot exceed the number of live links, so one link is enough when
         // one link is all there is.
-        assertEquals(MotionState.MOTION, d.tick(now).state)
+        val (disturbed, _) = d.run(listOf("solo"), 5, now, rssi = -90)
+        assertEquals(MotionState.MOTION, disturbed.state)
     }
 
     @Test
