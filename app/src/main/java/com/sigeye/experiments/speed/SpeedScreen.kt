@@ -42,10 +42,12 @@ import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.PassQuality
 import com.sigeye.core.analysis.PassResult
-import com.sigeye.core.analysis.PassSample
-import com.sigeye.core.analysis.SpeedEstimator
+import com.sigeye.core.analysis.PassWatcher
+import com.sigeye.core.analysis.WatcherStats
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.AlertPicker
+import com.sigeye.ui.Diagnostic
+import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -107,7 +109,10 @@ private fun Live() {
     val notes by book.notes.collectAsStateWithLifecycle()
     val health by BleScanHub.health.collectAsStateWithLifecycle()
 
-    val tracks = remember { mutableMapOf<String, MutableList<PassSample>>() }
+    // Tracking, finalising and the tally of what was thrown away all live in PassWatcher,
+    // which is testable - the version inlined here was not, and silently discarded
+    // everything it could not measure.
+    val watcher = remember { PassWatcher(windowMs = TRACK_MAX_MS, quietMs = PASS_TIMEOUT_MS) }
 
     var watching by remember { mutableStateOf(false) }
     var distance by remember { mutableStateOf(15f) }
@@ -115,7 +120,7 @@ private fun Live() {
     var units by remember { mutableStateOf(Units.KMH) }
     var alertStyle by remember { mutableStateOf(AlertStyle.BUZZ) }
     var passes by remember { mutableStateOf<List<PassResult>>(emptyList()) }
-    var tracking by remember { mutableStateOf(0) }
+    var stats by remember { mutableStateOf(WatcherStats()) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -129,39 +134,24 @@ private fun Live() {
     LaunchedEffect(watching) {
         if (!watching) return@LaunchedEffect
         BleScanHub.adverts.collect { advert ->
-            val samples = tracks.getOrPut(advert.address) { mutableListOf() }
-            samples.add(PassSample(advert.atMs, advert.rssi))
-            // A device that has been around for ages is furniture, not a pass.
-            if (samples.size > 2 && advert.atMs - samples.first().atMs > TRACK_MAX_MS) {
-                samples.clear()
-                samples.add(PassSample(advert.atMs, advert.rssi))
-            }
+            watcher.observe(advert.address, advert.rssi, advert.atMs)
         }
     }
 
     // A pass is only recognisable once it has finished, so the work happens when a device
     // stops being heard rather than while it is still going by.
     LaunchedEffect(watching, distance, pathLoss) {
+        watcher.distanceMetres = distance.toDouble()
+        watcher.pathLossExponent = pathLoss.toDouble()
         while (watching) {
             delay(TICK_MS)
             val now = System.currentTimeMillis()
-            val finished = tracks.filter {
-                it.value.isNotEmpty() && now - it.value.last().atMs > PASS_TIMEOUT_MS
+            val found = watcher.tick(now)
+            if (found.isNotEmpty()) {
+                passes = (found.reversed() + passes).take(40)
+                feedback.alert(alertStyle)
             }
-            finished.forEach { (address, samples) ->
-                val result = SpeedEstimator.analyse(
-                    address = address,
-                    samples = samples.toList(),
-                    distanceMetres = distance.toDouble(),
-                    pathLossExponent = pathLoss.toDouble(),
-                )
-                tracks.remove(address)
-                if (result.quality != PassQuality.REJECTED) {
-                    passes = (listOf(result) + passes).take(40)
-                    feedback.alert(alertStyle)
-                }
-            }
-            tracking = tracks.count { it.value.size >= 3 }
+            stats = watcher.stats(now)
         }
     }
 
@@ -212,7 +202,7 @@ private fun Live() {
 
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        Stat("Watching", if (watching) "$tracking" else "off", "devices in flight")
+        Stat("Watching", if (watching) "${stats.tracking}" else "off", "devices in flight")
         Stat("Passes", passes.size.toString(), "recorded")
     }
 
@@ -291,6 +281,25 @@ private fun Live() {
             )
         }
     }
+
+    // Outside the results block on purpose: this panel matters most when there is
+    // nothing to show, which is the case it used to leave completely unexplained.
+    Spacer(Modifier.height(12.dp))
+    DiagnosticsPanel(
+        title = "What the watcher is seeing",
+        verdict = if (watching) stats.verdict() else null,
+        diagnostics = listOf(
+            Diagnostic("Watching", stats.tracking.toString(), "in range now"),
+            Diagnostic("Gone", stats.finished.toString(), "tracks ended"),
+            Diagnostic("Timed", stats.passes.toString(), "passes measured"),
+            Diagnostic("Too brief", stats.rejectedTooFew.toString(), "too few readings"),
+            Diagnostic("No shape", stats.rejectedNoShape.toString(), "no rise and fall"),
+            Diagnostic("Untimeable", stats.rejectedNoCrossings.toString(), "no crossings"),
+        ),
+        footnote = "A pass has to rise to a peak and fall away again - that peak is the " +
+            "moment of closest approach, and everything is timed from it. Devices that " +
+            "only ever get weaker were already alongside when they appeared.",
+    )
 
     if (passes.isNotEmpty()) {
         Spacer(Modifier.height(16.dp))

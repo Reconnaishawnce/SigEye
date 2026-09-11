@@ -85,6 +85,30 @@ data class SweepResult(
             return difference
         }
 
+    /**
+     * Sector means with a three-point circular median run over them.
+     *
+     * Used only to *locate* the peak and the notch, never to report their depth. An
+     * exported sweep showed the peak landing on a lone sector holding four readings at
+     * -43.5 dB, sitting between neighbours at -52.6 and -48.0 - noise, not a direction,
+     * and it dragged the reported bearing thirty degrees off. A median ignores a single
+     * outlying sector while leaving a genuine wedge, which is several sectors wide,
+     * exactly where it is.
+     */
+    internal fun smoothedMeans(): Map<Int, Double> {
+        val measured = sectors.filter { it.samples > 0 }.associateBy { it.index }
+        if (measured.size < 3) return measured.mapValues { it.value.meanRssi }
+        val count = sectors.size
+        return measured.mapValues { (index, sector) ->
+            val neighbours = listOfNotNull(
+                measured[(index - 1 + count) % count]?.meanRssi,
+                sector.meanRssi,
+                measured[(index + 1) % count]?.meanRssi,
+            ).sorted()
+            neighbours[neighbours.size / 2]
+        }
+    }
+
     private fun regionBearing(strong: Boolean): Float? {
         val high = peak?.meanRssi ?: return null
         val low = notch?.meanRssi ?: return null
@@ -154,10 +178,52 @@ class PolarSweep(
 
     val sampleCount: Int get() = samples.size
 
-    fun reset() = samples.clear()
+    fun reset() {
+        samples.clear()
+        stationaryDrops = 0
+    }
 
-    fun add(headingDegrees: Float, rssi: Int, atMs: Long = 0L) {
+    /**
+     * Records a reading, unless the phone was not turning when it arrived.
+     *
+     * An exported sweep spent 36% of its packets in the seven seconds between pressing
+     * start and beginning to turn, all of them piling into one sector. That direction then
+     * carried half the readings in the record and looked like the most confident thing in
+     * it, while every other sector went hungry - a fixed packet budget spent on the one
+     * bearing that was already known.
+     *
+     * The measurement is how signal varies *with direction*, so a reading taken while the
+     * direction is not changing adds nothing to it. Dropping them moved the peak of that
+     * sweep thirty degrees and took peak-to-notch separation from 105 degrees to 135,
+     * across the threshold where a shadow reads as body-shaped rather than architectural.
+     *
+     * @return true if the reading was kept.
+     */
+    fun add(headingDegrees: Float, rssi: Int, atMs: Long = 0L): Boolean {
+        val previous = samples.lastOrNull()
+        if (previous != null && atMs > 0L && previous.atMs > 0L) {
+            val seconds = (atMs - previous.atMs) / 1000.0
+            if (seconds > 0 && turnRate(previous.headingDegrees, headingDegrees, seconds)
+                < MIN_TURN_RATE_DEGREES_PER_SECOND
+            ) {
+                stationaryDrops++
+                return false
+            }
+        }
         samples.add(HeadingSample(atMs, headingDegrees, rssi))
+        return true
+    }
+
+    /** Readings discarded because the phone was not turning. */
+    var stationaryDrops: Int = 0
+        private set
+
+    /** Degrees a second between two headings, taking the short way round the circle. */
+    private fun turnRate(from: Float, to: Float, seconds: Double): Double {
+        var delta = to - from
+        while (delta > 180f) delta -= 360f
+        while (delta < -180f) delta += 360f
+        return kotlin.math.abs(delta) / seconds
     }
 
     /** Every reading, in arrival order. For export and diagnosis. */
@@ -203,15 +269,25 @@ class PolarSweep(
         }
 
         val settled = sectors.filter { it.isSettled(minSamplesPerSector) }
-        return SweepResult(
+        val draft = SweepResult(
             sectors = sectors,
             settledSectors = settled.size,
             totalSectors = resolution,
             totalSamples = samples.size,
-            // Only settled sectors can be the answer - one stray packet must not get to
-            // define where the shadow is.
             peak = settled.maxByOrNull { it.meanRssi },
             notch = settled.minByOrNull { it.meanRssi },
+        )
+        if (settled.size < 3) return draft
+
+        // Locate the extremes on the smoothed series, then report the real sectors found
+        // there. Only settled sectors can be the answer either way - one stray packet must
+        // not get to define where the shadow is.
+        val smoothed = draft.smoothedMeans()
+        val candidates = settled.filter { smoothed.containsKey(it.index) }
+        if (candidates.isEmpty()) return draft
+        return draft.copy(
+            peak = candidates.maxByOrNull { smoothed.getValue(it.index) },
+            notch = candidates.minByOrNull { smoothed.getValue(it.index) },
         )
     }
 
@@ -237,5 +313,11 @@ class PolarSweep(
     private companion object {
         /** Finest first. Each divides 360 evenly so sector centres stay tidy. */
         val RESOLUTIONS = listOf(24, 18, 12, 8)
+
+        /**
+         * Slow enough to allow a deliberate, careful turn - a full circle in three
+         * minutes still counts - and fast enough to exclude standing still.
+         */
+        const val MIN_TURN_RATE_DEGREES_PER_SECOND = 2.0
     }
 }

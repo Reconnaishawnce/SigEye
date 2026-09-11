@@ -4,6 +4,7 @@ package com.sigeye.core.analysis
 enum class DropReason(val label: String) {
     NOT_THE_SOURCE("Different device"),
     NO_COMPASS("No compass reading"),
+    NOT_TURNING("Phone was not turning"),
 }
 
 data class SweepCounters(
@@ -14,6 +15,7 @@ data class SweepCounters(
     /** Those actually binned. */
     val recorded: Int = 0,
     val droppedNoCompass: Int = 0,
+    val droppedNotTurning: Int = 0,
     val elapsedMs: Long = 0,
     val headingUpdates: Int = 0,
     val distinctHeadings: Int = 0,
@@ -42,6 +44,9 @@ data class SweepCounters(
             "No compass readings at all. The sweep has nothing to plot against."
         distinctHeadings <= 2 ->
             "The compass barely moved. Turn your whole body rather than the phone."
+        recorded == 0 && droppedNotTurning > 0 ->
+            "Everything arrived, but the phone was not turning, so none of it told the " +
+                "sweep anything new. Start turning."
         recorded == 0 ->
             "Packets and headings both arrived, but nothing was recorded - that is a bug " +
                 "in the app rather than anything you did."
@@ -70,6 +75,7 @@ class SweepDiagnostics {
     private var packetsFromSource = 0
     private var recorded = 0
     private var droppedNoCompass = 0
+    private var droppedNotTurning = 0
     private var headingUpdates = 0
     private var startedAtMs = 0L
     private var lastAtMs = 0L
@@ -82,6 +88,7 @@ class SweepDiagnostics {
         packetsFromSource = 0
         recorded = 0
         droppedNoCompass = 0
+        droppedNotTurning = 0
         headingUpdates = 0
         headingBuckets.clear()
         startedAtMs = nowMs
@@ -108,6 +115,7 @@ class SweepDiagnostics {
     fun dropped(reason: DropReason) {
         when (reason) {
             DropReason.NO_COMPASS -> droppedNoCompass++
+            DropReason.NOT_TURNING -> droppedNotTurning++
             DropReason.NOT_THE_SOURCE -> Unit
         }
     }
@@ -121,6 +129,7 @@ class SweepDiagnostics {
         packetsFromSource = packetsFromSource,
         recorded = recorded,
         droppedNoCompass = droppedNoCompass,
+        droppedNotTurning = droppedNotTurning,
         elapsedMs = (nowMs - startedAtMs).coerceAtLeast(0L),
         headingUpdates = headingUpdates,
         distinctHeadings = headingBuckets.size,

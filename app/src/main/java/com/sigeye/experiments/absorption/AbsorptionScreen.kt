@@ -53,6 +53,8 @@ import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.CompassQuality
 import com.sigeye.core.sensors.HeadingSensor
 import com.sigeye.ui.BodyDiagram
+import com.sigeye.ui.Diagnostic
+import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.isBlocking
 import com.sigeye.ui.PauseBar
@@ -192,10 +194,13 @@ private fun Live() {
             // Anything but a missing magnetometer is recorded. See CompassQuality's note
             // on why the strict gate belongs on printing bearings and not on capture.
             if (current.quality.isUsableForSweep) {
-                sweep.add(current.degrees, advert.rssi, advert.atMs)
-                diagnostics.recorded(current.degrees)
-                if (current.quality.rank < worstCompass.rank) {
-                    worstCompass = current.quality
+                if (sweep.add(current.degrees, advert.rssi, advert.atMs)) {
+                    diagnostics.recorded(current.degrees)
+                    if (current.quality.rank < worstCompass.rank) {
+                        worstCompass = current.quality
+                    }
+                } else {
+                    diagnostics.dropped(DropReason.NOT_TURNING)
                 }
             } else {
                 diagnostics.dropped(DropReason.NO_COMPASS)
@@ -794,57 +799,28 @@ private fun Results(
  */
 @Composable
 private fun SweepDiagnosticsCard(counters: SweepCounters, resolution: Int) {
-    val verdict = counters.verdict()
-    Card(
-        Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (verdict == null) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.errorContainer
-            },
+    DiagnosticsPanel(
+        title = "What the sweep is seeing",
+        verdict = counters.verdict(),
+        diagnostics = listOf(
+            Diagnostic("From source", counters.packetsFromSource.toString(), "packets"),
+            Diagnostic("Recorded", counters.recorded.toString(), "into sectors"),
+            Diagnostic(
+                "Rate",
+                String.format(Locale.US, "%.1f/s", counters.sourceRate),
+                "from source",
+            ),
+            Diagnostic("All devices", counters.packetsSeen.toString(), "packets seen"),
+            Diagnostic("Compass", counters.headingUpdates.toString(), "updates"),
+            Diagnostic("Sectors", "$resolution", "${360 / resolution}° each"),
+            Diagnostic("Not turning", counters.droppedNotTurning.toString(), "dropped"),
+            Diagnostic("No compass", counters.droppedNoCompass.toString(), "dropped"),
+            Diagnostic("Turn seen", "${counters.distinctHeadings}/12", "arcs visited"),
         ),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Text(
-                "What the sweep is seeing",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Stat("From source", counters.packetsFromSource.toString(), "packets")
-                Stat("Recorded", counters.recorded.toString(), "into sectors")
-                Stat(
-                    "Rate",
-                    String.format(Locale.US, "%.1f/s", counters.sourceRate),
-                    "from source",
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Stat("All devices", counters.packetsSeen.toString(), "packets seen")
-                Stat("Compass", counters.headingUpdates.toString(), "updates")
-                Stat("Sectors", "$resolution", "${360 / resolution}° each")
-            }
-            if (counters.droppedNoCompass > 0) {
-                Text(
-                    "${counters.droppedNoCompass} dropped for want of a compass reading.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-            verdict?.let {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
-        }
-    }
+        footnote = "Readings taken while the phone is not turning are dropped: the " +
+            "measurement is how signal changes with direction, so standing still adds " +
+            "nothing and spends packets that other bearings need.",
+    )
 }
 
 /** Plain words for the number, including the honest "you found nothing" case. */
