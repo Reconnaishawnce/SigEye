@@ -52,7 +52,9 @@ fun Sparkline(
             drawRect(surface)
             if (bins.isEmpty()) return@Canvas
 
-            val peak = bins.maxOfOrNull { it.newCount } ?: 0
+            // Enrollment bins record the standing population, not arrivals. Letting one
+            // set the scale would flatten every real event for the rest of the window.
+            val peak = bins.filter { it.countsTowardScale }.maxOfOrNull { it.newCount } ?: 0
             val yMax = max(max(peak.toDouble(), baseline * 2.0), 4.0).toFloat()
 
             val padTop = 10f

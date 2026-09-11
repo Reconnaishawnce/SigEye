@@ -10,15 +10,25 @@ data class ScanUiState(
     val currentCount: Int = 0,
     val activeUnique: Int = 0,
     val baseline: Double = 0.0,
-    val binsUntilWarm: Int = 0,
+    val phase: Phase = Phase.ENROLL,
+    val secondsUntilArmed: Int = 0,
+    val armingProgress: Float = 0f,
     val totalAdvertisements: Long = 0,
+    /** Live delivery rate, and the healthy rate learned after the last scan restart. */
+    val advertsPerSecond: Double = 0.0,
+    val referenceRate: Double = 0.0,
+    val ignoredCount: Int = 0,
     val lastAlertMs: Long = 0,
     val lastResultMs: Long = 0,
     val scanRestarts: Int = 0,
     val config: PulseConfig = PulseConfig.DEFAULT,
     val error: String? = null,
     val csvPath: String? = null,
-)
+) {
+    /** Delivery has collapsed relative to what this phone managed a moment ago. */
+    val starved: Boolean
+        get() = running && referenceRate >= 1.0 && advertsPerSecond < referenceRate * 0.25
+}
 
 /**
  * Single shared snapshot of the scan, written by the service and read by the UI.

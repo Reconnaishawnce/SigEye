@@ -39,6 +39,7 @@ class CsvLogger(context: Context) {
                     append(bin.activeUnique).append(',')
                     append(String.format(Locale.US, "%.2f", bin.baseline)).append(',')
                     append(if (bin.spike) 1 else 0).append(',')
+                    append(bin.phase.csv()).append(',')
                     append(bin.label)
                     append('\n')
                 }
@@ -95,6 +96,7 @@ class CsvLogger(context: Context) {
 
     private companion object {
         const val TAG = "SigEye/Csv"
-        const val HEADER = "timestamp,epoch_ms,new_count,active_unique,baseline,spike,label\n"
+        const val HEADER =
+            "timestamp,epoch_ms,new_count,active_unique,baseline,spike,phase,label\n"
     }
 }

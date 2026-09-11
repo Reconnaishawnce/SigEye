@@ -24,6 +24,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.sigeye.R
 import com.sigeye.core.CsvLogger
+import com.sigeye.core.IgnoreList
 import com.sigeye.core.Permissions
 import com.sigeye.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +37,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -72,6 +74,17 @@ class ScanService : Service() {
     private var lastAlertMs = 0L
     private var restarts = 0
 
+    /** Advertisements accepted in the current health sample. */
+    private val sampleAds = AtomicInteger(0)
+    private var sampleStartMs = 0L
+    /** Healthy rate learned early in a scan cycle, in advertisements per second. */
+    private var referenceRate = 0.0
+    private var currentRate = 0.0
+    private var rateSamples = 0
+    private var starvedSinceMs = 0L
+
+    private lateinit var ignoreList: IgnoreList
+
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
@@ -95,6 +108,7 @@ class ScanService : Service() {
     override fun onCreate() {
         super.onCreate()
         settings = SettingsStore(this)
+        ignoreList = IgnoreList.get(this)
         config = settings.load()
         aggregator = PulseAggregator(config)
         csv = CsvLogger(this)
@@ -172,6 +186,12 @@ class ScanService : Service() {
         lastAlertMs = 0L
         lastRestartAtMs = 0L
         restarts = 0
+        referenceRate = 0.0
+        currentRate = 0.0
+        rateSamples = 0
+        starvedSinceMs = 0L
+        sampleAds.set(0)
+        sampleStartMs = System.currentTimeMillis()
         nextCloseAtMs = System.currentTimeMillis() + config.binMillis
 
         PulseState.update {
@@ -181,7 +201,11 @@ class ScanService : Service() {
                 currentCount = 0,
                 activeUnique = 0,
                 baseline = 0.0,
-                binsUntilWarm = config.warmupBins,
+                phase = Phase.ENROLL,
+                secondsUntilArmed = config.armedAfterBins * config.binSeconds,
+                armingProgress = 0f,
+                advertsPerSecond = 0.0,
+                referenceRate = 0.0,
                 totalAdvertisements = 0,
                 scanRestarts = 0,
                 config = config,
@@ -224,8 +248,10 @@ class ScanService : Service() {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             val device = result?.device ?: return
+            if (ignoreList.isIgnored(device.address)) return
             val now = System.currentTimeMillis()
             lastResultMs.set(now)
+            sampleAds.incrementAndGet()
             // Bounded so a stalled loop coroutine cannot grow this without limit in a
             // dense RF environment. Dropping the newest advert is harmless: the same
             // address will re-advertise within seconds.
@@ -325,6 +351,12 @@ class ScanService : Service() {
         if (now - lastRestartAtMs < MIN_RESTART_GAP_MS) return
         lastRestartAtMs = now
         restarts++
+        // A fresh cycle needs a fresh reference; the old one described the old table.
+        referenceRate = 0.0
+        rateSamples = 0
+        starvedSinceMs = 0L
+        sampleAds.set(0)
+        sampleStartMs = now
         Log.i(TAG, "Restarting scan: " + why)
         stopScan()
         scope.launch {
@@ -393,12 +425,23 @@ class ScanService : Service() {
     }
 
     /**
-     * Two failure modes we watch for: the Android 12+ stack quietly stopping delivery,
-     * and the long-running-scan cutoff some OEM builds enforce around 30 minutes.
+     * Keeps the scan actually delivering.
+     *
+     * The failure that matters in practice is not silence, it is starvation. The BLE
+     * controller holds a finite duplicate-filter table. In a busy area, with nearby phones
+     * rotating their addresses, that table fills within a few minutes and the chipset then
+     * stops surfacing genuinely new advertisers. A trickle still gets through, so a
+     * silence-based watchdog never fires and the app looks alive while seeing nothing.
+     *
+     * So measure the advertisement *rate*, learn what healthy looks like early in each
+     * cycle, and restart when it collapses. Plus an unconditional cycle on a timer,
+     * because flushing that table is cheap and the failure is invisible from outside.
      */
     private fun runWatchdog(now: Long) {
         val bt = adapter()
         if (bt == null || !bt.isEnabled) return
+
+        sampleRate(now)
 
         if (!scanning) {
             if (now - lastScanAttemptMs > RETRY_GAP_MS) restartScan("scanner not running")
@@ -408,9 +451,49 @@ class ScanService : Service() {
             restartScan("no results for " + (SILENCE_RESTART_MS / 1000) + "s")
             return
         }
-        if (now - scanStartedAtMs > PERIODIC_RESTART_MS) {
-            restartScan("periodic refresh")
+        if (now - scanStartedAtMs > config.scanCycleMillis) {
+            restartScan("scan cycle, flushing the controller duplicate filter")
+            return
         }
+        if (isStarved(now)) {
+            restartScan("delivery rate collapsed, likely duplicate-filter exhaustion")
+        }
+    }
+
+    /** Rolls a rate sample every RATE_SAMPLE_MS and learns the healthy reference. */
+    private fun sampleRate(now: Long) {
+        if (sampleStartMs == 0L) {
+            sampleStartMs = now
+            return
+        }
+        val elapsed = now - sampleStartMs
+        if (elapsed < RATE_SAMPLE_MS) return
+
+        currentRate = sampleAds.getAndSet(0) * 1000.0 / elapsed
+        sampleStartMs = now
+        rateSamples++
+
+        // Learn the reference from the early, healthy part of a cycle, taking the best
+        // sample rather than an average - a dip is the thing we are trying to detect.
+        if (rateSamples <= REFERENCE_SAMPLES) {
+            referenceRate = maxOf(referenceRate, currentRate)
+        }
+    }
+
+    /** True once delivery has sat below a fraction of the learned rate long enough. */
+    private fun isStarved(now: Long): Boolean {
+        if (referenceRate < MIN_MEANINGFUL_RATE) return false
+        if (rateSamples <= REFERENCE_SAMPLES) return false
+
+        if (currentRate >= referenceRate * STARVED_FRACTION) {
+            starvedSinceMs = 0L
+            return false
+        }
+        if (starvedSinceMs == 0L) {
+            starvedSinceMs = now
+            return false
+        }
+        return now - starvedSinceMs >= STARVED_FOR_MS
     }
 
     private fun publish() {
@@ -421,10 +504,15 @@ class ScanService : Service() {
                 currentCount = aggregator.currentCount(),
                 activeUnique = aggregator.activeUnique(),
                 baseline = aggregator.computeBaseline(),
-                binsUntilWarm = aggregator.binsUntilWarm(),
                 totalAdvertisements = aggregator.totalAdvertisements,
                 lastResultMs = lastResultMs.get(),
                 scanRestarts = restarts,
+                phase = aggregator.phase(),
+                secondsUntilArmed = aggregator.secondsUntilArmed(),
+                armingProgress = aggregator.armingProgress(),
+                advertsPerSecond = currentRate,
+                referenceRate = referenceRate,
+                ignoredCount = ignoreList.size(),
                 csvPath = csv.currentFile?.absolutePath,
             )
         }
@@ -474,7 +562,9 @@ class ScanService : Service() {
         val state = PulseState.state.value
         val text = when {
             state.error != null -> state.error!!
-            state.binsUntilWarm > 0 -> "Warming up, " + state.binsUntilWarm + " bins to go"
+            state.secondsUntilArmed > 0 ->
+                (if (state.phase == Phase.ENROLL) "Learning what is already here, " else
+                    "Learning the normal rate, ") + state.secondsUntilArmed + "s to go"
             else -> state.currentCount.toString() + " new now, usual " + format1(state.baseline)
         }
         val stopIntent = PendingIntent.getForegroundService(
@@ -533,9 +623,16 @@ class ScanService : Service() {
 
         private const val TICK_MS = 500L
         private const val SILENCE_RESTART_MS = 90_000L
-        private const val PERIODIC_RESTART_MS = 25 * 60_000L
         private const val RETRY_GAP_MS = 30_000L
         private const val MIN_RESTART_GAP_MS = 30_000L
+        private const val RATE_SAMPLE_MS = 10_000L
+        /** Samples used to learn the healthy rate after each (re)start. */
+        private const val REFERENCE_SAMPLES = 3
+        /** Below this fraction of the learned rate counts as starved. */
+        private const val STARVED_FRACTION = 0.25
+        private const val STARVED_FOR_MS = 40_000L
+        /** Do not act on a reference so low that the fraction is meaningless. */
+        private const val MIN_MEANINGFUL_RATE = 1.0
         private const val MAX_QUEUED_ADVERTS = 20_000
         private const val CSV_RETENTION_DAYS = 30
 

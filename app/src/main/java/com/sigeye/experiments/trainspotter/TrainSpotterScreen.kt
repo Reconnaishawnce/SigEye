@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -118,6 +119,29 @@ private fun Monitor() {
         }
     }
 
+    if (state.running && state.secondsUntilArmed > 0) {
+        ArmingCard(state)
+        Spacer(Modifier.height(16.dp))
+    }
+
+    if (state.starved) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
+        ) {
+            Text(
+                text = "Scan starved - the radio is delivering " +
+                    format1(state.advertsPerSecond) + "/s against " +
+                    format1(state.referenceRate) + "/s earlier. Restarting automatically.",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -160,19 +184,9 @@ private fun Monitor() {
     ) {
         Stat("Active", state.activeUnique.toString(), "in " + state.config.windowMinutes + " min")
         Stat("Usual", format1(state.baseline), "new per bin")
-        Stat("Ads", compact(state.totalAdvertisements), "seen total")
+        Stat("Rate", format1(state.advertsPerSecond), "ads per sec")
     }
 
-    if (state.running && state.binsUntilWarm > 0) {
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "Warming up: " + state.binsUntilWarm + " more bins before burst alerts arm.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 
     Spacer(Modifier.height(20.dp))
     if (state.running) {
@@ -234,6 +248,77 @@ private fun Monitor() {
             onSaved = { ScanService.reloadConfig(context) },
         )
     }
+}
+
+/**
+ * The opening stretch of a run, made legible.
+ *
+ * Out of the box the app used to look broken here: a huge first reading, then a long
+ * silence with no explanation. Saying which stage it is in, and how long is left, is the
+ * difference between "it is learning" and "it is not working".
+ */
+@Composable
+private fun ArmingCard(state: ScanUiState) {
+    val enrolling = state.phase == Phase.ENROLL
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = if (enrolling) {
+                    "Noting what is already here"
+                } else {
+                    "Learning the normal rate"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (enrolling) {
+                    "Every device in range looks new at the start, so nothing is counted " +
+                        "yet. This is not a reading."
+                } else {
+                    "Counting for real now, measuring what a quiet minute looks like " +
+                        "before anything can count as a burst."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            LinearProgressIndicator(
+                progress = { state.armingProgress },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Alerts arm in " + clock(state.secondsUntilArmed),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = state.activeUnique.toString() + " devices logged",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Seconds as m:ss, or plain seconds under a minute. */
+private fun clock(seconds: Int): String {
+    if (seconds < 60) return seconds.toString() + "s"
+    val minutes = seconds / 60
+    val rest = seconds % 60
+    return minutes.toString() + ":" + rest.toString().padStart(2, '0')
 }
 
 @Composable

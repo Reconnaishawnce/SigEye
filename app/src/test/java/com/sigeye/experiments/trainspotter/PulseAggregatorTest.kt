@@ -14,34 +14,48 @@ class PulseAggregatorTest {
         windowMinutes = 10,
         rssiFloor = -85,
         historyMinutes = 30,
+        enrollmentSeconds = 20, // 4 bins
+        warmupSeconds = 60, // 12 bins
         baselineBins = 60,
-        warmupBins = 24,
         spikeFactor = 3.0,
         spikeMinCount = 4,
     )
 
+    /** Advances past enrollment and warm-up with a steady [perBin] arrivals per bin. */
+    private fun PulseAggregator.runIn(bins: Int, perBin: Int, startAt: Long = 0L): Long {
+        var now = startAt
+        var seq = 0
+        repeat(bins) {
+            repeat(perBin) { observe("warm-$now-${seq++}", -60, now) }
+            now += 5_000L
+            closeBin(now)
+        }
+        return now
+    }
+
     @Test
-    fun `first sighting of an address counts as new`() {
+    fun `first sighting of an address counts as new once armed`() {
         val agg = PulseAggregator(config)
-        assertTrue(agg.observe("AA:BB", -60, 0L))
+        val now = agg.runIn(config.armedAfterBins, 0)
+        assertTrue(agg.observe("AA:BB", -60, now))
         assertEquals(1, agg.currentCount())
     }
 
     @Test
     fun `repeat sighting inside the window does not count again`() {
         val agg = PulseAggregator(config)
-        agg.observe("AA:BB", -60, 0L)
-        assertFalse(agg.observe("AA:BB", -60, 60_000L))
-        assertFalse(agg.observe("AA:BB", -60, 9 * 60_000L))
+        var now = agg.runIn(config.armedAfterBins, 0)
+        agg.observe("AA:BB", -60, now)
+        assertFalse(agg.observe("AA:BB", -60, now + 60_000L))
         assertEquals(1, agg.currentCount())
     }
 
     @Test
     fun `sighting after the window counts as new again`() {
         val agg = PulseAggregator(config)
-        agg.observe("AA:BB", -60, 0L)
-        // 10 minutes plus a second
-        assertTrue(agg.observe("AA:BB", -60, 601_000L))
+        val now = agg.runIn(config.armedAfterBins, 0)
+        agg.observe("AA:BB", -60, now)
+        assertTrue(agg.observe("AA:BB", -60, now + 601_000L))
         assertEquals(2, agg.currentCount())
     }
 
@@ -54,67 +68,100 @@ class PulseAggregatorTest {
         assertEquals(0L, agg.totalAdvertisements)
     }
 
+    // ------------------------------------------------------------ enrollment
+
     @Test
-    fun `closing a bin resets the counter and records the count`() {
+    fun `enrollment records devices without counting them`() {
         val agg = PulseAggregator(config)
-        agg.observe("A", -60, 0L)
-        agg.observe("B", -60, 1_000L)
-        val bin = agg.closeBin(5_000L)
-        assertNotNull(bin)
-        assertEquals(2, bin!!.newCount)
-        assertEquals(2, bin.activeUnique)
+        assertEquals(Phase.ENROLL, agg.phase())
+
+        // The opening sweep: 200 devices all appear at once.
+        repeat(200) { assertFalse(agg.observe("dev$it", -60, 0L)) }
+        assertEquals(0, agg.currentCount())
+        assertEquals(200, agg.activeUnique())
+
+        val bin = agg.closeBin(5_000L)!!
+        assertEquals(0, bin.newCount)
+        assertEquals(200, bin.activeUnique)
+        assertEquals(Phase.ENROLL, bin.phase)
+        assertFalse(bin.countsTowardScale)
+    }
+
+    @Test
+    fun `a device enrolled at the start does not count when seen again later`() {
+        val agg = PulseAggregator(config)
+        agg.observe("resident", -60, 0L)
+        val now = agg.runIn(config.armedAfterBins, 0)
+        // Still inside the 10 minute window, so it is not new.
+        assertFalse(agg.observe("resident", -60, now))
         assertEquals(0, agg.currentCount())
     }
 
     @Test
-    fun `addresses age out of the active set`() {
+    fun `phase advances enroll then warmup then armed`() {
         val agg = PulseAggregator(config)
-        agg.observe("A", -60, 0L)
+        var now = 0L
+        assertEquals(Phase.ENROLL, agg.phase())
+
+        repeat(config.enrollmentBins) { now += 5_000L; agg.closeBin(now) }
+        assertEquals(Phase.WARMUP, agg.phase())
+
+        repeat(config.warmupBins) { now += 5_000L; agg.closeBin(now) }
+        assertEquals(Phase.ARMED, agg.phase())
+        assertTrue(agg.isWarm())
+        assertEquals(0, agg.secondsUntilArmed())
+        assertEquals(1f, agg.armingProgress(), 0.001f)
+    }
+
+    @Test
+    fun `countdown reports the configured total at the start`() {
+        val agg = PulseAggregator(config)
+        // 4 enrollment bins + 12 warm-up bins, 5s each = 80s.
+        assertEquals(80, agg.secondsUntilArmed())
+        assertEquals(0f, agg.armingProgress(), 0.001f)
+    }
+
+    @Test
+    fun `enrollment bins are excluded from the baseline`() {
+        val agg = PulseAggregator(config)
+        // A huge enrollment bin, then quiet bins of 1.
+        repeat(200) { agg.observe("dev$it", -60, 0L) }
         agg.closeBin(5_000L)
-        assertEquals(1, agg.activeUnique())
-        // Close a bin well past the 10 minute window with no further sightings.
-        agg.closeBin(11 * 60_000L)
-        assertEquals(0, agg.activeUnique())
+        agg.runIn(30, 1, startAt = 5_000L)
+        // Median of the quiet bins only; the 200 never entered the pool.
+        assertEquals(1.0, agg.computeBaseline(), 0.001)
+    }
+
+    // ----------------------------------------------------------------- spikes
+
+    @Test
+    fun `no spike can fire before the app is armed`() {
+        val agg = PulseAggregator(config)
+        repeat(50) { agg.observe("x$it", -60, 0L) }
+        assertFalse(agg.closeBin(5_000L)!!.spike)
+        assertFalse(agg.isWarm())
     }
 
     @Test
     fun `a quiet baseline followed by a burst raises a spike`() {
         val agg = PulseAggregator(config)
-        var now = 0L
-        var addr = 0
-
-        // 40 bins of steady background: 1 new device per bin.
-        repeat(40) {
-            agg.observe("bg${addr++}", -60, now)
-            now += 5_000L
-            agg.closeBin(now)
-        }
+        var now = agg.runIn(40, 1)
         assertEquals(1.0, agg.computeBaseline(), 0.001)
 
-        // A train: 12 new devices in one bin.
-        repeat(12) { agg.observe("train${addr++}", -60, now) }
+        repeat(12) { agg.observe("train$it", -60, now) }
         now += 5_000L
         val bin = agg.closeBin(now)!!
         assertTrue("12 devices over a baseline of 1 should spike", bin.spike)
-        assertEquals(12, bin.newCount)
+        assertEquals(Phase.ARMED, bin.phase)
     }
 
     @Test
     fun `a busy baseline suppresses an ordinary bin`() {
         val agg = PulseAggregator(config)
-        var now = 0L
-        var addr = 0
-
-        // Busy street: 10 new devices per bin is normal here.
-        repeat(40) {
-            repeat(10) { agg.observe("bg${addr++}", -60, now) }
-            now += 5_000L
-            agg.closeBin(now)
-        }
+        var now = agg.runIn(40, 10)
         assertEquals(10.0, agg.computeBaseline(), 0.001)
 
-        // 12 devices is above the mean but nowhere near 3x - should not fire.
-        repeat(12) { agg.observe("x${addr++}", -60, now) }
+        repeat(12) { agg.observe("x$it", -60, now) }
         now += 5_000L
         assertFalse(agg.closeBin(now)!!.spike)
     }
@@ -122,7 +169,6 @@ class PulseAggregatorTest {
     @Test
     fun `spikeMinCount blocks tiny relative spikes in dead silence`() {
         val agg = PulseAggregator(config)
-        // Baseline of zero, a single device appears. 1 device is not a train.
         assertFalse(agg.isSpike(1, 0.0))
         assertFalse(agg.isSpike(3, 0.0))
         assertTrue(agg.isSpike(4, 0.0))
@@ -131,58 +177,35 @@ class PulseAggregatorTest {
     @Test
     fun `spiking bins are excluded from the baseline`() {
         val agg = PulseAggregator(config)
-        var now = 0L
-        var addr = 0
-        repeat(30) {
-            agg.observe("bg${addr++}", -60, now)
-            now += 5_000L
-            agg.closeBin(now)
-        }
-        // Three consecutive heavy bins, as a long train would produce.
+        var now = agg.runIn(30, 1)
+        var seq = 0
         repeat(3) {
-            repeat(15) { agg.observe("t${addr++}", -60, now) }
+            repeat(15) { agg.observe("t${seq++}", -60, now) }
             now += 5_000L
             assertTrue(agg.closeBin(now)!!.spike)
         }
-        // Baseline must still reflect the quiet street, not the train.
         assertEquals(1.0, agg.computeBaseline(), 0.001)
     }
 
-    @Test
-    fun `no spike can fire during the warm-up period`() {
-        val agg = PulseAggregator(config)
-        var now = 0L
-        var addr = 0
-        // A huge burst in the very first bin must not alert - there is no baseline yet.
-        repeat(50) { agg.observe("x${addr++}", -60, now) }
-        now += 5_000L
-        assertFalse(agg.closeBin(now)!!.spike)
-        assertFalse(agg.isWarm())
-
-        // Idle through the rest of the warm-up.
-        repeat(25) {
-            now += 5_000L
-            agg.closeBin(now)
-        }
-        assertTrue(agg.isWarm())
-        assertEquals(0, agg.binsUntilWarm())
-
-        // Now the same burst does alert.
-        repeat(50) { agg.observe("y${addr++}", -60, now) }
-        now += 5_000L
-        assertTrue(agg.closeBin(now)!!.spike)
-    }
+    // ------------------------------------------------------------ bookkeeping
 
     @Test
     fun `history is capped to the configured window`() {
         val small = config.copy(historyMinutes = 1) // 12 bins at 5s
         val agg = PulseAggregator(small)
         var now = 0L
-        repeat(50) {
-            now += 5_000L
-            agg.closeBin(now)
-        }
+        repeat(50) { now += 5_000L; agg.closeBin(now) }
         assertEquals(12, agg.history().size)
+    }
+
+    @Test
+    fun `addresses age out of the active set`() {
+        val agg = PulseAggregator(config)
+        agg.observe("A", -60, 0L)
+        agg.closeBin(5_000L)
+        assertEquals(1, agg.activeUnique())
+        agg.closeBin(11 * 60_000L)
+        assertEquals(0, agg.activeUnique())
     }
 
     @Test
@@ -190,9 +213,7 @@ class PulseAggregatorTest {
         val agg = PulseAggregator(config)
         agg.observe("A", -60, 1_000_000L)
         assertNotNull(agg.closeBin(1_005_000L))
-        // Clock yanked back an hour mid-run.
         assertNull(agg.closeBin(1_005_000L - 3_600_000L))
-        // The very next bin closes normally against the new reference.
         agg.observe("B", -60, 1_005_000L - 3_600_000L + 1_000L)
         assertNotNull(agg.closeBin(1_005_000L - 3_600_000L + 5_000L))
     }
@@ -204,5 +225,18 @@ class PulseAggregatorTest {
         agg.markLabel("TRAIN")
         assertEquals("TRAIN", agg.closeBin(10_000L)!!.label)
         assertEquals("", agg.closeBin(15_000L)!!.label)
+    }
+
+    @Test
+    fun `config derives bin counts from seconds`() {
+        val c = PulseConfig(binSeconds = 5, enrollmentSeconds = 20, warmupSeconds = 60)
+        assertEquals(4, c.enrollmentBins)
+        assertEquals(12, c.warmupBins)
+        assertEquals(16, c.armedAfterBins)
+
+        // Rounds up, and never to zero, whatever the bin width.
+        val coarse = PulseConfig(binSeconds = 30, enrollmentSeconds = 20, warmupSeconds = 10)
+        assertEquals(1, coarse.enrollmentBins)
+        assertEquals(1, coarse.warmupBins)
     }
 }

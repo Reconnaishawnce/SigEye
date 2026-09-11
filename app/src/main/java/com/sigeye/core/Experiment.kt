@@ -26,6 +26,7 @@ data class Experiment(
 object Experiments {
 
     const val TRAIN_SPOTTER = "trainspotter"
+    const val INSPECTOR = "inspector"
 
     val all: List<Experiment> = listOf(
         Experiment(
@@ -37,11 +38,12 @@ object Experiments {
             status = Experiment.Status.READY,
         ),
         Experiment(
-            id = "beacons",
-            title = "Beacon Decoder",
-            blurb = "Shows what nearby devices are actually broadcasting.",
-            teaches = "iBeacon and Eddystone frames, manufacturer IDs, service UUIDs.",
-            status = Experiment.Status.PLANNED,
+            id = INSPECTOR,
+            title = "Device Inspector",
+            blurb = "Everything broadcasting around you, decoded.",
+            teaches = "Who made it, what it is saying, and how close it is. Mute the " +
+                "devices you do not care about and every experiment ignores them.",
+            status = Experiment.Status.READY,
         ),
         Experiment(
             id = "channels",

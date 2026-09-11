@@ -8,6 +8,9 @@ package com.sigeye.experiments.trainspotter
  * every 15 minutes, so stationary neighbours mint a steady drip of "new" addresses.
  * That drip is the baseline; a train is a sharp multiple of it.
  *
+ * A run has three stages, see [Phase]. Enrollment exists because the first moments of any
+ * scan discover the entire standing population at once, which is not an event.
+ *
  * Not thread-safe by design - the service confines it to a single coroutine.
  */
 class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
@@ -21,6 +24,7 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
     private var currentBinStart = Long.MIN_VALUE
     private var currentNew = 0
     private var pendingLabel: String = ""
+    private var closedBins = 0
 
     /** Total advertisements accepted since start, for a sanity readout. */
     var totalAdvertisements: Long = 0
@@ -32,11 +36,24 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
 
     fun activeUnique(): Int = lastSeen.size
 
-    /** True once enough bins have closed for the baseline to mean anything. */
-    fun isWarm(): Boolean = bins.size >= config.warmupBins
+    fun phase(): Phase = when {
+        closedBins < config.enrollmentBins -> Phase.ENROLL
+        closedBins < config.armedAfterBins -> Phase.WARMUP
+        else -> Phase.ARMED
+    }
 
-    /** Bins still needed before spike detection arms itself. */
-    fun binsUntilWarm(): Int = (config.warmupBins - bins.size).coerceAtLeast(0)
+    fun isWarm(): Boolean = phase() == Phase.ARMED
+
+    /** Seconds remaining before alerts arm. Drives the countdown on screen. */
+    fun secondsUntilArmed(): Int =
+        ((config.armedAfterBins - closedBins).coerceAtLeast(0)) * config.binSeconds
+
+    /** 0f at the start of a run, 1f once armed. */
+    fun armingProgress(): Float {
+        val total = config.armedAfterBins
+        if (total <= 0) return 1f
+        return (closedBins.toFloat() / total).coerceIn(0f, 1f)
+    }
 
     fun reconfigure(newConfig: PulseConfig) {
         config = newConfig
@@ -54,11 +71,15 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
         currentBinStart = Long.MIN_VALUE
         currentNew = 0
         pendingLabel = ""
+        closedBins = 0
         totalAdvertisements = 0
     }
 
     /**
      * Feeds one advertisement. Returns true if this address counted as new.
+     *
+     * During enrollment the address is still recorded - that is the whole point - but it
+     * never counts, so the opening burst cannot masquerade as an event.
      */
     fun observe(address: String, rssi: Int, nowMs: Long): Boolean {
         if (rssi < config.rssiFloor) return false
@@ -67,8 +88,11 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
 
         val previous = lastSeen.put(address, nowMs)
         val isNew = previous == null || nowMs - previous > config.windowMillis
-        if (isNew) currentNew++
-        return isNew
+        if (isNew && phase() != Phase.ENROLL) {
+            currentNew++
+            return true
+        }
+        return false
     }
 
     /**
@@ -88,20 +112,23 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
             return null
         }
 
+        val phase = phase()
         forgetStaleAddresses(nowMs)
 
         val baseline = computeBaseline()
-        val spike = isWarm() && isSpike(currentNew, baseline)
+        val spike = phase == Phase.ARMED && isSpike(currentNew, baseline)
         val bin = Bin(
             startMs = currentBinStart,
             newCount = currentNew,
             activeUnique = lastSeen.size,
             baseline = baseline,
             spike = spike,
+            phase = phase,
             label = pendingLabel,
         )
 
         bins.addLast(bin)
+        closedBins++
         trimHistory()
 
         currentBinStart = nowMs
@@ -111,12 +138,16 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
     }
 
     /**
-     * Median of recent *non-spiking* bins. Excluding spikes keeps a long train from
-     * inflating the very baseline it is supposed to stand out against.
+     * Median of recent *non-spiking* bins, ignoring enrollment.
+     *
+     * Excluding spikes keeps a long train from inflating the very baseline it is supposed
+     * to stand out against. Excluding enrollment keeps the opening population sweep out of
+     * the median entirely.
      */
     fun computeBaseline(): Double {
         val recent = bins.asReversed()
             .asSequence()
+            .filter { it.phase != Phase.ENROLL }
             .take(config.baselineBins)
             .filterNot { it.spike }
             .map { it.newCount }

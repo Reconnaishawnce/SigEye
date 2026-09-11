@@ -16,11 +16,13 @@ class SettingsStore(context: Context) {
             windowMinutes = prefs.getInt(KEY_WINDOW_MINUTES, d.windowMinutes),
             rssiFloor = prefs.getInt(KEY_RSSI_FLOOR, d.rssiFloor),
             historyMinutes = prefs.getInt(KEY_HISTORY_MINUTES, d.historyMinutes),
+            enrollmentSeconds = prefs.getInt(KEY_ENROLLMENT_SECONDS, d.enrollmentSeconds),
+            warmupSeconds = prefs.getInt(KEY_WARMUP_SECONDS, d.warmupSeconds),
             baselineBins = prefs.getInt(KEY_BASELINE_BINS, d.baselineBins),
-            warmupBins = prefs.getInt(KEY_WARMUP_BINS, d.warmupBins),
             spikeFactor = prefs.getFloat(KEY_SPIKE_FACTOR, d.spikeFactor.toFloat()).toDouble(),
             spikeMinCount = prefs.getInt(KEY_SPIKE_MIN_COUNT, d.spikeMinCount),
             alertCooldownSeconds = prefs.getInt(KEY_COOLDOWN, d.alertCooldownSeconds),
+            scanCycleMinutes = prefs.getInt(KEY_SCAN_CYCLE_MINUTES, d.scanCycleMinutes),
         )
     }
 
@@ -30,11 +32,13 @@ class SettingsStore(context: Context) {
             .putInt(KEY_WINDOW_MINUTES, config.windowMinutes)
             .putInt(KEY_RSSI_FLOOR, config.rssiFloor)
             .putInt(KEY_HISTORY_MINUTES, config.historyMinutes)
+            .putInt(KEY_ENROLLMENT_SECONDS, config.enrollmentSeconds)
+            .putInt(KEY_WARMUP_SECONDS, config.warmupSeconds)
             .putInt(KEY_BASELINE_BINS, config.baselineBins)
-            .putInt(KEY_WARMUP_BINS, config.warmupBins)
             .putFloat(KEY_SPIKE_FACTOR, config.spikeFactor.toFloat())
             .putInt(KEY_SPIKE_MIN_COUNT, config.spikeMinCount)
             .putInt(KEY_COOLDOWN, config.alertCooldownSeconds)
+            .putInt(KEY_SCAN_CYCLE_MINUTES, config.scanCycleMinutes)
             .apply()
     }
 
@@ -43,10 +47,12 @@ class SettingsStore(context: Context) {
         const val KEY_WINDOW_MINUTES = "window_minutes"
         const val KEY_RSSI_FLOOR = "rssi_floor"
         const val KEY_HISTORY_MINUTES = "history_minutes"
+        const val KEY_ENROLLMENT_SECONDS = "enrollment_seconds"
+        const val KEY_WARMUP_SECONDS = "warmup_seconds"
         const val KEY_BASELINE_BINS = "baseline_bins"
-        const val KEY_WARMUP_BINS = "warmup_bins"
         const val KEY_SPIKE_FACTOR = "spike_factor"
         const val KEY_SPIKE_MIN_COUNT = "spike_min_count"
         const val KEY_COOLDOWN = "alert_cooldown_seconds"
+        const val KEY_SCAN_CYCLE_MINUTES = "scan_cycle_minutes"
     }
 }

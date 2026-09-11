@@ -35,6 +35,9 @@ fun SettingsDialog(
     var windowMinutes by remember { mutableFloatStateOf(initial.windowMinutes.toFloat()) }
     var rssiFloor by remember { mutableFloatStateOf(initial.rssiFloor.toFloat()) }
     var historyMinutes by remember { mutableFloatStateOf(initial.historyMinutes.toFloat()) }
+    var enrollmentSeconds by remember { mutableFloatStateOf(initial.enrollmentSeconds.toFloat()) }
+    var warmupSeconds by remember { mutableFloatStateOf(initial.warmupSeconds.toFloat()) }
+    var scanCycle by remember { mutableFloatStateOf(initial.scanCycleMinutes.toFloat()) }
     var spikeFactor by remember { mutableFloatStateOf(initial.spikeFactor.toFloat()) }
     var spikeMinCount by remember { mutableFloatStateOf(initial.spikeMinCount.toFloat()) }
     var cooldown by remember { mutableFloatStateOf(initial.alertCooldownSeconds.toFloat()) }
@@ -83,6 +86,37 @@ fun SettingsDialog(
                 ) { historyMinutes = it }
 
                 SliderRow(
+                    label = "Enrollment",
+                    value = enrollmentSeconds,
+                    range = 5f..120f,
+                    steps = 22,
+                    display = enrollmentSeconds.roundToInt().toString() + " s",
+                    hint = "Time spent recording what is already here without counting it. " +
+                        "Stops the opening population sweep looking like an event.",
+                ) { enrollmentSeconds = it }
+
+                SliderRow(
+                    label = "Baseline learning",
+                    value = warmupSeconds,
+                    range = 15f..300f,
+                    steps = 18,
+                    display = warmupSeconds.roundToInt().toString() + " s",
+                    hint = "After enrollment, how long to learn the normal rate before " +
+                        "alerts arm.",
+                ) { warmupSeconds = it }
+
+                SliderRow(
+                    label = "Scan refresh",
+                    value = scanCycle,
+                    range = 1f..15f,
+                    steps = 13,
+                    display = scanCycle.roundToInt().toString() + " min",
+                    hint = "How often to restart the Bluetooth scan. The radio keeps a " +
+                        "duplicate filter that fills up and starves the scan; restarting " +
+                        "clears it. Lower this if counts flatline after a few minutes.",
+                ) { scanCycle = it }
+
+                SliderRow(
                     label = "Burst threshold",
                     value = spikeFactor,
                     range = 1.5f..8f,
@@ -118,8 +152,10 @@ fun SettingsDialog(
                         windowMinutes = windowMinutes.roundToInt(),
                         rssiFloor = rssiFloor.roundToInt(),
                         historyMinutes = historyMinutes.roundToInt(),
+                        enrollmentSeconds = enrollmentSeconds.roundToInt(),
+                        warmupSeconds = warmupSeconds.roundToInt(),
                         baselineBins = initial.baselineBins,
-                        warmupBins = initial.warmupBins,
+                        scanCycleMinutes = scanCycle.roundToInt(),
                         spikeFactor = spikeFactor.toDouble(),
                         spikeMinCount = spikeMinCount.roundToInt(),
                         alertCooldownSeconds = cooldown.roundToInt(),
