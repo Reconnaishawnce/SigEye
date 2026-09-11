@@ -55,6 +55,9 @@ object SpeedEstimator {
 
     const val MIN_SAMPLES = 8
 
+    /** Beyond this ratio between approach and departure, the pass is not a clean one. */
+    const val MAX_ASYMMETRY = 1.6
+
     fun analyse(
         address: String,
         samples: List<PassSample>,
@@ -72,7 +75,13 @@ object SpeedEstimator {
         // a train going half again as fast as it was.
         val series = smooth(samples)
 
-        val peakIndex = series.indices.maxByOrNull { series[it].rssi } ?: 0
+        // The middle of the plateau, not its first sample. Smoothing flattens the top,
+        // and integer dBm ties anyway, so the strongest reading is usually several
+        // samples wide - taking the first puts closest approach early by half the
+        // plateau, which then makes a symmetric pass look lopsided.
+        val strongest = series.maxOf { it.rssi }
+        val plateau = series.indices.filter { series[it].rssi == strongest }
+        val peakIndex = plateau[plateau.size / 2]
         val peak = series[peakIndex]
 
         val before = series.take(peakIndex + 1)
@@ -111,12 +120,14 @@ object SpeedEstimator {
         val trackLength = 2 * alongTrack
         val speed = if (crossingMs > 0) trackLength / (crossingMs / 1000.0) else null
 
-        // A clean pass is symmetric: the approach and the departure should take about the
-        // same time. Badly lopsided means something else was changing.
-        val half = crossingMs / 2.0
-        val approach = (peak.atMs - entry).toDouble()
-        val symmetry = if (half > 0) (approach / half).coerceIn(0.0, 2.0) else 1.0
-        val lopsided = symmetry < 0.55 || symmetry > 1.45
+        // A clean pass is symmetric: approaching and leaving should take about as long as
+        // each other. Compare them directly rather than against half the total - the
+        // indirect version barely moves for a pass that is genuinely twice as long on one
+        // side as the other.
+        val approach = (peak.atMs - entry).coerceAtLeast(1L).toDouble()
+        val departure = (exit - peak.atMs).coerceAtLeast(1L).toDouble()
+        val ratio = maxOf(approach / departure, departure / approach)
+        val lopsided = ratio > MAX_ASYMMETRY
 
         return PassResult(
             address = address,
@@ -127,7 +138,11 @@ object SpeedEstimator {
             samples = samples.size,
             quality = if (lopsided) PassQuality.ROUGH else PassQuality.GOOD,
             reason = if (lopsided) {
-                "Approach and departure took different times, so treat this loosely."
+                String.format(
+                    java.util.Locale.US,
+                    "Approach and departure differed by %.1fx, so treat this loosely.",
+                    ratio,
+                )
             } else {
                 null
             },
