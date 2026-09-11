@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -31,17 +33,39 @@ jobs:
         continue-on-error: true
         run: ./gradlew lintDebug --no-daemon
 
-      - name: Rename APK
+      - name: Stage APK
         run: |
           mkdir -p out
           cp app/build/outputs/apk/debug/app-debug.apk "out/SigEye-${GITHUB_SHA::7}.apk"
+          # Stable filename for the rolling release, so the download URL never changes.
+          cp app/build/outputs/apk/debug/app-debug.apk out/SigEye.apk
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SigEye-apk
-          path: out/*.apk
+          path: out/SigEye-*.apk
           retention-days: 90
+
+      # Actions artifacts need an authenticated desktop session to download, which makes
+      # them useless from a phone. A release asset is a plain public URL any browser can
+      # fetch, so the newest build is always one tap away at /releases/latest.
+      - name: Publish rolling latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA_SHORT="${GITHUB_SHA::7}"
+          BUILT_AT="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          NOTES="Debug APK built from main at ${SHA_SHORT} on ${BUILT_AT}."
+          NOTES="${NOTES}"$'\n\n'"Install straight over the previous version to update; settings and CSV logs are kept."
+
+          if ! gh release view latest >/dev/null 2>&1; then
+            gh release create latest --title "Latest debug build" --notes "${NOTES}"
+          else
+            gh release edit latest --title "Latest debug build" --notes "${NOTES}"
+          fi
+          gh release upload latest out/SigEye.apk --clobber
 
       - name: Upload test and lint reports
         if: always()

@@ -16,17 +16,19 @@ source**.
 
 ### 2. Download the APK on the phone
 
-Open this on the **phone's** browser and sign in to GitHub:
+Open this in the phone's browser:
 
-https://github.com/Reconnaishawnce/SigEye/actions
+**https://github.com/Reconnaishawnce/SigEye/releases/latest**
 
-Tap the newest run with a green check → scroll to **Artifacts** → tap **SigEye-apk**.
-It downloads a `.zip`.
+Tap **SigEye.apk** under Assets. It downloads directly — no login, no zip.
 
-### 3. Unzip and install
+> Don't use the Actions tab for this. Actions artifacts are always zipped and need an
+> authenticated desktop browser session, so on a phone they show up but refuse to download.
+> The release asset exists to avoid exactly that.
 
-Open the phone's **Files** app → Downloads → tap `SigEye-apk.zip` → extract → tap the
-`.apk` inside → **Install**. Play Protect will warn that it doesn't recognise the app; tap
+### 3. Install
+
+Open the phone's **Files** app → Downloads → tap `SigEye.apk` → **Install**. Play Protect will warn that it doesn't recognise the app; tap
 **Install anyway**.
 
 ### 4. First run

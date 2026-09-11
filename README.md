@@ -50,8 +50,13 @@ Requires nothing but a JDK 17 and this repo:
 
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
-CI builds the same APK on every push. Grab it from the **Actions** tab of this repo -
-open the newest green run and download the `SigEye-apk` artifact.
+CI builds the same APK on every push to `main` and publishes it as a release asset:
+
+**https://github.com/Reconnaishawnce/SigEye/releases/latest**
+
+That is a plain public download link, so it works from a phone browser with no login and
+no zip. The Actions tab also keeps a 90-day artifact, but artifacts are zipped and need an
+authenticated desktop session, which makes them awkward on mobile.
 
 ## CSV log
 
