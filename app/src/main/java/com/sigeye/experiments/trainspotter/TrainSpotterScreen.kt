@@ -36,8 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.ScanService
+import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Sparkline
@@ -53,23 +55,7 @@ fun TrainSpotterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextButton(
-            onClick = onBack,
-            contentPadding = PaddingValues(0.dp),
-        ) {
-            Text("← All experiments")
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Train Spotter",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Counts new Bluetooth devices nearby and flags the bursts.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ExperimentHeader(Experiments.TRAIN_SPOTTER, onBack)
         Spacer(Modifier.height(20.dp))
 
         PermissionGate(

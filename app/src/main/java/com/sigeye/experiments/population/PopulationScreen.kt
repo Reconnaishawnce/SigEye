@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.DwellClass
@@ -51,6 +52,8 @@ import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.DetailField
 import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.NewListDialog
+import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.RadarTarget
@@ -79,22 +82,9 @@ fun PopulationScreen(
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-            Text("← All experiments")
-        }
-        Text(
-            if (dwell) "Dwell Time" else "Crowd Counter",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            if (dwell) {
-                "Who is passing through, and who lives here."
-            } else {
-                "Roughly how many people are around you."
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ExperimentHeader(
+            if (dwell) Experiments.DWELL else Experiments.CROWD,
+            onBack,
         )
         Spacer(Modifier.height(16.dp))
 
@@ -135,6 +125,7 @@ private fun Live(dwell: Boolean) {
     var showSettings by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<String?>(null) }
     var showNewList by remember { mutableStateOf(false) }
+    var paused by remember { mutableStateOf(false) }
     val ignoreList = remember { IgnoreList.get(context) }
 
     DisposableEffect(Unit) {
@@ -163,8 +154,10 @@ private fun Live(dwell: Boolean) {
         )
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
+    // Pausing freezes the rendered snapshot, never the recording, so a row can be tapped
+    // without the list reordering underneath the finger.
+    LaunchedEffect(paused) {
+        while (!paused) {
             delay(REFRESH_MS)
             val now = System.currentTimeMillis()
             tracker.prune(now)
@@ -352,7 +345,13 @@ private fun Live(dwell: Boolean) {
         Spacer(Modifier.height(18.dp))
         Text("Longest staying", style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
+        PauseBar(
+            paused = paused,
+            onToggle = { paused = !paused },
+            summary = "${snap.devices.size} tracked",
+        )
+        Spacer(Modifier.height(4.dp))
 
         val longest = snap.devices.sortedByDescending { it.dwellMs }.take(40)
         if (longest.isEmpty()) {

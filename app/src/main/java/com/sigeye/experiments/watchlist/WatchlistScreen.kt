@@ -38,8 +38,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
+import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.ScanService
+import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import java.text.SimpleDateFormat
@@ -56,19 +58,7 @@ fun WatchlistScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-            Text("← All experiments")
-        }
-        Text(
-            "Signal Watch",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "Alerts when something you care about comes into range.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ExperimentHeader(Experiments.WATCHLIST, onBack)
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(

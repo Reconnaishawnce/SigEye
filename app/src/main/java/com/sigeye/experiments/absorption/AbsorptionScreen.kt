@@ -39,11 +39,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.DeviceNote
 import com.sigeye.core.Permissions
+import com.sigeye.core.Experiments
 import com.sigeye.core.analysis.PolarSweep
+import com.sigeye.core.analysis.SweepAgreement
 import com.sigeye.core.analysis.SweepResult
+import com.sigeye.core.analysis.SessionResult
+import com.sigeye.core.analysis.SweepSession
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.CompassQuality
 import com.sigeye.core.sensors.HeadingSensor
+import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.PolarPlot
@@ -66,19 +72,7 @@ fun AbsorptionScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-            Text("← All experiments")
-        }
-        Text(
-            "Body Absorption",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "Turn slowly in a circle and find your own shadow.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ExperimentHeader(Experiments.ABSORPTION, onBack)
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(
@@ -113,11 +107,19 @@ private fun Live() {
     val heading by compass.heading.collectAsStateWithLifecycle()
     val notes by book.notes.collectAsStateWithLifecycle()
 
+    val session = remember { SweepSession() }
     var stage by remember { mutableStateOf(Stage.PICK_SOURCE) }
     var sourceAddress by remember { mutableStateOf<String?>(null) }
     var candidates by remember { mutableStateOf<Map<String, Candidate>>(emptyMap()) }
+    var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
+    var paused by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<SweepResult?>(null) }
+    var sessionResult by remember { mutableStateOf(session.result()) }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
+    var sourceRate by remember { mutableStateOf(0.0) }
+    var turnRate by remember { mutableStateOf(0.0f) }
+    var lastHeading by remember { mutableStateOf<Pair<Long, Float>?>(null) }
+    val sourcePackets = remember { java.util.concurrent.atomic.AtomicInteger(0) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -140,12 +142,14 @@ private fun Live() {
                     rssi = advert.rssi,
                     isRandom = advert.isRandomAddress,
                     sightings = (existing?.sightings ?: 0) + 1,
+                    firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
                     lastSeenMs = advert.atMs,
                 )
                 )
 
             if (advert.address == sourceAddress) {
                 liveRssi = advert.rssi
+                sourcePackets.incrementAndGet()
                 // Only record while the compass is worth believing.
                 if (stage == Stage.SWEEP && heading.quality.isUsable) {
                     sweep.add(heading.degrees, advert.rssi)
@@ -161,14 +165,56 @@ private fun Live() {
         }
     }
 
+    // Advertising rate of the chosen source. This is the number that decides whether a
+    // sweep can work at all: a device sending one packet a second cannot fill 24 sectors.
+    LaunchedEffect(sourceAddress) {
+        while (true) {
+            delay(2_000)
+            sourceRate = sourcePackets.getAndSet(0) / 2.0
+        }
+    }
+
+    // Degrees per second, for the turn-speed coaching.
+    LaunchedEffect(heading.degrees) {
+        val now = System.currentTimeMillis()
+        val previous = lastHeading
+        if (previous != null && now > previous.first) {
+            var delta = heading.degrees - previous.second
+            while (delta > 180f) delta -= 360f
+            while (delta < -180f) delta += 360f
+            val seconds = (now - previous.first) / 1000f
+            if (seconds > 0.05f) {
+                val instant = kotlin.math.abs(delta) / seconds
+                turnRate = turnRate * 0.7f + instant * 0.3f
+            }
+        }
+        lastHeading = now to heading.degrees
+    }
+
+    // The picker list, frozen on demand so a row can actually be tapped.
+    LaunchedEffect(paused, candidates) {
+        if (!paused) {
+            val now = System.currentTimeMillis()
+            frozen = candidates.values
+                .filter { now - it.lastSeenMs < 15_000 && it.sightings >= 3 }
+                .sortedByDescending { it.rssi }
+                .take(25)
+        }
+    }
+
     when (stage) {
         Stage.PICK_SOURCE -> PickSource(
-            candidates = candidates.values.toList(),
+            candidates = frozen,
+            paused = paused,
+            onTogglePause = { paused = !paused },
             nicknameOf = { notes[it.uppercase()]?.nickname },
             compassQuality = heading.quality,
             onPick = { address ->
                 sourceAddress = address
+                sourcePackets.set(0)
                 sweep.reset()
+                session.clear()
+                sessionResult = session.result()
                 result = null
                 stage = Stage.SWEEP
             },
@@ -179,9 +225,15 @@ private fun Live() {
             heading = heading.degrees,
             quality = heading.quality,
             rssi = liveRssi,
+            sourceRate = sourceRate,
+            turnRate = turnRate,
+            runNumber = session.count() + 1,
             result = result,
             onFinish = {
-                result = sweep.result()
+                val finished = sweep.result()
+                session.add(finished)
+                sessionResult = session.result()
+                result = finished
                 stage = Stage.RESULT
             },
             onCancel = { stage = Stage.PICK_SOURCE },
@@ -189,7 +241,7 @@ private fun Live() {
 
         Stage.RESULT -> Results(
             sourceLabel = labelFor(sourceAddress, candidates, notes),
-            result = result,
+            session = sessionResult,
             onAgain = {
                 sweep.reset()
                 result = null
@@ -197,6 +249,8 @@ private fun Live() {
             },
             onNewSource = {
                 sourceAddress = null
+                session.clear()
+                sessionResult = session.result()
                 stage = Stage.PICK_SOURCE
             },
         )
@@ -210,8 +264,24 @@ private data class Candidate(
     val rssi: Int,
     val isRandom: Boolean,
     val sightings: Int,
+    val firstSeenMs: Long,
     val lastSeenMs: Long,
-)
+) {
+    /**
+     * Packets per second since first heard.
+     *
+     * The single most useful thing to know before picking a source: a sweep needs about
+     * three readings in each of 24 sectors, so under roughly 3/s there is no chance of
+     * filling the circle in the half minute a turn takes.
+     */
+    val rate: Double
+        get() {
+            val span = (lastSeenMs - firstSeenMs).coerceAtLeast(1L)
+            return sightings * 1000.0 / span
+        }
+
+    val isChatty: Boolean get() = rate >= 3.0
+}
 
 private fun labelFor(
     address: String?,
@@ -229,6 +299,8 @@ private fun labelFor(
 @Composable
 private fun PickSource(
     candidates: List<Candidate>,
+    paused: Boolean,
+    onTogglePause: () -> Unit,
     nicknameOf: (String) -> String?,
     compassQuality: CompassQuality,
     onPick: (String) -> Unit,
@@ -236,21 +308,16 @@ private fun PickSource(
     StepCard(
         step = "Step 1 of 3",
         title = "Choose something to listen to",
-        body = "Pick a strong, stationary source - a beacon, a TV, a speaker. The " +
-            "measurement is the difference between directions, so what it is matters " +
-            "less than that it stays put and keeps talking.",
+        body = "Pick a source that talks often. The rate beside each one is packets per " +
+            "second - a sweep needs about three readings in each of twenty-four sectors, " +
+            "so anything under 3/s cannot fill the circle in the time a turn takes. " +
+            "Beacons, earbuds and speakers are chatty; most phones are not.",
     )
 
     CompassBanner(compassQuality)
 
-    Spacer(Modifier.height(12.dp))
-    val now = System.currentTimeMillis()
-    val usable = candidates
-        .filter { now - it.lastSeenMs < 15_000 && it.sightings >= 3 }
-        .sortedByDescending { it.rssi }
-        .take(25)
-
-    if (usable.isEmpty()) {
+    Spacer(Modifier.height(10.dp))
+    if (candidates.isEmpty()) {
         Text(
             "Listening for something steady enough to use...",
             style = MaterialTheme.typography.bodyMedium,
@@ -259,7 +326,14 @@ private fun PickSource(
         return
     }
 
-    usable.forEach { candidate ->
+    PauseBar(
+        paused = paused,
+        onToggle = onTogglePause,
+        summary = "${candidates.size} usable · ${candidates.count { it.isChatty }} chatty",
+    )
+    Spacer(Modifier.height(6.dp))
+
+    candidates.forEach { candidate ->
         Card(
             Modifier
                 .fillMaxWidth()
@@ -287,18 +361,29 @@ private fun PickSource(
                     )
                     if (candidate.isRandom) {
                         Text(
-                            "Randomised address - fine for one sweep, but it will change " +
-                                "within about fifteen minutes",
+                            "Randomised address - fine for one sweep, gone within " +
+                                "about fifteen minutes",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
-                Text(
-                    "${candidate.rssi}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${candidate.rssi}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        String.format(Locale.US, "%.1f/s", candidate.rate),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (candidate.isChatty) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                    )
+                }
             }
         }
     }
@@ -312,16 +397,18 @@ private fun Sweeping(
     heading: Float,
     quality: CompassQuality,
     rssi: Int?,
+    sourceRate: Double,
+    turnRate: Float,
+    runNumber: Int,
     result: SweepResult?,
     onFinish: () -> Unit,
     onCancel: () -> Unit,
 ) {
     StepCard(
-        step = "Step 2 of 3",
+        step = "Step 2 of 3 · sweep $runNumber",
         title = "Turn slowly, all the way round",
-        body = "Hold the phone against your chest, screen facing out, and turn on the " +
-            "spot through a full circle. Take about thirty seconds - too fast and the " +
-            "sectors never fill. Keep the phone against your body: it is your torso " +
+        body = "Hold the phone flat against your chest, screen facing out, and turn on " +
+            "the spot through a full circle. Keep it against your body: it is your torso " +
             "doing the absorbing, and the phone has to be on one side of it.",
     )
 
@@ -344,31 +431,51 @@ private fun Sweeping(
 
     Spacer(Modifier.height(10.dp))
     LinearProgressIndicator(progress = { coverage }, modifier = Modifier.fillMaxWidth())
+
+    // Turn-speed coaching. Sectors are 15 degrees and need three readings, so the fastest
+    // usable turn is roughly a fifth of the source's packet rate in degrees per second.
+    val maxUsableTurn = (sourceRate * 15.0 / MIN_SAMPLES_PER_SECTOR).toFloat()
+    val coaching = when {
+        sourceRate < 1.0 -> "This source is barely talking. Go back and pick a chattier one."
+        turnRate < 2f -> "Start turning, slowly."
+        maxUsableTurn > 1f && turnRate > maxUsableTurn ->
+            "Too fast for this source - slow down or sectors will stay empty."
+        coverage >= 0.75f -> "Enough of the circle covered. Finish whenever you like."
+        else -> "Good pace. Keep going."
+    }
     Text(
-        text = if (coverage >= 0.75f) {
-            "Enough of the circle covered. Finish whenever you like."
-        } else {
-            "Keep turning - a sector needs a few readings before it counts."
+        coaching,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = when {
+            sourceRate < 1.0 -> MaterialTheme.colorScheme.error
+            maxUsableTurn > 1f && turnRate > maxUsableTurn -> MaterialTheme.colorScheme.error
+            coverage >= 0.75f -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+    )
+    Text(
+        String.format(
+            Locale.US,
+            "%s · %.1f packets/s · turning %.0f°/s",
+            sourceLabel,
+            sourceRate,
+            turnRate,
+        ),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
     )
 
-    Spacer(Modifier.height(14.dp))
-    Text(
-        "Listening to $sourceLabel",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(12.dp))
     Button(
         onClick = onFinish,
         enabled = coverage > 0.25f,
         modifier = Modifier.fillMaxWidth(),
-    ) { Text("Finish sweep") }
+    ) { Text("Finish sweep $runNumber") }
     Spacer(Modifier.height(6.dp))
     OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
         Text("Pick a different source")
@@ -380,27 +487,32 @@ private fun Sweeping(
 @Composable
 private fun Results(
     sourceLabel: String,
-    result: SweepResult?,
+    session: SessionResult,
     onAgain: () -> Unit,
     onNewSource: () -> Unit,
 ) {
-    if (result == null) {
+    val combined = session.combined
+    if (session.runCount == 0) {
         Text("No sweep recorded.", style = MaterialTheme.typography.bodyMedium)
         return
     }
 
     StepCard(
         step = "Step 3 of 3",
-        title = "What the sweep found",
+        title = if (session.runCount == 1) {
+            "One sweep done - now do another"
+        } else {
+            "${session.runCount} sweeps combined"
+        },
         body = "Radius is signal strength, north is up. A notch means something was " +
             "absorbing in that direction.",
     )
 
     Spacer(Modifier.height(12.dp))
-    PolarPlot(result = result, minSamplesPerSector = MIN_SAMPLES_PER_SECTOR)
+    PolarPlot(result = combined, minSamplesPerSector = MIN_SAMPLES_PER_SECTOR)
 
     Spacer(Modifier.height(14.dp))
-    val difference = result.frontToBackDb
+    val difference = combined.frontToBackDb
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             difference?.let { String.format(Locale.US, "%.1f", it) } ?: "-",
@@ -417,13 +529,46 @@ private fun Results(
 
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        result.peak?.let {
+        combined.peak?.let {
             Stat("Clearest", "${it.centreDegrees.roundToInt()}°", "${it.meanRssi.roundToInt()} dBm")
         }
-        result.notch?.let {
+        combined.notch?.let {
             Stat("Shadow", "${it.centreDegrees.roundToInt()}°", "${it.meanRssi.roundToInt()} dBm")
         }
-        Stat("Covered", "${(result.coverage * 100).roundToInt()}%", "${result.totalSamples} reads")
+        Stat("Sweeps", session.runCount.toString(), "${combined.totalSamples} reads")
+    }
+
+    // The agreement card is the real finding once there is more than one run.
+    Spacer(Modifier.height(14.dp))
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (session.agreement) {
+                SweepAgreement.CONSISTENT -> MaterialTheme.colorScheme.primaryContainer
+                SweepAgreement.SCATTERED -> MaterialTheme.colorScheme.errorContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                session.agreement.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(session.agreement.verdict, style = MaterialTheme.typography.bodySmall)
+            session.notchSpreadDegrees?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Shadow headings: " +
+                        session.notchHeadings.joinToString(", ") { h -> "${h.roundToInt()}°" } +
+                        String.format(Locale.US, "  (spread %.0f°)", it),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 
     Spacer(Modifier.height(14.dp))
@@ -440,16 +585,7 @@ private fun Results(
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(4.dp))
-            Text(interpret(result), style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Multipath makes any single sweep noisy - reflections add and cancel " +
-                    "independently of your body. Run it twice facing the same way. If the " +
-                    "shadow lands in roughly the same place both times, it is you; if it " +
-                    "moves, you measured the room.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(interpret(combined, session), style = MaterialTheme.typography.bodySmall)
         }
     }
 
@@ -461,7 +597,9 @@ private fun Results(
     )
 
     Spacer(Modifier.height(10.dp))
-    Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("Sweep again") }
+    Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) {
+        Text(if (session.runCount == 1) "Sweep again (recommended)" else "Sweep again")
+    }
     Spacer(Modifier.height(6.dp))
     OutlinedButton(onClick = onNewSource, modifier = Modifier.fillMaxWidth()) {
         Text("Different source")
@@ -469,14 +607,15 @@ private fun Results(
 }
 
 /** Plain words for the number, including the honest "you found nothing" case. */
-private fun interpret(result: SweepResult): String {
+private fun interpret(result: SweepResult, session: SessionResult): String {
     if (!result.isUsable()) {
         return "Only ${(result.coverage * 100).roundToInt()}% of the circle was covered, " +
             "which is not enough to call a direction. Turn further, and more slowly."
     }
     val difference = result.frontToBackDb ?: return "Not enough readings."
     val notch = result.notch?.centreDegrees?.roundToInt() ?: 0
-    return when {
+
+    val depth = when {
         difference < 3.0 ->
             "Under 3 dB is within the noise of an ordinary room. Either nothing was " +
                 "blocking the path, or the phone was held away from your body. Hold it " +
@@ -492,6 +631,19 @@ private fun interpret(result: SweepResult): String {
                 "toward $notch°. More than a body alone usually manages - there may be a " +
                 "wall, a pillar or an appliance in that direction too."
     }
+
+    val confirmation = when (session.agreement) {
+        SweepAgreement.UNKNOWN ->
+            " One sweep cannot separate you from the room, though - run it again."
+        SweepAgreement.CONSISTENT ->
+            " Repeated sweeps put it in the same place, so this is your body rather than " +
+                "a reflection."
+        SweepAgreement.MIXED -> " The sweeps only partly agree, so treat the heading loosely."
+        SweepAgreement.SCATTERED ->
+            " But the sweeps disagreed about where, which means you measured the room, " +
+                "not yourself."
+    }
+    return depth + confirmation
 }
 
 // --------------------------------------------------------------------- pieces

@@ -38,6 +38,7 @@ import com.sigeye.core.cell.CellStats
 import com.sigeye.core.cell.CellTracker
 import com.sigeye.core.cell.Handover
 import com.sigeye.ui.DetailField
+import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -56,19 +57,7 @@ fun CellScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-            Text("← All experiments")
-        }
-        Text(
-            "Cell Handovers",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "How often your phone changes tower.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ExperimentHeader(Experiments.CELLS, onBack)
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(

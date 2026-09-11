@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
 import com.sigeye.core.ble.BeaconDecoder
@@ -53,6 +54,7 @@ import com.sigeye.core.ble.BleScanHub
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchRule
 import com.sigeye.experiments.watchlist.WatchStore
+import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -73,19 +75,7 @@ fun InspectorScreen(
 ) {
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-            Text("← All experiments")
-        }
-        Text(
-            text = "Device Inspector",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Everything broadcasting around you, decoded.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ExperimentHeader(Experiments.INSPECTOR, onBack)
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(

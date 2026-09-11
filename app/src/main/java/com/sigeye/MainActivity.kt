@@ -18,6 +18,7 @@ import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.inspector.InspectorScreen
 import com.sigeye.experiments.locate.LocateScreen
+import com.sigeye.experiments.microwave.MicrowaveScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
@@ -95,6 +96,9 @@ private fun SigEyeApp() {
 
             Experiments.ABSORPTION ->
                 AbsorptionScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.MICROWAVE ->
+                MicrowaveScreen(onBack = { route = null }, modifier = inset)
 
             Experiments.CELLS ->
                 CellScreen(onBack = { route = null }, modifier = inset)

@@ -17,6 +17,12 @@ data class Experiment(
     val status: Status,
     /** Set when the phone, or a second device, may simply not be able to do this. */
     val needs: String? = null,
+    /** Numbered walkthrough, shown behind "How this works" on the experiment screen. */
+    val howTo: List<String> = emptyList(),
+    /** What the output means once you have it. */
+    val reading: String? = null,
+    /** The honest limits. Shown in red, because this is the part that gets skipped. */
+    val limits: String? = null,
 ) {
     enum class Status { READY, PLANNED }
 
@@ -47,6 +53,7 @@ object Experiments {
     const val CELLS = "cells"
     const val ABSORPTION = "body"
     const val RADAR = "radar"
+    const val MICROWAVE = "microwave"
 
     val all: List<Experiment> = listOf(
 
@@ -59,6 +66,20 @@ object Experiments {
                 "group them into lists that other experiments can use.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Let the list fill for a few seconds.",
+                "Tap Pause to freeze it, then tap any device to open its " +
+                    "record.",
+                "Give it a nickname, file it into a list, watch it, mute it, or " +
+                    "locate it.",
+                "Muting is global: a muted device is dropped before counting in " +
+                    "every experiment.",
+            ),
+            reading = "Sort by Closest to find what is near you, or Chattiest to find " +
+                "beacons, which advertise far more often than phones.",
+            limits = "A nickname sticks to an address, and phones change theirs " +
+                "every fifteen minutes or so. Name fixed hardware, not people's " +
+                "phones.",
         ),
         Experiment(
             id = RADAR,
@@ -69,6 +90,19 @@ object Experiments {
                 "one kind of thing.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Pick a filter: everything, your watchlist, flagged vendors, or " +
+                    "one of your lists.",
+                "Pinch to zoom. Zooming narrows the dB range the rings cover, " +
+                    "which gives more resolution close to you.",
+                "Tap a blip to select it and see its signal, range and trend.",
+                "Tap Locate to hunt it down on foot.",
+            ),
+            reading = "Distance from the centre is signal strength, strongest in the " +
+                "middle. A blip drifting inward is getting closer.",
+            limits = "The angle is not a direction. One antenna cannot measure a " +
+                "bearing, so the angle is only a hash of the address that keeps " +
+                "each device in its own spot. Never read the radar as a map.",
         ),
         Experiment(
             id = WATCHLIST,
@@ -78,6 +112,21 @@ object Experiments {
                 "Manufacturer prefixes and service data outlive a rotating MAC.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Turn on Watching to run in the background, with the screen " +
+                    "off.",
+                "Add a rule, or open the Device Inspector and tap Watch on " +
+                    "something you can see.",
+                "Set the signal floor to say how close it has to be before you " +
+                    "care.",
+                "The cooldown keeps one arrival to one buzz rather than one per " +
+                    "packet.",
+            ),
+            reading = "Recent hits show what fired, when, and how strong it was at " +
+                "the time.",
+            limits = "Rules matching an address only work on hardware with a fixed " +
+                "one. Manufacturer prefixes, company IDs and service data " +
+                "survive address randomisation; addresses do not.",
         ),
 
         // ----------------------------------------------------------- sensing
@@ -89,6 +138,20 @@ object Experiments {
                 "once. That shows up as a spike in previously unseen addresses.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Put the phone where it will live - a windowsill facing the " +
+                    "tracks beats the next room by a wide margin.",
+                "Press Start and leave it. The first twenty seconds record what " +
+                    "is already here; the next minute learns the normal rate.",
+                "Press Train now whenever you actually hear one, to label the " +
+                    "CSV.",
+                "Pull the CSV later and compare the spike column against your " +
+                    "labels.",
+            ),
+            reading = "The chart shows new devices per bin. The dashed line is the " +
+                "usual rate and red dots are bursts.",
+            limits = "It cannot tell a train from any other crowd. A bus, a school " +
+                "emptying or a delivery van will all raise the count.",
         ),
         Experiment(
             id = "speed",
@@ -107,6 +170,19 @@ object Experiments {
                 "against a headcount you actually know.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Set the signal floor to define what counts as here - around " +
+                    "-70 dBm is a room, -85 is a building.",
+                "Stand with a group you have actually counted.",
+                "Adjust devices per person until the estimate matches the real " +
+                    "number.",
+                "That figure is now roughly right for this kind of place.",
+            ),
+            reading = "The radar shows what is present now, strongest at the centre. " +
+                "The headline uses only devices heard in the last minute.",
+            limits = "It counts devices, not people. Laptops, televisions and " +
+                "printers belong to nobody, and one person can carry three " +
+                "advertisers.",
         ),
         Experiment(
             id = DWELL,
@@ -117,6 +193,19 @@ object Experiments {
                 "because a phone changes address before it can become one.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Leave it running for at least twenty minutes - the classes " +
+                    "need time to separate.",
+                "Pause the list when you want to tap something.",
+                "Tap any device for its full record, and to name, watch or mute " +
+                    "it.",
+            ),
+            reading = "Resident means a device held one address for over twenty " +
+                "minutes, which means fixed hardware. Those are the trustworthy " +
+                "rows.",
+            limits = "Passing counts are inflated by address randomisation: one " +
+                "phone walking past can appear as several devices over an " +
+                "evening.",
         ),
         Experiment(
             id = "motion",
@@ -166,6 +255,25 @@ object Experiments {
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.READY,
             needs = "A compass. Most phones have one, but it must be calibrated.",
+            howTo = listOf(
+                "Pick a chatty source. The list shows how many packets a second " +
+                    "each one sends - anything under about three will not fill the " +
+                    "sectors in time.",
+                "Hold the phone flat against your chest, screen facing out. " +
+                    "This matters more than anything else: your torso has to be " +
+                    "between the phone and the source.",
+                "Turn slowly on the spot, a full circle in about thirty " +
+                    "seconds.",
+                "Run it at least twice from the same place, facing the same way " +
+                    "to start.",
+            ),
+            reading = "Radius is signal strength and north is up, so a notch is a " +
+                "direction something was absorbing from. The dB figure is the " +
+                "difference between the best and worst direction - a few dB is " +
+                "a body.",
+            limits = "One sweep cannot tell your body from the room, because a " +
+                "reflection makes a notch too. Only repeated sweeps can: yours " +
+                "turns with you, the room's stays put.",
         ),
         Experiment(
             id = "bands",
@@ -185,13 +293,29 @@ object Experiments {
             status = Experiment.Status.PLANNED,
         ),
         Experiment(
-            id = "microwave",
+            id = MICROWAVE,
             title = "Microwave Interference",
             blurb = "Watch an oven trample the 2.4 GHz band.",
-            teaches = "A consumer microwave leaks around 2.45 GHz, right in the ISM band. " +
-                "The clearest answer to why Wi-Fi dies in the kitchen.",
+            teaches = "A consumer microwave leaks around 2.45 GHz, right in the middle of " +
+                "the band Bluetooth uses. Measure how many advertisements survive with " +
+                "it off, then with it on.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "A microwave oven, and something to heat in it.",
+            howTo = listOf(
+                "Stand near the microwave with a Bluetooth device in the room, " +
+                    "and put a cup of water in the oven so it has something to " +
+                    "heat.",
+                "Record the baseline with the oven off, for thirty seconds.",
+                "Start the oven, then record the test phase for thirty seconds.",
+                "Stop, and compare.",
+            ),
+            reading = "The measure is how many advertisements a second reach the " +
+                "phone. A microwave leaking into the band drowns them out, so " +
+                "the rate falls and the surviving packets read weaker.",
+            limits = "It cannot see the oven directly, only the damage. A modern " +
+                "well-sealed oven may show almost nothing, which is itself the " +
+                "answer: your kitchen Wi-Fi problem is somewhere else.",
         ),
         Experiment(
             id = "rtt",
@@ -251,6 +375,18 @@ object Experiments {
             category = Experiment.Category.MAPPING,
             status = Experiment.Status.READY,
             needs = "A SIM. Nothing to read in aeroplane mode.",
+            howTo = listOf(
+                "Open it and leave it while you travel.",
+                "Standing still, expect almost no handovers - that is the " +
+                    "control.",
+                "On a train or in a car they come every minute or two.",
+            ),
+            reading = "Each row shows how long the previous cell was held and the " +
+                "signal you left it at. A handover taken at strong signal is " +
+                "load balancing, not lost coverage.",
+            limits = "Modems withhold cell identity regularly. Those readings are " +
+                "recorded but never counted as movement, so the total is a " +
+                "floor, not an exact count.",
         ),
 
         // ----------------------------------------------------------- privacy
@@ -262,6 +398,18 @@ object Experiments {
                 "structured data, not blobs. Decoded, they name themselves.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.READY,
+            howTo = listOf(
+                "Let it listen. Anything speaking a known format appears.",
+                "Use the protocol chips to isolate one format.",
+                "Pause before tapping a row - beacons advertise fast and the " +
+                    "list reorders.",
+            ),
+            reading = "Each row names the protocol and decodes its fields. Apple Find " +
+                "My means an AirTag or a device advertising for the offline " +
+                "finding network.",
+            limits = "Most devices advertise nothing structured, so an empty list is " +
+                "normal in a quiet place. An unrecognised format falls back to " +
+                "naming the vendor.",
         ),
         Experiment(
             id = "randomisation",
