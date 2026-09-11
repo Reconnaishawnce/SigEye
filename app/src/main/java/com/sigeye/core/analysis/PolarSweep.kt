@@ -157,6 +157,8 @@ class PolarSweep(
     fun reset() {
         samples.clear()
         stationaryDrops = 0
+        lastTimedMs = null
+        lastTimedHeading = null
     }
 
     /**
@@ -175,20 +177,37 @@ class PolarSweep(
      *
      * @return true if the reading was kept.
      */
-    fun add(headingDegrees: Float, rssi: Int, atMs: Long = 0L): Boolean {
-        val previous = samples.lastOrNull()
-        if (previous != null && atMs > 0L && previous.atMs > 0L) {
-            val seconds = (atMs - previous.atMs) / 1000.0
-            if (seconds > 0 && turnRate(previous.headingDegrees, headingDegrees, seconds)
-                < MIN_TURN_RATE_DEGREES_PER_SECOND
-            ) {
-                stationaryDrops++
-                return false
+    fun add(headingDegrees: Float, rssi: Int, atMs: Long = NO_TIME): Boolean {
+        if (atMs != NO_TIME) {
+            val previousMs = lastTimedMs
+            val previousHeading = lastTimedHeading
+            if (previousMs != null && previousHeading != null) {
+                val seconds = (atMs - previousMs) / 1000.0
+                if (seconds > 0 &&
+                    turnRate(previousHeading, headingDegrees, seconds) <
+                    MIN_TURN_RATE_DEGREES_PER_SECOND
+                ) {
+                    stationaryDrops++
+                    return false
+                }
             }
+            lastTimedMs = atMs
+            lastTimedHeading = headingDegrees
         }
-        samples.add(HeadingSample(atMs, headingDegrees, rssi))
+        samples.add(
+            HeadingSample(
+                atMs = if (atMs == NO_TIME) 0L else atMs,
+                headingDegrees = headingDegrees,
+                rssi = rssi,
+            ),
+        )
         return true
     }
+
+    // Nullable rather than a zero sentinel: zero is a perfectly good timestamp, and an
+    // earlier pair of trackers in this codebase got this exact thing wrong.
+    private var lastTimedMs: Long? = null
+    private var lastTimedHeading: Float? = null
 
     /** Readings discarded because the phone was not turning. */
     var stationaryDrops: Int = 0
@@ -291,5 +310,8 @@ class PolarSweep(
          * minutes still counts - and fast enough to exclude standing still.
          */
         const val MIN_TURN_RATE_DEGREES_PER_SECOND = 2.0
+
+        /** No timestamp supplied, so the turn gate cannot and does not apply. */
+        const val NO_TIME = Long.MIN_VALUE
     }
 }

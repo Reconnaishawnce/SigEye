@@ -349,6 +349,16 @@ class PolarSweepTest {
     }
 
     @Test
+    fun `zero is a real timestamp, not a missing one`() {
+        // An earlier version used 0 to mean "no timestamp", so a sweep whose first reading
+        // landed on zero skipped the turn gate for its second reading as well.
+        val sweep = PolarSweep()
+        assertTrue(sweep.add(345f, -46, 0L))
+        assertFalse(sweep.add(345f, -46, 100L))
+        assertEquals(1, sweep.stationaryDrops)
+    }
+
+    @Test
     fun `reset clears the stationary tally too`() {
         val sweep = PolarSweep()
         repeat(20) { sweep.add(10f, -50, it * 100L) }
