@@ -45,6 +45,7 @@ import com.sigeye.core.analysis.PassResult
 import com.sigeye.core.analysis.PassSample
 import com.sigeye.core.analysis.SpeedEstimator
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
