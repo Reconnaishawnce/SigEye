@@ -1,6 +1,7 @@
 package com.sigeye.core.ble
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -52,9 +53,14 @@ class BeaconDecoderTest {
     }
 
     @Test
-    fun `an iBeacon-shaped payload from another vendor is rejected`() {
+    fun `an iBeacon-shaped payload from another vendor is not read as an iBeacon`() {
+        // The 0x02 0x15 header only means iBeacon under Apple's company ID. Under anyone
+        // else it is just bytes, and the decoder must not borrow Apple's meaning for them.
         val payload = bytes(0x02, 0x15) + ByteArray(21)
-        assertEquals(null, decode(companyId = 0x0075, manufacturerData = payload)?.protocol)
+        val beacon = decode(companyId = 0x0075, manufacturerData = payload)
+        assertNotEquals("iBeacon", beacon?.protocol)
+        // It still names the vendor rather than throwing the advertisement away.
+        assertEquals("Samsung", beacon?.protocol)
     }
 
     @Test
