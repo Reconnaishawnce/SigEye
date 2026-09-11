@@ -85,30 +85,6 @@ data class SweepResult(
             return difference
         }
 
-    /**
-     * Sector means with a three-point circular median run over them.
-     *
-     * Used only to *locate* the peak and the notch, never to report their depth. An
-     * exported sweep showed the peak landing on a lone sector holding four readings at
-     * -43.5 dB, sitting between neighbours at -52.6 and -48.0 - noise, not a direction,
-     * and it dragged the reported bearing thirty degrees off. A median ignores a single
-     * outlying sector while leaving a genuine wedge, which is several sectors wide,
-     * exactly where it is.
-     */
-    internal fun smoothedMeans(): Map<Int, Double> {
-        val measured = sectors.filter { it.samples > 0 }.associateBy { it.index }
-        if (measured.size < 3) return measured.mapValues { it.value.meanRssi }
-        val count = sectors.size
-        return measured.mapValues { (index, sector) ->
-            val neighbours = listOfNotNull(
-                measured[(index - 1 + count) % count]?.meanRssi,
-                sector.meanRssi,
-                measured[(index + 1) % count]?.meanRssi,
-            ).sorted()
-            neighbours[neighbours.size / 2]
-        }
-    }
-
     private fun regionBearing(strong: Boolean): Float? {
         val high = peak?.meanRssi ?: return null
         val low = notch?.meanRssi ?: return null
@@ -269,25 +245,21 @@ class PolarSweep(
         }
 
         val settled = sectors.filter { it.isSettled(minSamplesPerSector) }
-        val draft = SweepResult(
+        return SweepResult(
             sectors = sectors,
             settledSectors = settled.size,
             totalSectors = resolution,
             totalSamples = samples.size,
+            // Only settled sectors can be the answer - one stray packet must not get to
+            // define where the shadow is.
+            //
+            // A three-point median was tried here as well, to stop a lone sector holding
+            // four noisy readings from capturing the peak. On the sweep that prompted it
+            // the median moved the peak but left the notch and the peak-to-notch
+            // separation - the number the conclusion rests on - completely unchanged,
+            // while destroying any notch only one sector wide. Not worth it.
             peak = settled.maxByOrNull { it.meanRssi },
             notch = settled.minByOrNull { it.meanRssi },
-        )
-        if (settled.size < 3) return draft
-
-        // Locate the extremes on the smoothed series, then report the real sectors found
-        // there. Only settled sectors can be the answer either way - one stray packet must
-        // not get to define where the shadow is.
-        val smoothed = draft.smoothedMeans()
-        val candidates = settled.filter { smoothed.containsKey(it.index) }
-        if (candidates.isEmpty()) return draft
-        return draft.copy(
-            peak = candidates.maxByOrNull { smoothed.getValue(it.index) },
-            notch = candidates.minByOrNull { smoothed.getValue(it.index) },
         )
     }
 

@@ -318,7 +318,8 @@ class PolarSweepTest {
     fun `readings taken while the phone is not turning are dropped`() {
         val sweep = PolarSweep(sectorCount = 24, minSamplesPerSector = 3)
         // Seven seconds of standing still, exactly as an exported sweep began.
-        repeat(70) { assertFalse(sweep.add(345f, -46, it * 100L)) }
+        assertTrue("the first reading is always kept", sweep.add(345f, -46, 0L))
+        repeat(69) { assertFalse(sweep.add(345f, -46, (it + 1) * 100L)) }
         assertEquals(1, sweep.sampleCount)
         assertEquals(69, sweep.stationaryDrops)
     }
@@ -354,49 +355,5 @@ class PolarSweepTest {
         assertTrue(sweep.stationaryDrops > 0)
         sweep.reset()
         assertEquals(0, sweep.stationaryDrops)
-    }
-
-    @Test
-    fun `a lone noisy sector does not get to be the peak`() {
-        // The real case, from an exported sweep: one sector holding four readings at
-        // -43.5 sat between neighbours at -52.6 and -48.0 and captured the peak bearing,
-        // dragging it thirty degrees off where the signal actually was.
-        val sweep = PolarSweep(sectorCount = 24, minSamplesPerSector = 3)
-        var t = 0L
-        repeat(24) { sector ->
-            val heading = sector * 15f + 7.5f
-            // A broad strong region around north, a spike at sector 15, quiet elsewhere.
-            val rssi = when {
-                sector >= 21 || sector <= 2 -> -46
-                sector == 15 -> -43
-                else -> -52
-            }
-            repeat(5) {
-                sweep.add(heading, rssi, t)
-                t += 400
-            }
-        }
-        val peak = sweep.result(24).peakBearingDegrees
-        assertNotNull(peak)
-        // Should land in the broad region near north, not on the lone spike at 232.5.
-        val distanceFromNorth = minOf(peak!!, 360f - peak)
-        assertTrue("peak landed at $peak", distanceFromNorth < 60f)
-    }
-
-    @Test
-    fun `a genuine wide notch survives the smoothing`() {
-        val sweep = PolarSweep(sectorCount = 24, minSamplesPerSector = 3)
-        var t = 0L
-        repeat(24) { sector ->
-            val heading = sector * 15f + 7.5f
-            val rssi = if (sector in 10..13) -80 else -50
-            repeat(5) {
-                sweep.add(heading, rssi, t)
-                t += 400
-            }
-        }
-        val notch = sweep.result(24).notchBearingDegrees
-        assertNotNull(notch)
-        assertEquals(180f, notch!!, 30f)
     }
 }
