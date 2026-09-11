@@ -25,6 +25,9 @@ class PulseAggregatorTest {
     private fun PulseAggregator.runIn(bins: Int, perBin: Int, startAt: Long = 0L): Long {
         var now = startAt
         var seq = 0
+        // One seed advertisement so the first closeBin is a real bin even when perBin
+        // is zero - the phase clock only starts once data is flowing.
+        observe("seed-$startAt", -60, now)
         repeat(bins) {
             repeat(perBin) { observe("warm-$now-${seq++}", -60, now) }
             now += 5_000L
@@ -98,10 +101,23 @@ class PulseAggregatorTest {
     }
 
     @Test
+    fun `the phase clock starts with the first advertisement, not the first tick`() {
+        val agg = PulseAggregator(config)
+        // Bins closed before any data has arrived only establish the bin boundary. If
+        // Bluetooth is slow to deliver, enrollment should not burn away on empty air.
+        repeat(10) { agg.closeBin(it * 5_000L) }
+        assertEquals(Phase.ENROLL, agg.phase())
+        assertEquals(config.armedAfterBins * config.binSeconds, agg.secondsUntilArmed())
+    }
+
+    @Test
     fun `phase advances enroll then warmup then armed`() {
         val agg = PulseAggregator(config)
         var now = 0L
         assertEquals(Phase.ENROLL, agg.phase())
+
+        // Seed one advertisement so the first bin is a real bin, see the test above.
+        agg.observe("seed", -60, now)
 
         repeat(config.enrollmentBins) { now += 5_000L; agg.closeBin(now) }
         assertEquals(Phase.WARMUP, agg.phase())
