@@ -135,7 +135,7 @@ macro network.
 
 ## D. What is actually being broadcast
 
-**19. Beacon Decoder**
+**19. Beacon Decoder** — shipped.
 Parse and display what is in the air: iBeacon UUID/major/minor, Eddystone frames,
 manufacturer IDs resolved to company names, service UUIDs, TX power. Turns an anonymous
 count into "that's a Tile, that's a supermarket beacon, that's a car." The gateway
@@ -151,6 +151,18 @@ distribution of rotation periods and a list of persistent identifiers.
 of this module for free.
 
 ---
+
+## Shipped so far
+
+| Experiment | Notes |
+|---|---|
+| Device Inspector | Everything broadcasting, decoded. Nicknames and user lists live here. |
+| Signal Watch | Rule-based alerts, including Axon's IEEE block. Runs in the background. |
+| Train Spotter | Roadmap 9. Enrollment, rolling baseline, CSV with a phase column. |
+| Beacon Decoder | Roadmap 19. iBeacon, Eddystone, AltBeacon, Apple Continuity. |
+
+All four share one scan through `BleScanHub`, so running several at once costs one radio.
+The full list below now also appears inside the app, greyed out until built.
 
 ## Suggested build order
 

@@ -48,6 +48,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
+import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchRule
@@ -477,6 +478,23 @@ private fun DeviceDetail(
                 }
 
                 Spacer(Modifier.height(14.dp))
+                BeaconDecoder.decode(
+                    companyId = device.companyId,
+                    manufacturerData = device.manufacturerData,
+                    serviceData = device.serviceData,
+                    serviceUuids = device.serviceUuids,
+                )?.let { beacon ->
+                    Field("Format", beacon.protocol + " — " + beacon.summary)
+                    beacon.fields.forEach { Field(it.label, it.value) }
+                    beacon.note?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                }
                 Field(
                     "Address",
                     device.address + if (device.isRandomAddress) "  (random)" else "",

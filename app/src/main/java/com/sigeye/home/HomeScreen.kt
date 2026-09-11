@@ -43,17 +43,39 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "${Experiments.readyCount} ready · ${Experiments.all.size} planned in total",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(20.dp))
 
-        Experiments.all.forEach { experiment ->
-            ExperimentCard(
-                experiment = experiment,
-                onClick = { if (experiment.status == Experiment.Status.READY) onOpen(experiment.id) },
+        Experiments.byCategory().forEach { (category, experiments) ->
+            Text(
+                text = category.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(12.dp))
+            Text(
+                text = category.blurb,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+
+            experiments.forEach { experiment ->
+                ExperimentCard(
+                    experiment = experiment,
+                    onClick = {
+                        if (experiment.status == Experiment.Status.READY) onOpen(experiment.id)
+                    },
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            Spacer(Modifier.height(14.dp))
         }
 
-        Spacer(Modifier.height(8.dp))
         Text(
             text = "Everything runs on this phone. No accounts, no network, no analytics.",
             style = MaterialTheme.typography.labelSmall,
@@ -111,6 +133,24 @@ private fun ExperimentCard(experiment: Experiment, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Planned entries get the "why" too - the roadmap should be readable, not a
+            // row of teasers.
+            if (!ready) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = experiment.teaches,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                experiment.needs?.let { needs ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Needs: $needs",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
     }
 }

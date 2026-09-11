@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import com.sigeye.core.Experiments
+import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.inspector.InspectorScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
@@ -46,6 +47,8 @@ private fun SigEyeApp() {
                 InspectorScreen(onBack = { openExperiment = null }, modifier = inset)
             Experiments.WATCHLIST ->
                 WatchlistScreen(onBack = { openExperiment = null }, modifier = inset)
+            Experiments.BEACONS ->
+                BeaconScreen(onBack = { openExperiment = null }, modifier = inset)
             // An unknown id can only come from a stale saved state after an update.
             else -> HomeScreen(onOpen = { openExperiment = it }, modifier = inset)
         }
