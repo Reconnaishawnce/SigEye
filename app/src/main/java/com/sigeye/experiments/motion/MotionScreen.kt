@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,8 +45,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
+import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.MotionConfig
@@ -53,6 +58,7 @@ import com.sigeye.core.analysis.MotionReading
 import com.sigeye.core.analysis.MotionState
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -109,11 +115,30 @@ private fun Live() {
     val notes by book.notes.collectAsStateWithLifecycle()
     val health by BleScanHub.health.collectAsStateWithLifecycle()
 
+    val feedback = remember { Feedback(context) }
+
     var reading by remember { mutableStateOf<MotionReading?>(null) }
     var running by remember { mutableStateOf(false) }
-    var sensitivity by remember { mutableStateOf(3.5f) }
     var history by remember { mutableStateOf<List<Double>>(emptyList()) }
     var events by remember { mutableStateOf<List<MotionEvent>>(emptyList()) }
+    var showSettings by remember { mutableStateOf(false) }
+
+    // Settings
+    var sensitivity by remember { mutableStateOf(3.0f) }
+    var sigmaFloor by remember { mutableStateOf(0.8f) }
+    var levelWeight by remember { mutableStateOf(1.0f) }
+    var jitterWeight by remember { mutableStateOf(3.0f) }
+    var calibrationSeconds by remember { mutableStateOf(20f) }
+    var agreement by remember { mutableStateOf(2f) }
+    var holdTicks by remember { mutableStateOf(2f) }
+    var alertStyle by remember { mutableStateOf(AlertStyle.BOTH) }
+    var manual by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var useManual by remember { mutableStateOf(false) }
+
+    // Candidate picker, for choosing links by hand.
+    var candidates by remember { mutableStateOf<Map<String, Pair<Int, Long>>>(emptyMap()) }
+    var pickerPaused by remember { mutableStateOf(false) }
+    var frozenCandidates by remember { mutableStateOf<List<Triple<String, Int, Long>>>(emptyList()) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -124,20 +149,52 @@ private fun Live() {
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
             detector.observe(advert.address, advert.rssi, advert.atMs)
+            candidates = candidates + (advert.address to (advert.rssi to advert.atMs))
         }
     }
 
-    LaunchedEffect(sensitivity) {
-        detector.config = MotionConfig(sensitivity = sensitivity.toDouble())
+    LaunchedEffect(pickerPaused, candidates, running) {
+        if (!pickerPaused && !running) {
+            val now = System.currentTimeMillis()
+            frozenCandidates = candidates.entries
+                .filter { now - it.value.second < 12_000 }
+                .sortedByDescending { it.value.first }
+                .take(20)
+                .map { Triple(it.key, it.value.first, it.value.second) }
+        }
     }
+
+    LaunchedEffect(
+        sensitivity, sigmaFloor, levelWeight, jitterWeight,
+        calibrationSeconds, agreement, holdTicks, useManual, manual,
+    ) {
+        detector.config = MotionConfig(
+            calibrationSeconds = calibrationSeconds.roundToInt(),
+            sensitivity = sensitivity.toDouble(),
+            sigmaFloor = sigmaFloor.toDouble(),
+            levelWeight = levelWeight.toDouble(),
+            jitterWeight = jitterWeight.toDouble(),
+            minAgreement = agreement.roundToInt(),
+            ticksToFire = holdTicks.roundToInt(),
+            manualReferences = if (useManual && manual.isNotEmpty()) manual else null,
+        )
+    }
+
+    DisposableEffect(Unit) { onDispose { feedback.release() } }
 
     LaunchedEffect(running) {
         while (running) {
             delay(TICK_MS)
             val now = System.currentTimeMillis()
+            val previous = reading?.state
             val next = detector.tick(now)
             reading = next
             events = detector.eventLog()
+            // Announce the transition, not the state - otherwise it buzzes twice a second
+            // for as long as someone stands in the room.
+            if (previous != MotionState.MOTION && next.state == MotionState.MOTION) {
+                feedback.alert(alertStyle, urgent = true)
+            }
             if (next.state != MotionState.CALIBRATING) {
                 history = (history + next.score).takeLast(160)
             }
@@ -188,6 +245,79 @@ private fun Live() {
             }
         }
         Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(
+                selected = !useManual,
+                onClick = { useManual = false },
+                label = { Text("Pick links automatically", style = MaterialTheme.typography.labelSmall) },
+            )
+            FilterChip(
+                selected = useManual,
+                onClick = { useManual = true },
+                label = { Text("Choose them myself", style = MaterialTheme.typography.labelSmall) },
+            )
+        }
+
+        Text(
+            if (useManual) {
+                "Choose links that cross where someone would actually walk - a beacon on " +
+                    "the far side of a doorway makes a tripwire. Chosen links skip the " +
+                    "usual filters, so a marginal one is kept if you insist."
+            } else {
+                "Keeps whichever nearby devices are chatty enough and were sitting still. " +
+                    "Fine for a room; it cannot know which links cross the route you care " +
+                    "about."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+
+        if (useManual) {
+            Spacer(Modifier.height(10.dp))
+            PauseBar(
+                paused = pickerPaused,
+                onToggle = { pickerPaused = !pickerPaused },
+                summary = "${manual.size} chosen of ${frozenCandidates.size} nearby",
+            )
+            Spacer(Modifier.height(4.dp))
+            frozenCandidates.forEach { (address, rssi, _) ->
+                val chosen = manual.contains(address)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            manual = if (chosen) manual - address else manual + address
+                        }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = chosen,
+                        onCheckedChange = {
+                            manual = if (chosen) manual - address else manual + address
+                        },
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            notes[address.uppercase()]?.nickname
+                                ?: Vendors.byAddress(address)
+                                ?: address,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            address,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("$rssi", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
                 detector.startCalibration(System.currentTimeMillis())
@@ -195,8 +325,29 @@ private fun Live() {
                 events = emptyList()
                 running = true
             },
+            enabled = !useManual || manual.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Calibrate and start") }
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(
+            onClick = { showSettings = !showSettings },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (showSettings) "Hide settings" else "Settings") }
+
+        if (showSettings) {
+            Spacer(Modifier.height(10.dp))
+            Settings(
+                sensitivity = sensitivity, onSensitivity = { sensitivity = it },
+                sigmaFloor = sigmaFloor, onSigmaFloor = { sigmaFloor = it },
+                levelWeight = levelWeight, onLevelWeight = { levelWeight = it },
+                jitterWeight = jitterWeight, onJitterWeight = { jitterWeight = it },
+                calibrationSeconds = calibrationSeconds,
+                onCalibrationSeconds = { calibrationSeconds = it },
+                agreement = agreement, onAgreement = { agreement = it },
+                holdTicks = holdTicks, onHoldTicks = { holdTicks = it },
+                alertStyle = alertStyle, onAlertStyle = { alertStyle = it },
+            )
+        }
         return
     }
 
@@ -238,6 +389,23 @@ private fun Live() {
         Stat("Events", "${events.size}", "so far")
     }
 
+    // Which symptom is actually responding. Without this the combined score is a single
+    // number with no way to tell whether level or jitter is doing the work, which makes
+    // the weights below impossible to tune.
+    Spacer(Modifier.height(10.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Stat(
+            "Level",
+            String.format(Locale.US, "%.1f", snap.levelScore),
+            "signal shifted",
+        )
+        Stat(
+            "Jitter",
+            String.format(Locale.US, "%.1f", snap.jitterScore),
+            "signal unsteady",
+        )
+    }
+
     Spacer(Modifier.height(14.dp))
     ScoreTrace(
         history = history,
@@ -274,27 +442,33 @@ private fun Live() {
         }
     }
 
-    Spacer(Modifier.height(14.dp))
-    Text(
-        "Sensitivity: " + when {
-            sensitivity < 2.5f -> "twitchy"
-            sensitivity < 4.5f -> "balanced"
-            else -> "only obvious movement"
-        } + String.format(Locale.US, "  (%.1f sigma)", sensitivity),
-        style = MaterialTheme.typography.labelLarge,
-    )
-    Slider(
-        value = sensitivity,
-        onValueChange = { sensitivity = it },
-        valueRange = 1.5f..8f,
-        steps = 25,
-    )
-    Text(
-        "How far a link has to stray from its own calm behaviour before it counts. " +
-            "Lower catches someone across the room and also the cat.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = { showSettings = !showSettings },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(if (showSettings) "Hide settings" else "Settings") }
+
+    if (showSettings) {
+        Spacer(Modifier.height(10.dp))
+        Settings(
+            sensitivity = sensitivity, onSensitivity = { sensitivity = it },
+            sigmaFloor = sigmaFloor, onSigmaFloor = { sigmaFloor = it },
+            levelWeight = levelWeight, onLevelWeight = { levelWeight = it },
+            jitterWeight = jitterWeight, onJitterWeight = { jitterWeight = it },
+            calibrationSeconds = calibrationSeconds,
+            onCalibrationSeconds = { calibrationSeconds = it },
+            agreement = agreement, onAgreement = { agreement = it },
+            holdTicks = holdTicks, onHoldTicks = { holdTicks = it },
+            alertStyle = alertStyle, onAlertStyle = { alertStyle = it },
+        )
+        Text(
+            "Sensitivity, weights and alerts take effect immediately. Calibration length " +
+                "and chosen links apply the next time you calibrate.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
 
     if (snap.references.isNotEmpty()) {
         Spacer(Modifier.height(16.dp))
@@ -323,10 +497,12 @@ private fun Live() {
                     Text(
                         String.format(
                             Locale.US,
-                            "%.0f dBm calm, sigma %.1f, %.1f/s%s",
+                            "calm %.0f now %.0f · sigma %.1f · level %.1f jitter %.1f%s",
                             reference.baselineMean,
+                            reference.currentMean,
                             reference.baselineSigma,
-                            reference.packetsPerSecond,
+                            reference.levelScore,
+                            reference.jitterScore,
                             if (reference.live) "" else " · silent",
                         ),
                         style = MaterialTheme.typography.labelSmall,
@@ -541,6 +717,181 @@ private fun Stat(label: String, value: String, caption: String) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * Every knob, each with the recommendation that makes it usable.
+ *
+ * A setting without advice is worse than no setting: it hands over a number whose right
+ * value the user has no way to reason about, and the honest default was at least chosen
+ * with the physics in mind.
+ */
+@Composable
+private fun Settings(
+    sensitivity: Float, onSensitivity: (Float) -> Unit,
+    sigmaFloor: Float, onSigmaFloor: (Float) -> Unit,
+    levelWeight: Float, onLevelWeight: (Float) -> Unit,
+    jitterWeight: Float, onJitterWeight: (Float) -> Unit,
+    calibrationSeconds: Float, onCalibrationSeconds: (Float) -> Unit,
+    agreement: Float, onAgreement: (Float) -> Unit,
+    holdTicks: Float, onHoldTicks: (Float) -> Unit,
+    alertStyle: AlertStyle, onAlertStyle: (AlertStyle) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Setting(
+            label = "Trigger level",
+            value = String.format(Locale.US, "%.1f sigma", sensitivity),
+            advice = "How far a link must stray from its own calm behaviour. Start at 3. " +
+                "Drop toward 2 if someone can cross the room without tripping it; raise " +
+                "toward 5 if a fan or a curtain keeps firing it.",
+        ) {
+            Slider(
+                value = sensitivity,
+                onValueChange = onSensitivity,
+                valueRange = 1.5f..8f,
+                steps = 25,
+            )
+        }
+
+        Setting(
+            label = "Noise floor",
+            value = String.format(Locale.US, "%.1f dB", sigmaFloor),
+            advice = "The smallest wobble treated as normal. This is the control to reach " +
+                "for when nothing triggers unless you stand next to the phone: a very " +
+                "steady link gets its deviations divided by this, so a high floor makes a " +
+                "good link deaf. Try 0.5 with beacons on a shelf; raise to 2 if the room " +
+                "is busy and it will not settle.",
+        ) {
+            Slider(
+                value = sigmaFloor,
+                onValueChange = onSigmaFloor,
+                valueRange = 0.3f..4f,
+                steps = 36,
+            )
+        }
+
+        Setting(
+            label = "Weight on signal shift",
+            value = String.format(Locale.US, "%.1f", levelWeight),
+            advice = "Catches someone standing in the path and blocking it. Works close " +
+                "in, does little across a room. Leave at 1.",
+        ) {
+            Slider(
+                value = levelWeight,
+                onValueChange = onLevelWeight,
+                valueRange = 0f..4f,
+                steps = 15,
+            )
+        }
+
+        Setting(
+            label = "Weight on unsteadiness",
+            value = String.format(Locale.US, "%.1f", jitterWeight),
+            advice = "Catches someone moving anywhere in the room, because a body shifts " +
+                "the reflections long before it blocks anything. This is the sensitive " +
+                "one - raise it to 4 or 5 for detection at a distance.",
+        ) {
+            Slider(
+                value = jitterWeight,
+                onValueChange = onJitterWeight,
+                valueRange = 0f..6f,
+                steps = 23,
+            )
+        }
+
+        Setting(
+            label = "Calibration",
+            value = "${calibrationSeconds.roundToInt()} s",
+            advice = "Time spent learning what calm looks like. Twenty is plenty in a " +
+                "quiet room. Longer only helps if the room itself is restless - and " +
+                "whatever moves during it is learned as normal, so leave the room.",
+        ) {
+            Slider(
+                value = calibrationSeconds,
+                onValueChange = onCalibrationSeconds,
+                valueRange = 10f..60f,
+                steps = 24,
+            )
+        }
+
+        Setting(
+            label = "Links that must agree",
+            value = agreement.roundToInt().toString(),
+            advice = "Guards against one device glitching. Two is right for automatic " +
+                "selection. Set it to 1 when you have deliberately chosen a single " +
+                "tripwire link - otherwise it can never fire.",
+        ) {
+            Slider(
+                value = agreement,
+                onValueChange = onAgreement,
+                valueRange = 1f..4f,
+                steps = 2,
+            )
+        }
+
+        Setting(
+            label = "Hold before firing",
+            value = String.format(Locale.US, "%.1f s", holdTicks * 0.5f),
+            advice = "Sustained disturbance needed before it calls motion. Half a second " +
+                "catches someone walking briskly past; two seconds ignores a door " +
+                "swinging shut.",
+        ) {
+            Slider(
+                value = holdTicks,
+                onValueChange = onHoldTicks,
+                valueRange = 1f..8f,
+                steps = 6,
+            )
+        }
+
+        Text("Alert", style = MaterialTheme.typography.labelLarge)
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            AlertStyle.entries.forEach { style ->
+                FilterChip(
+                    selected = alertStyle == style,
+                    onClick = { onAlertStyle(style) },
+                    label = {
+                        Text(style.label, style = MaterialTheme.typography.labelSmall)
+                    },
+                )
+            }
+        }
+        Text(
+            alertStyle.hint + " It fires once when motion starts, not continuously while " +
+                "someone is there.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun Setting(
+    label: String,
+    value: String,
+    advice: String,
+    control: @Composable () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text(value, style = MaterialTheme.typography.labelLarge)
+        }
+        control()
+        Text(
+            advice,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

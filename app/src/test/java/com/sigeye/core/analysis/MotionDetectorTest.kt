@@ -16,6 +16,8 @@ class MotionDetectorTest {
         minPacketsPerSecond = 1.5,
         maxBaselineSigma = 5.0,
         sigmaFloor = 1.2,
+        levelWeight = 1.0,
+        jitterWeight = 2.0,
     )
 
     private fun detector() = MotionDetector(config)
@@ -268,6 +270,61 @@ class MotionDetectorTest {
         now = strict.run(three, 3, now).second
         repeat(4) { now = strict.feedSteady(three, 1, now, rssi = -78) }
         assertNotEquals(MotionState.MOTION, strict.tick(now).state)
+    }
+
+    @Test
+    fun `chosen references are used even when they would fail the filters`() {
+        // A deliberately picked link that is noisy and slow - exactly the marginal case
+        // automatic selection throws away, and exactly what someone means when they point
+        // at the beacon across the doorway.
+        val d = MotionDetector(config.copy(manualReferences = setOf("chosen")))
+        d.startCalibration(0L)
+        var now = 0L
+        repeat(55) { step ->
+            d.observe("chosen", -70 + (step * 5 % 13) - 6, now)
+            d.observe("ignored", -60, now)
+            now += 200L
+        }
+        val reading = d.tick(now)
+        assertEquals(1, reading.referenceCount)
+        assertEquals("chosen", reading.references.first().address)
+    }
+
+    @Test
+    fun `level and jitter are reported apart so you can see which is firing`() {
+        val d = detector()
+        d.startCalibration(0L)
+        var now = d.feedSteady(three, 11, 0L)
+        now = d.run(three, 4, now).second
+
+        // Same average, much noisier: jitter should carry this and level should not.
+        val (jittery, _) = d.run(three, 4, now, rssi = -70, jitter = 9)
+        assertTrue("jitter ${jittery.jitterScore}", jittery.jitterScore > jittery.levelScore)
+
+        val fresh = detector()
+        fresh.startCalibration(0L)
+        var t = fresh.feedSteady(three, 11, 0L)
+        t = fresh.run(three, 4, t).second
+        // Shifted but still steady: level should carry this one.
+        val (shifted, _) = fresh.run(three, 4, t, rssi = -84, jitter = 1)
+        assertTrue("level ${shifted.levelScore}", shifted.levelScore > shifted.jitterScore)
+    }
+
+    @Test
+    fun `a lower sigma floor makes a steady link more sensitive`() {
+        fun peakFor(floor: Double): Double {
+            val d = MotionDetector(config.copy(sigmaFloor = floor))
+            d.startCalibration(0L)
+            var now = 0L
+            // A very steady link: half a dB of wobble.
+            repeat(55) { step ->
+                three.forEach { d.observe(it, -70 + (step % 2), now) }
+                now += 200L
+            }
+            now = d.run(three, 3, now, rssi = -70, jitter = 0).second
+            return d.run(three, 3, now, rssi = -74, jitter = 0).first.score
+        }
+        assertTrue(peakFor(0.5) > peakFor(4.0))
     }
 
     @Test

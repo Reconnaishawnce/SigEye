@@ -56,6 +56,7 @@ object Experiments {
     const val MICROWAVE = "microwave"
     const val MOTION = "motion"
     const val FARADAY = "faraday"
+    const val SPEED = "speed"
 
     val all: List<Experiment> = listOf(
 
@@ -156,13 +157,31 @@ object Experiments {
                 "emptying or a delivery van will all raise the count.",
         ),
         Experiment(
-            id = "speed",
+            id = SPEED,
             title = "Speed Estimator",
-            blurb = "How fast was that train, from the shape of the signal.",
-            teaches = "Signal rises and falls as a vehicle passes. The width of that " +
-                "envelope, plus a known distance, gives speed.",
+            blurb = "How fast was that, from the shape of the signal.",
+            teaches = "A device going past is loudest when it draws level. Six dB below " +
+                "that peak is a known greater range, and a known range at a known distance " +
+                "from the track is a right-angled triangle - so the length of track " +
+                "between the two crossings falls out, and time gives speed.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "A known perpendicular distance to the road or track.",
+            howTo = listOf(
+                "Measure or pace the distance from where the phone sits to the middle of " +
+                    "the track, and set it. Everything scales directly off this number.",
+                "Press Watch for passes and leave it.",
+                "Results appear a few seconds after each vehicle has gone - a pass is only " +
+                    "recognisable once it is over.",
+                "Check one against something you know, a road with a speed limit will do, " +
+                    "and adjust the path loss exponent until it agrees.",
+            ),
+            reading = "Each row shows the peak signal, how long the crossing took and how " +
+                "many readings it rested on. Passes marked rough had lopsided approach and " +
+                "departure, which usually means something else was changing.",
+            limits = "It assumes a straight line at constant speed passing at the distance " +
+                "you gave. A device slowing down, stopping, or on a different track will " +
+                "still produce a number, and it will be wrong.",
         ),
         Experiment(
             id = CROWD,
@@ -227,10 +246,15 @@ object Experiments {
                 "Anything moving during calibration is learned as normal, which is the " +
                     "one way to make this useless.",
                 "Walk back in and watch the score cross the trigger.",
+                "If nothing fires unless you stand next to the phone, open Settings and " +
+                    "lower the noise floor - that is usually the culprit.",
+                "If you know where someone would walk, choose the links yourself: a " +
+                    "beacon on the far side of a doorway makes a tripwire.",
             ),
             reading = "The score is how far the steadiest links have strayed from their " +
-                "own calm behaviour, in standard deviations. Two links have to agree " +
-                "before it calls motion.",
+                "own calm behaviour, in standard deviations. Level and jitter are shown " +
+                "apart: level is someone blocking the path, jitter is someone moving " +
+                "anywhere in the room. Jitter is the sensitive one.",
             limits = "It cannot tell you who, where, or how many - only that the room " +
                 "stopped being still. A fan, a door swinging or a cat will all trip it.",
         ),

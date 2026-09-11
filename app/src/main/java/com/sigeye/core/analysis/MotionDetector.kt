@@ -18,8 +18,18 @@ data class Reference(
     val baselineSigma: Double,
     val samples: Int,
     val packetsPerSecond: Double,
-    /** Current deviation from its own baseline, in sigmas. */
+    /** Current deviation from its own baseline, in sigmas - the higher of the two below. */
     val score: Double = 0.0,
+    /**
+     * How far the average signal has moved. This is someone standing in the path.
+     * Reported separately because it and [jitterScore] respond to different things, and
+     * one combined number gives you no way to tell which is doing the work.
+     */
+    val levelScore: Double = 0.0,
+    /** How much less steady the link has become. This is someone walking through it. */
+    val jitterScore: Double = 0.0,
+    /** Signal right now, so a link that has simply got weaker is visible as such. */
+    val currentMean: Double = 0.0,
     val live: Boolean = true,
 )
 
@@ -27,6 +37,9 @@ data class MotionReading(
     val state: MotionState,
     /** Highest deviation across references, in sigmas. */
     val score: Double,
+    /** Best level and jitter scores separately, so the UI can show what is responding. */
+    val levelScore: Double = 0.0,
+    val jitterScore: Double = 0.0,
     /** How many references currently exceed the threshold. Agreement is the point. */
     val disturbed: Int,
     val referenceCount: Int,
@@ -47,11 +60,11 @@ data class MotionEvent(
 }
 
 data class MotionConfig(
-    val calibrationSeconds: Int = 25,
+    val calibrationSeconds: Int = 20,
     /** Sliding window the live statistics are computed over. */
     val windowMs: Long = 2_500L,
     /** Deviation, in sigmas, that counts as disturbed. */
-    val sensitivity: Double = 3.5,
+    val sensitivity: Double = 3.0,
     /** References that must agree before an event fires. */
     val minAgreement: Int = 2,
     /** Consecutive ticks above threshold before firing, to swallow single glitches. */
@@ -60,10 +73,34 @@ data class MotionConfig(
     val minPacketsPerSecond: Double = 1.5,
     /** A device whose own baseline is this noisy is probably moving itself. */
     val maxBaselineSigma: Double = 5.0,
-    /** Sigma never goes below this, so a perfectly steady link cannot divide by zero. */
-    val sigmaFloor: Double = 1.2,
+    /**
+     * Sigma never goes below this, so a perfectly steady link cannot divide by zero.
+     *
+     * It is also the single most important sensitivity control. A link that sat at
+     * plus-or-minus half a dB while calm has its deviations divided by this rather than by
+     * its real spread, so a high floor quietly makes a good link insensitive.
+     */
+    val sigmaFloor: Double = 0.8,
+    /** Weight on a change in average signal. Zero ignores level entirely. */
+    val levelWeight: Double = 1.0,
+    /**
+     * Weight on a change in steadiness.
+     *
+     * Jitter is the more sensitive symptom at a distance - someone crossing a room
+     * disturbs reflections long before they block the path - so it is worth more than
+     * one for one against a level shift.
+     */
+    val jitterWeight: Double = 3.0,
     /** Drop a reference unheard for this long. */
     val staleMs: Long = 8_000L,
+    /**
+     * Addresses to use as references, or null to choose automatically.
+     *
+     * Choosing deliberately is the better mode when you know the geometry: a beacon on
+     * the far side of a doorway makes a tripwire that anyone walking through has to break.
+     * Automatic selection cannot know which links cross the route that matters.
+     */
+    val manualReferences: Set<String>? = null,
 )
 
 /**
@@ -172,6 +209,8 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
 
         val references = mutableListOf<Reference>()
         var peak = 0.0
+        var peakLevel = 0.0
+        var peakJitter = 0.0
         var disturbed = 0
         var liveCount = 0
 
@@ -180,9 +219,12 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
             val live = nowMs - track.lastSeenMs <= config.staleMs && track.window.size >= 3
             if (live) liveCount++
 
-            val score = if (live) scoreOf(track) else 0.0
+            val parts = if (live) partsOf(track) else Parts(0.0, 0.0, track.baselineMean)
+            val score = maxOf(parts.level, parts.jitter)
             track.score = score
             if (score > peak) peak = score
+            if (parts.level > peakLevel) peakLevel = parts.level
+            if (parts.jitter > peakJitter) peakJitter = parts.jitter
             if (live && score >= config.sensitivity) disturbed++
 
             references.add(
@@ -193,6 +235,9 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
                     samples = track.totalSamples,
                     packetsPerSecond = rateOf(track, nowMs),
                     score = score,
+                    levelScore = parts.level,
+                    jitterScore = parts.jitter,
+                    currentMean = parts.mean,
                     live = live,
                 ),
             )
@@ -219,6 +264,8 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
         return MotionReading(
             state = state,
             score = peak,
+            levelScore = peakLevel,
+            jitterScore = peakJitter,
             disturbed = disturbed,
             referenceCount = references.size,
             liveReferences = liveCount,
@@ -228,26 +275,29 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
         )
     }
 
+    /** Level shift, jitter rise, and current mean for one link. */
+    private data class Parts(val level: Double, val jitter: Double, val mean: Double)
+
     /**
-     * Deviation in sigmas, taking the worse of two symptoms.
+     * The two symptoms, kept apart.
      *
      * A level shift is someone standing in the path; a jitter rise is someone walking
-     * through it. Both are motion, and neither alone catches the other.
+     * through it. Both are motion, neither alone catches the other, and collapsing them
+     * into one number early makes it impossible to tell which is firing.
      */
-    private fun scoreOf(track: Track): Double {
+    private fun partsOf(track: Track): Parts {
         val values = track.window.map { it.second.toDouble() }
-        if (values.size < 3) return 0.0
+        if (values.size < 3) return Parts(0.0, 0.0, track.baselineMean)
         val mean = values.average()
         val sigma = track.baselineSigma.coerceAtLeast(config.sigmaFloor)
 
-        val levelShift = abs(mean - track.baselineMean) / sigma
+        val level = abs(mean - track.baselineMean) / sigma * config.levelWeight
 
         val variance = values.sumOf { (it - mean) * (it - mean) } / values.size
         val windowSigma = sqrt(variance)
-        // How many times noisier than its calm self, expressed on the same scale.
-        val jitter = ((windowSigma / sigma) - 1.0) * 2.0
+        val jitter = (((windowSigma / sigma) - 1.0) * config.jitterWeight).coerceAtLeast(0.0)
 
-        return maxOf(levelShift, jitter).coerceAtLeast(0.0)
+        return Parts(level.coerceAtLeast(0.0), jitter, mean)
     }
 
     private fun rateOf(track: Track, nowMs: Long): Double {
@@ -255,22 +305,35 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
         return track.totalSamples * 1000.0 / span
     }
 
-    /** Keeps only devices chatty enough and steady enough to carry a reference link. */
+    /**
+     * Establishes baselines and decides which links to keep.
+     *
+     * When the user has chosen references by hand the filters are skipped - they picked
+     * those links on purpose, possibly precisely because they are marginal, and a detector
+     * that silently discards a deliberate choice is worse than one that struggles with it.
+     */
     private fun finishCalibration(nowMs: Long) {
         calibrationEndMs = nowMs
+        val manual = config.manualReferences
         val keep = HashMap<String, Track>()
 
         tracks.forEach { (address, track) ->
-            val rate = rateOf(track, nowMs)
-            if (rate < config.minPacketsPerSecond) return@forEach
-            if (track.totalSamples < 8) return@forEach
+            val chosen = manual?.contains(address) == true
+            if (manual != null && !chosen) return@forEach
 
             val values = track.window.map { it.second.toDouble() }
             if (values.size < 3) return@forEach
+
+            if (!chosen) {
+                if (rateOf(track, nowMs) < config.minPacketsPerSecond) return@forEach
+                if (track.totalSamples < 8) return@forEach
+            }
+
             val mean = values.average()
             val sigma = sqrt(values.sumOf { (it - mean) * (it - mean) } / values.size)
-            // A device whose own signal was already wandering is probably moving.
-            if (sigma > config.maxBaselineSigma) return@forEach
+            // A device whose own signal was already wandering is probably moving - unless
+            // it was picked deliberately.
+            if (!chosen && sigma > config.maxBaselineSigma) return@forEach
 
             track.baselineMean = mean
             track.baselineSigma = sigma
@@ -280,7 +343,7 @@ class MotionDetector(var config: MotionConfig = MotionConfig()) {
 
         tracks.clear()
         tracks.putAll(keep)
-        state = if (tracks.isEmpty()) MotionState.QUIET else MotionState.QUIET
+        state = MotionState.QUIET
     }
 
     /** Slow drift correction, so temperature and battery sag do not accumulate. */

@@ -24,6 +24,7 @@ import com.sigeye.experiments.motion.MotionScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
+import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
 import com.sigeye.home.HomeScreen
@@ -107,6 +108,9 @@ private fun SigEyeApp() {
 
             Experiments.MOTION ->
                 MotionScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.SPEED ->
+                SpeedScreen(onBack = { route = null }, modifier = inset)
 
             Experiments.CELLS ->
                 CellScreen(onBack = { route = null }, modifier = inset)
