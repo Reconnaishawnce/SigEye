@@ -54,6 +54,7 @@ object Experiments {
     const val ABSORPTION = "body"
     const val RADAR = "radar"
     const val MICROWAVE = "microwave"
+    const val MOTION = "motion"
 
     val all: List<Experiment> = listOf(
 
@@ -208,13 +209,29 @@ object Experiments {
                 "evening.",
         ),
         Experiment(
-            id = "motion",
+            id = MOTION,
             title = "RF Motion Detector",
             blurb = "Notices someone crossing a radio path.",
-            teaches = "A body between two radios perturbs the signal measurably. This is " +
-                "Wi-Fi sensing, and it needs no camera.",
+            teaches = "A body reflects 2.4 GHz, so moving one changes how reflections add " +
+                "and cancel at the receiver. The signal becomes unstable long before it " +
+                "becomes weak, which is why this watches steadiness rather than strength.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "A few Bluetooth devices sitting still nearby to use as links.",
+            howTo = listOf(
+                "Put the phone down where it will stay, somewhere with a television, " +
+                    "a speaker or earbuds within range.",
+                "Press Calibrate and then leave the room, or at least hold still, for " +
+                    "twenty-five seconds.",
+                "Anything moving during calibration is learned as normal, which is the " +
+                    "one way to make this useless.",
+                "Walk back in and watch the score cross the trigger.",
+            ),
+            reading = "The score is how far the steadiest links have strayed from their " +
+                "own calm behaviour, in standard deviations. Two links have to agree " +
+                "before it calls motion.",
+            limits = "It cannot tell you who, where, or how many - only that the room " +
+                "stopped being still. A fan, a door swinging or a cat will all trip it.",
         ),
         Experiment(
             id = "rhythm",

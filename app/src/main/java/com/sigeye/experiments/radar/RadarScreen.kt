@@ -1,5 +1,6 @@
 package com.sigeye.experiments.radar
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -137,6 +138,7 @@ private fun Live(onLocate: (String) -> Unit) {
     var targets by remember { mutableStateOf<List<RadarTarget>>(emptyList()) }
     var filter by remember { mutableStateOf<RadarFilter>(RadarFilter.Everything) }
     var selected by remember { mutableStateOf<String?>(null) }
+    var showList by remember { mutableStateOf(false) }
     var outerDbm by remember { mutableStateOf(-100f) }
     val innerDbm = -35f
 
@@ -250,6 +252,72 @@ private fun Live(onLocate: (String) -> Unit) {
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
     )
+
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(
+        onClick = { showList = !showList },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(if (showList) "Hide list" else "Show list (${targets.size})") }
+
+    // Tapping a four-pixel blip is fiddly, and a moving one more so. The list is the
+    // reliable way to pick something; hidden by default so the radar stays clean.
+    if (showList) {
+        Spacer(Modifier.height(8.dp))
+        targets.sortedByDescending { it.smoothedRssi }.forEach { target ->
+            val isSelected = target.address == selected
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp)
+                    .clickable {
+                        selected = if (isSelected) null else target.address
+                    },
+                colors = CardDefaults.cardColors(
+                    containerColor = when {
+                        isSelected -> MaterialTheme.colorScheme.primaryContainer
+                        target.flagged -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                ),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            target.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        )
+                        if (target.watched || target.flagged) {
+                            Text(
+                                if (target.flagged) "flagged vendor" else "on your watchlist",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (target.flagged) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.tertiary
+                                },
+                            )
+                        }
+                    }
+                    Text(
+                        "${target.smoothedRssi.roundToInt()}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+        if (targets.isEmpty()) {
+            Text(
+                "Nothing in range on this filter.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 
     selected?.let { address ->
         val advert = latest[address]
