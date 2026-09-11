@@ -1,4 +1,4 @@
-package com.blepulse.ui
+package com.sigeye.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import com.blepulse.core.Bin
+import com.sigeye.experiments.trainspotter.Bin
 import kotlin.math.max
 
 /**
@@ -29,7 +29,7 @@ import kotlin.math.max
  * to keep chasing for what amounts to one polyline and a dashed rule.
  */
 @Composable
-fun PulseChart(
+fun Sparkline(
     bins: List<Bin>,
     baseline: Double,
     modifier: Modifier = Modifier,

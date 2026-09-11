@@ -1,15 +1,8 @@
-package com.blepulse.ui
+package com.sigeye.experiments.trainspotter
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,13 +18,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,169 +33,70 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.blepulse.core.PulseState
-import com.blepulse.core.ScanUiState
-import com.blepulse.core.SettingsStore
-import com.blepulse.scan.Permissions
-import com.blepulse.scan.ScanService
+import com.sigeye.core.Permissions
+import com.sigeye.ui.PermissionGate
+import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.Sparkline
 import java.io.File
 import java.util.Locale
 
-class MainActivity : ComponentActivity() {
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent { BLEPulseApp() }
-    }
-}
-
 @Composable
-private fun BLEPulseApp() {
-    val dark = androidx.compose.foundation.isSystemInDarkTheme()
-    MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
-        Surface(modifier = Modifier.fillMaxSize()) { RootScreen() }
-    }
-}
-
-@Composable
-private fun RootScreen() {
-    val context = LocalContext.current
-    val state by PulseState.state.collectAsStateWithLifecycle()
-
-    var hasPermissions by remember { mutableStateOf(Permissions.canScan(context)) }
-    var wasRefused by remember { mutableStateOf(false) }
-
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
+fun TrainSpotterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState()),
     ) {
-        hasPermissions = Permissions.canScan(context)
-        // A second denial is permanent: Android stops showing the dialog and the button
-        // would silently do nothing from here on. Send them to Settings instead.
-        if (!hasPermissions) wasRefused = true
-    }
-
-    // Re-check when the user comes back from the Settings screen. Doing this inline in
-    // the composable body would be a state write during composition.
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) hasPermissions = Permissions.canScan(context)
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onBack, contentPadding = androidx.compose.foundation.layout
+            .PaddingValues(0.dp)) {
+            Text("←  All experiments")
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    Scaffold { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "BLEPulse",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "Counts new Bluetooth devices nearby and flags the bursts.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(20.dp))
-
-            if (!hasPermissions) {
-                PermissionGate(
-                    refused = wasRefused,
-                    onGrant = { launcher.launch(Permissions.required()) },
-                    onOpenSettings = { openAppSettings(context) },
-                )
-            } else {
-                MonitorScreen(state = state, context = context)
-            }
-            Spacer(Modifier.height(32.dp))
-        }
-    }
-}
-
-@Composable
-private fun PermissionGate(
-    refused: Boolean,
-    onGrant: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp)) {
-            Text("Three permissions needed", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            PermissionRow(
-                "Nearby devices",
-                "To listen for Bluetooth advertisements. BLEPulse never connects to anything.",
-            )
-            PermissionRow(
-                "Location",
-                "Android treats an unfiltered Bluetooth scan as location-capable and will " +
-                    "return zero results without it. Your location is never read or stored.",
-            )
-            PermissionRow(
-                "Notifications",
-                "To show the ongoing scan and buzz you when a burst looks like a train.",
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Nothing leaves the phone. There is no network code in this app.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onGrant, modifier = Modifier.fillMaxWidth()) {
-                Text("Grant permissions")
-            }
-            if (refused) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Android will not ask again after a second refusal. Grant them in " +
-                        "Settings instead.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open app settings")
-                }
-            }
-        }
-    }
-}
-
-private fun openAppSettings(context: Context) {
-    val intent = Intent(
-        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        Uri.fromParts("package", context.packageName, null),
-    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
-}
-
-@Composable
-private fun PermissionRow(title: String, body: String) {
-    Column(Modifier.padding(bottom = 12.dp)) {
-        Text(title, style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(4.dp))
         Text(
-            body,
-            style = MaterialTheme.typography.bodySmall,
+            text = "Train Spotter",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "Counts new Bluetooth devices nearby and flags the bursts.",
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(20.dp))
+
+        PermissionGate(
+            request = Permissions.required(),
+            blocking = Permissions.blocking(),
+            reasons = listOf(
+                PermissionReason(
+                    "Nearby devices",
+                    "To listen for Bluetooth advertisements. SigEye never connects to anything.",
+                ),
+                PermissionReason(
+                    "Location",
+                    "Android treats an unfiltered Bluetooth scan as location-capable and " +
+                        "returns zero results without it. Your location is never read or stored.",
+                ),
+                PermissionReason(
+                    "Notifications",
+                    "To show the ongoing scan and buzz you when a burst looks like a train.",
+                ),
+            ),
+            footnote = "Nothing leaves the phone. There is no network code in this app.",
+        ) {
+            Monitor()
+        }
+        Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun MonitorScreen(state: ScanUiState, context: Context) {
+private fun Monitor() {
+    val context = LocalContext.current
+    val state by PulseState.state.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
 
     state.error?.let { message ->
@@ -229,13 +119,13 @@ private fun MonitorScreen(state: ScanUiState, context: Context) {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        val alerting = state.lastAlertMs > 0 &&
+            System.currentTimeMillis() - state.lastAlertMs < 60_000
         Text(
             text = state.currentCount.toString(),
             fontSize = 88.sp,
             fontWeight = FontWeight.Bold,
-            color = if (state.lastAlertMs > 0 &&
-                System.currentTimeMillis() - state.lastAlertMs < 60_000
-            ) {
+            color = if (alerting) {
                 MaterialTheme.colorScheme.error
             } else {
                 MaterialTheme.colorScheme.primary
@@ -249,7 +139,7 @@ private fun MonitorScreen(state: ScanUiState, context: Context) {
     }
 
     Spacer(Modifier.height(16.dp))
-    PulseChart(bins = state.bins, baseline = state.baseline)
+    Sparkline(bins = state.bins, baseline = state.baseline)
     Spacer(Modifier.height(8.dp))
     Text(
         text = "Last " + state.config.historyMinutes + " min. Dashed line is the usual rate; " +
@@ -265,7 +155,7 @@ private fun MonitorScreen(state: ScanUiState, context: Context) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        Stat("Active", state.activeUnique.toString(), "unique in " + state.config.windowMinutes + " min")
+        Stat("Active", state.activeUnique.toString(), "in " + state.config.windowMinutes + " min")
         Stat("Usual", format1(state.baseline), "new per bin")
         Stat("Ads", compact(state.totalAdvertisements), "seen total")
     }
@@ -289,9 +179,12 @@ private fun MonitorScreen(state: ScanUiState, context: Context) {
         ) { Text("Stop scanning") }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
-            onClick = { ScanService.label(context) },
+            onClick = {
+                ScanService.label(context)
+                Toast.makeText(context, "Marked this bin as TRAIN", Toast.LENGTH_SHORT).show()
+            },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Train now - mark this bin") }
+        ) { Text("Train now — mark this bin") }
     } else {
         Button(
             onClick = { ScanService.start(context) },
@@ -370,7 +263,7 @@ private fun shareCsv(context: Context) {
         Toast.makeText(context, "External storage unavailable.", Toast.LENGTH_SHORT).show()
         return
     }
-    val files = dir.listFiles { f -> f.name.startsWith("blepulse-") && f.name.endsWith(".csv") }
+    val files = dir.listFiles { f -> f.name.startsWith("sigeye-") && f.name.endsWith(".csv") }
         ?.sortedBy { it.name }
         .orEmpty()
     if (files.isEmpty()) {
@@ -390,7 +283,7 @@ private fun shareCsv(context: Context) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching {
-        context.startActivity(Intent.createChooser(intent, "Export BLEPulse logs"))
+        context.startActivity(Intent.createChooser(intent, "Export SigEye logs"))
     }.onFailure {
         Toast.makeText(context, "No app available to receive the file.", Toast.LENGTH_SHORT).show()
     }

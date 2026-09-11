@@ -26,14 +26,14 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.BLEPulse"
+        android:theme="@style/Theme.SigEye"
         tools:targetApi="34">
 
         <activity
-            android:name=".ui.MainActivity"
+            android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.BLEPulse">
+            android:theme="@style/Theme.SigEye">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -41,7 +41,7 @@
         </activity>
 
         <service
-            android:name=".scan.ScanService"
+            android:name=".experiments.trainspotter.ScanService"
             android:exported="false"
             android:foregroundServiceType="location" />
 

@@ -1,4 +1,4 @@
-# Installing BLEPulse on your phone
+# Installing SigEye on your phone
 
 Two parts. **Part 1 gets the app running** and needs nothing on your PC. **Part 2 installs
 `adb`** so you can pull the CSV and read logs — do it once, it takes five minutes.
@@ -18,20 +18,20 @@ source**.
 
 Open this on the **phone's** browser and sign in to GitHub:
 
-https://github.com/segalreport/BLEPulse/actions
+https://github.com/Reconnaishawnce/SigEye/actions
 
-Tap the newest run with a green check → scroll to **Artifacts** → tap **BLEPulse-apk**.
+Tap the newest run with a green check → scroll to **Artifacts** → tap **SigEye-apk**.
 It downloads a `.zip`.
 
 ### 3. Unzip and install
 
-Open the phone's **Files** app → Downloads → tap `BLEPulse-apk.zip` → extract → tap the
+Open the phone's **Files** app → Downloads → tap `SigEye-apk.zip` → extract → tap the
 `.apk` inside → **Install**. Play Protect will warn that it doesn't recognise the app; tap
 **Install anyway**.
 
 ### 4. First run
 
-Open BLEPulse. It asks for three permissions in one prompt:
+Open SigEye. It asks for three permissions in one prompt:
 
 - **Nearby devices** → Allow
 - **Location** → choose **While using the app** (this is enough; the foreground service
@@ -44,9 +44,9 @@ Then tap **Start scanning**. Within a few seconds the big number should start mo
 
 This is the difference between logging all night and logging for 20 minutes.
 
-Settings → Apps → BLEPulse → **Battery** → **Unrestricted**.
+Settings → Apps → SigEye → **Battery** → **Unrestricted**.
 
-On Samsung also: Settings → Battery → Background usage limits → make sure BLEPulse is
+On Samsung also: Settings → Battery → Background usage limits → make sure SigEye is
 **not** in "Sleeping apps" or "Deep sleeping apps".
 
 ---
@@ -86,7 +86,7 @@ Each of these is one command. Run them from PowerShell.
 ### Is the service scanning?
 
 ```powershell
-C:\platform-tools\adb.exe logcat -s BLEPulse
+C:\platform-tools\adb.exe logcat -s SigEye
 ```
 
 You should see a line every 5 seconds:
@@ -107,7 +107,7 @@ minutes of continuous data with no flat gap.
 ### Pull the CSV
 
 ```powershell
-C:\platform-tools\adb.exe pull /sdcard/Android/data/com.blepulse/files/ .\blepulse-logs
+C:\platform-tools\adb.exe pull /sdcard/Android/data/com.sigeye/files/ .\sigeye-logs
 ```
 
 ### Force a test alert without waiting for a train
@@ -136,7 +136,7 @@ tracks will see a burst four to five times the size of one in the next room.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Big number stays at 0 | Location permission denied | Settings → Apps → BLEPulse → Permissions → Location → Allow |
+| Big number stays at 0 | Location permission denied | Settings → Apps → SigEye → Permissions → Location → Allow |
 | "Bluetooth is off" | Bluetooth off | Turn it on; the app resumes by itself |
 | Data stops after ~30 min | OEM battery killer | Set Battery to **Unrestricted** (Part 1, step 5) |
 | Counts drop to near zero after a while | Android scan throttling | The watchdog restarts automatically; the screen shows how many times |

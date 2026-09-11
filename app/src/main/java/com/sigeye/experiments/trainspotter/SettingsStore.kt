@@ -1,4 +1,4 @@
-package com.blepulse.core
+package com.sigeye.experiments.trainspotter
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -7,7 +7,7 @@ import android.content.SharedPreferences
 class SettingsStore(context: Context) {
 
     private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences("blepulse", Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences("trainspotter", Context.MODE_PRIVATE)
 
     fun load(): PulseConfig {
         val d = PulseConfig.DEFAULT

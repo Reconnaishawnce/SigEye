@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "BLEPulse"
+rootProject.name = "SigEye"
 include(":app")

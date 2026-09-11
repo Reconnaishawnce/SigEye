@@ -1,4 +1,4 @@
-package com.blepulse.core
+package com.sigeye.experiments.trainspotter
 
 /**
  * All tunables in one place. Pure data - no Android types - so the aggregator

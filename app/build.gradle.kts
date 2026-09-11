@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.blepulse"
+    namespace = "com.sigeye"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.blepulse"
+        applicationId = "com.sigeye"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

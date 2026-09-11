@@ -1,4 +1,4 @@
-package com.blepulse.scan
+package com.sigeye.core
 
 import android.Manifest
 import android.content.Context

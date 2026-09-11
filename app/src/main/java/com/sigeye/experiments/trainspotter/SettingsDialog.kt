@@ -1,4 +1,4 @@
-package com.blepulse.ui
+package com.sigeye.experiments.trainspotter
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,8 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.blepulse.core.PulseConfig
-import com.blepulse.core.SettingsStore
 import java.util.Locale
 import kotlin.math.roundToInt
 

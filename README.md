@@ -1,12 +1,27 @@
-# BLEPulse
+# SigEye
+
+Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
+
+Every experiment is a self-contained module over one shared spine:
+
+```
+sampler  ->  aggregator  ->  live chart  ->  CSV  ->  share
+```
+
+`docs/EXPERIMENTS.md` holds the roadmap of twenty planned experiments and the three
+Android constraints that shape them.
+
+No network code. No accounts. No analytics. Everything stays on the phone.
+
+---
+
+## Experiment 1: Train Spotter
 
 Counts **newly seen Bluetooth LE addresses** per time bin and tells you when they burst.
 
 Built to answer one question: *is a train going past my apartment right now?* A passenger
 train is a hundred phones, earbuds and fitness trackers moving through your radio horizon in
 under a minute. That shows up as a sharp spike in previously-unseen BLE addresses.
-
-No network code. No accounts. No analytics. Everything stays on the phone.
 
 ## How it decides something is a train
 
@@ -36,14 +51,14 @@ Requires nothing but a JDK 17 and this repo:
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
 CI builds the same APK on every push. Grab it from the **Actions** tab of this repo -
-open the newest green run and download the `BLEPulse-apk` artifact.
+open the newest green run and download the `SigEye-apk` artifact.
 
 ## CSV log
 
 Every closed bin is appended to app-specific external storage, one file per day:
 
 ```
-/sdcard/Android/data/com.blepulse/files/blepulse-YYYY-MM-DD.csv
+/sdcard/Android/data/com.sigeye/files/sigeye-YYYY-MM-DD.csv
 ```
 
 Columns: `timestamp,epoch_ms,new_count,active_unique,baseline,spike,label`
@@ -55,7 +70,7 @@ actually hear a train go by; after a few days you can check the `spike` column a
 Pull it with:
 
 ```
-adb pull /sdcard/Android/data/com.blepulse/files/ ./blepulse-logs
+adb pull /sdcard/Android/data/com.sigeye/files/ ./sigeye-logs
 ```
 
 Or use the in-app **Export CSV** button, which shares every log file.
@@ -92,5 +107,5 @@ path work unchanged on API 26-30, where location permission is mandatory regardl
 - Android throttles BLE scans. A watchdog restarts the scan if results stop arriving for 90
   seconds, and refreshes it every 25 minutes regardless.
 - Aggressive OEM battery managers (Samsung, Xiaomi, OnePlus) may kill the foreground service
-  anyway. Exempt BLEPulse from battery optimisation if the log has gaps.
+  anyway. Exempt SigEye from battery optimisation if the log has gaps.
 - Bin counts are wall-clock, not monotonic. A manual clock change mid-run will distort one bin.

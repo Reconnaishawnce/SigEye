@@ -1,8 +1,8 @@
-package com.blepulse.scan
+package com.sigeye.core
 
 import android.content.Context
 import android.util.Log
-import com.blepulse.core.Bin
+import com.sigeye.experiments.trainspotter.Bin
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -12,7 +12,7 @@ import java.util.Locale
 /**
  * Appends one row per closed bin to app-specific external storage, so it is
  * readable over adb without any storage permission:
- *   adb pull /sdcard/Android/data/com.blepulse/files/
+ *   adb pull /sdcard/Android/data/com.sigeye/files/
  */
 class CsvLogger(context: Context) {
 
@@ -24,7 +24,7 @@ class CsvLogger(context: Context) {
     private var openDay: String? = null
 
     val currentFile: File?
-        get() = dir?.let { File(it, "blepulse-${dayFormat.format(Date())}.csv") }
+        get() = dir?.let { File(it, "sigeye-${dayFormat.format(Date())}.csv") }
 
     fun append(bin: Bin) {
         val file = fileFor(bin.startMs) ?: return
@@ -50,7 +50,7 @@ class CsvLogger(context: Context) {
     }
 
     fun listFiles(): List<File> =
-        dir?.listFiles { f -> f.name.startsWith("blepulse-") && f.name.endsWith(".csv") }
+        dir?.listFiles { f -> f.name.startsWith("sigeye-") && f.name.endsWith(".csv") }
             ?.sortedBy { it.name }
             .orEmpty()
 
@@ -81,7 +81,7 @@ class CsvLogger(context: Context) {
     }
 
     private fun fileFor(timeMs: Long): File? =
-        dir?.let { File(it, "blepulse-${dayFormat.format(Date(timeMs))}.csv") }
+        dir?.let { File(it, "sigeye-${dayFormat.format(Date(timeMs))}.csv") }
 
     private fun rotateIfNeeded(file: File) {
         val day = file.name
@@ -94,7 +94,7 @@ class CsvLogger(context: Context) {
     }
 
     private companion object {
-        const val TAG = "BLEPulse/Csv"
+        const val TAG = "SigEye/Csv"
         const val HEADER = "timestamp,epoch_ms,new_count,active_unique,baseline,spike,label\n"
     }
 }

@@ -1,4 +1,4 @@
-package com.blepulse.core
+package com.sigeye.experiments.trainspotter
 
 /**
  * Turns a stream of BLE advertisements into per-bin counts of *newly seen* addresses,

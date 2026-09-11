@@ -1,4 +1,4 @@
-package com.blepulse.core
+package com.sigeye.experiments.trainspotter
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

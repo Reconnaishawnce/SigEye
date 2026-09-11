@@ -1,4 +1,4 @@
-package com.blepulse.core
+package com.sigeye.experiments.trainspotter
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -1,4 +1,4 @@
-package com.blepulse.core
+package com.sigeye.experiments.trainspotter
 
 /** One closed time bucket. This is exactly what a CSV row holds. */
 data class Bin(

@@ -1,4 +1,4 @@
-package com.blepulse.scan
+package com.sigeye.experiments.trainspotter
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -22,13 +22,8 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.blepulse.R
-import com.blepulse.core.Bin
-import com.blepulse.core.PulseAggregator
-import com.blepulse.core.PulseConfig
-import com.blepulse.core.PulseState
-import com.blepulse.core.SettingsStore
-import com.blepulse.ui.MainActivity
+import com.sigeye.R
+import com.sigeye.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -251,7 +246,7 @@ class ScanService : Service() {
                     "Android refused the scan. Toggle Bluetooth off and on."
 
                 SCAN_FAILED_FEATURE_UNSUPPORTED ->
-                    "This phone does not support the scan mode BLEPulse needs."
+                    "This phone does not support the scan mode this needs."
 
                 SCAN_FAILED_INTERNAL_ERROR ->
                     "Bluetooth stack error. Toggle Bluetooth off and on."
@@ -452,7 +447,7 @@ class ScanService : Service() {
                 CHANNEL_ONGOING,
                 "Scanning",
                 NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = "Shown while BLEPulse is counting devices." },
+            ).apply { description = "Shown while Train Spotter is counting devices." },
         )
         manager.createNotificationChannel(
             NotificationChannel(
@@ -488,7 +483,7 @@ class ScanService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_pulse)
-            .setContentTitle("BLEPulse is listening")
+            .setContentTitle("Train Spotter is listening")
             .setContentText(text)
             .setContentIntent(contentIntent())
             .addAction(0, "Stop", stopIntent)
@@ -528,7 +523,7 @@ class ScanService : Service() {
     private fun format1(value: Double): String = String.format(Locale.US, "%.1f", value)
 
     companion object {
-        private const val TAG = "BLEPulse"
+        private const val TAG = "SigEye"
         private const val CHANNEL_ONGOING = "scan"
         private const val CHANNEL_ALERT = "alerts"
         private const val NOTIF_ONGOING = 1
@@ -542,10 +537,10 @@ class ScanService : Service() {
         private const val MAX_QUEUED_ADVERTS = 20_000
         private const val CSV_RETENTION_DAYS = 30
 
-        const val ACTION_START = "com.blepulse.START"
-        const val ACTION_STOP = "com.blepulse.STOP"
-        const val ACTION_LABEL = "com.blepulse.LABEL"
-        const val ACTION_RELOAD_CONFIG = "com.blepulse.RELOAD_CONFIG"
+        const val ACTION_START = "com.sigeye.trainspotter.START"
+        const val ACTION_STOP = "com.sigeye.trainspotter.STOP"
+        const val ACTION_LABEL = "com.sigeye.trainspotter.LABEL"
+        const val ACTION_RELOAD_CONFIG = "com.sigeye.trainspotter.RELOAD_CONFIG"
 
         fun start(context: Context) {
             val intent = Intent(context, ScanService::class.java).setAction(ACTION_START)
