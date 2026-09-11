@@ -149,13 +149,33 @@ class ProximityTest {
     @Test
     fun `old readings leave the trend window`() {
         val e = ProximityEstimator(trendWindowMs = 2_000L)
-        // A strong climb, then a long steady stretch that should displace it entirely.
+        // A strong climb, then a long steady stretch.
+        //
+        // Two separate mechanisms have to settle before the trend goes flat: the window
+        // has to drop the climbing samples, and the filter has to finish converging on
+        // the new level. While it is still catching up the smoothed series genuinely is
+        // rising, and reporting that as "closer" is correct - so the flat stretch here is
+        // long enough to cover both.
         var now = 0L
         repeat(10) { e.observe(-90 + it * 3, now); now += 100L }
         now += 5_000L
-        repeat(12) { e.observe(-60, now); now += 150L }
+        repeat(40) { e.observe(-60, now); now += 150L }
         val reading = e.observe(-60, now)
-        assertNotEquals(Trend.CLOSER, reading.trend)
+        assertEquals(Trend.STEADY, reading.trend)
+        assertTrue("slope ${reading.slopeDbPerSecond}", abs(reading.slopeDbPerSecond) < 0.5)
+    }
+
+    @Test
+    fun `the trend follows a reversal rather than averaging it away`() {
+        val e = ProximityEstimator()
+        var now = 0L
+        // Walk in...
+        var rssi = -90
+        repeat(30) { e.observe(rssi, now); now += 200L; if (it % 2 == 0) rssi += 2 }
+        assertEquals(Trend.CLOSER, e.observe(rssi, now).trend)
+        // ...then turn around and walk out.
+        repeat(40) { e.observe(rssi, now); now += 200L; if (it % 2 == 0) rssi -= 2 }
+        assertEquals(Trend.FURTHER, e.observe(rssi, now).trend)
     }
 
     // ------------------------------------------------------------ confidence
