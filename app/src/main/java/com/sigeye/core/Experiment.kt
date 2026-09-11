@@ -27,6 +27,7 @@ object Experiments {
 
     const val TRAIN_SPOTTER = "trainspotter"
     const val INSPECTOR = "inspector"
+    const val WATCHLIST = "watchlist"
 
     val all: List<Experiment> = listOf(
         Experiment(
@@ -43,6 +44,14 @@ object Experiments {
             blurb = "Everything broadcasting around you, decoded.",
             teaches = "Who made it, what it is saying, and how close it is. Mute the " +
                 "devices you do not care about and every experiment ignores them.",
+            status = Experiment.Status.READY,
+        ),
+        Experiment(
+            id = WATCHLIST,
+            title = "Signal Watch",
+            blurb = "Alerts when something you care about comes into range.",
+            teaches = "Which identifiers survive address randomisation, and which do not. " +
+                "Manufacturer prefixes and service data outlive a rotating MAC.",
             status = Experiment.Status.READY,
         ),
         Experiment(

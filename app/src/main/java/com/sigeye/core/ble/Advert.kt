@@ -1,0 +1,81 @@
+package com.sigeye.core.ble
+
+import android.bluetooth.le.ScanResult
+import com.sigeye.core.Vendors
+
+/**
+ * One decoded BLE advertisement, shared by every experiment.
+ *
+ * Decoded once at the hub rather than separately per consumer: the radio hands the same
+ * packet to everyone, and parsing it three times would be three times the allocation on
+ * the hottest path in the app.
+ */
+data class Advert(
+    val address: String,
+    val rssi: Int,
+    val atMs: Long,
+    val name: String? = null,
+    val companyId: Int? = null,
+    val manufacturerData: ByteArray? = null,
+    val serviceUuids: List<String> = emptyList(),
+    val serviceData: Map<String, ByteArray> = emptyMap(),
+    val txPower: Int? = null,
+) {
+    val oui: String get() = Vendors.ouiOf(address)
+
+    val isRandomAddress: Boolean get() = Vendors.isRandomAddress(address)
+
+    val vendor: String?
+        get() = Vendors.byAddress(address) ?: companyId?.let { Vendors.byCompanyId(it) }
+
+    /** Identity by address; the payload arrays would otherwise compare by reference. */
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is Advert && other.address == address && other.atMs == atMs)
+
+    override fun hashCode(): Int = address.hashCode() * 31 + atMs.hashCode()
+
+    companion object {
+        fun from(result: ScanResult, nowMs: Long): Advert? {
+            val address = result.device?.address ?: return null
+            val record = result.scanRecord
+
+            var companyId: Int? = null
+            var manufacturerData: ByteArray? = null
+            val mfg = record?.manufacturerSpecificData
+            if (mfg != null && mfg.size() > 0) {
+                companyId = mfg.keyAt(0)
+                manufacturerData = mfg.valueAt(0)
+            }
+
+            return Advert(
+                address = address,
+                rssi = result.rssi,
+                atMs = nowMs,
+                name = record?.deviceName,
+                companyId = companyId,
+                manufacturerData = manufacturerData,
+                serviceUuids = record?.serviceUuids?.map { it.uuid.toString() }.orEmpty(),
+                serviceData = record?.serviceData
+                    ?.mapKeys { it.key.uuid.toString() }
+                    ?.mapValues { it.value ?: ByteArray(0) }
+                    .orEmpty(),
+                txPower = record?.txPowerLevel?.takeIf { it != Int.MIN_VALUE },
+            )
+        }
+    }
+}
+
+/** What the radio is currently managing to deliver. */
+data class ScanHealth(
+    val scanning: Boolean = false,
+    val advertsPerSecond: Double = 0.0,
+    /** Best rate seen early in the current scan cycle - what healthy looks like here. */
+    val referenceRate: Double = 0.0,
+    val restarts: Int = 0,
+    val subscribers: Int = 0,
+    val error: String? = null,
+) {
+    /** Delivery has collapsed relative to what this phone managed a moment ago. */
+    val starved: Boolean
+        get() = scanning && referenceRate >= 1.0 && advertsPerSecond < referenceRate * 0.25
+}

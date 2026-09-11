@@ -41,7 +41,7 @@
         </activity>
 
         <service
-            android:name=".experiments.trainspotter.ScanService"
+            android:name=".core.ScanService"
             android:exported="false"
             android:foregroundServiceType="location" />
 

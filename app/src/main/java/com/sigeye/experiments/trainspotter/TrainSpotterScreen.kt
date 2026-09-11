@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Permissions
+import com.sigeye.core.ScanService
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Sparkline
@@ -191,7 +192,7 @@ private fun Monitor() {
     Spacer(Modifier.height(20.dp))
     if (state.running) {
         Button(
-            onClick = { ScanService.stop(context) },
+            onClick = { ScanService.stop(context, ScanService.Mode.TRAIN_SPOTTER) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Stop scanning") }
         Spacer(Modifier.height(8.dp))
@@ -204,7 +205,7 @@ private fun Monitor() {
         ) { Text("Train now — mark this bin") }
     } else {
         Button(
-            onClick = { ScanService.start(context) },
+            onClick = { ScanService.start(context, ScanService.Mode.TRAIN_SPOTTER) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Start scanning") }
     }
