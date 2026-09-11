@@ -47,6 +47,8 @@ import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
 
 private const val HUB_TAG = "faraday"
@@ -112,15 +114,25 @@ private fun Live() {
 
     var stage by remember { mutableStateOf(Stage.PICK) }
     var target by remember { mutableStateOf<String?>(null) }
-    var candidates by remember { mutableStateOf<Map<String, Candidate>>(emptyMap()) }
+    var targetLabel by remember { mutableStateOf("-") }
+    // A plain map, deliberately not Compose state. Writing a new immutable map on every
+    // advertisement copied the whole thing per packet and recomposed the screen hundreds
+    // of times a second, which starved the coroutine doing the recording - and in this
+    // experiment that coroutine is the measurement.
+    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
     var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
     var paused by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf(comparison.result()) }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
-    var lastHeardMs by remember { mutableStateOf(0L) }
+    // Counted off the Compose thread and published on the phase timer, for the same
+    // reason: a state write per packet is a recomposition per packet.
+    val lastHeardMs = remember { AtomicLong(0L) }
+    val outsideCount = remember { AtomicInteger(0) }
+    val insideCount = remember { AtomicInteger(0) }
     // Packets are the other half of the story: a good shield gives no readings at all.
     var outsidePackets by remember { mutableStateOf(0) }
     var insidePackets by remember { mutableStateOf(0) }
+    var silent by remember { mutableStateOf(false) }
     var phaseSeconds by remember { mutableStateOf(0) }
 
     DisposableEffect(Unit) {
@@ -129,11 +141,14 @@ private fun Live() {
         onDispose { BleScanHub.release(HUB_TAG) }
     }
 
-    LaunchedEffect(Unit) {
+    // Candidates are only needed while one is being picked, so nothing is collected for
+    // them once the measurement starts.
+    LaunchedEffect(stage) {
+        if (stage != Stage.PICK) return@LaunchedEffect
         BleScanHub.adverts.collect { advert ->
-            val existing = candidates[advert.address]
-            candidates = candidates + (
-                advert.address to Candidate(
+            synchronized(candidateTable) {
+                val existing = candidateTable[advert.address]
+                candidateTable[advert.address] = Candidate(
                     address = advert.address,
                     name = advert.name ?: existing?.name,
                     vendor = advert.vendor,
@@ -142,28 +157,37 @@ private fun Live() {
                     firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
                     lastSeenMs = advert.atMs,
                 )
-                )
-
-            if (advert.address == target) {
-                liveRssi = advert.rssi
-                lastHeardMs = advert.atMs
-                comparison.record(advert.rssi.toDouble())
-                when (comparison.phase) {
-                    AbComparison.Phase.BASELINE -> outsidePackets++
-                    AbComparison.Phase.TEST -> insidePackets++
-                    AbComparison.Phase.IDLE -> Unit
-                }
             }
         }
     }
 
-    LaunchedEffect(paused, candidates) {
-        if (!paused) {
+    // The picker list, snapshotted on a timer and freezable so a row can be tapped.
+    LaunchedEffect(paused, stage) {
+        while (stage == Stage.PICK && !paused) {
+            delay(700)
             val now = System.currentTimeMillis()
-            frozen = candidates.values
+            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
                 .filter { now - it.lastSeenMs < 12_000 && it.sightings >= 3 }
                 .sortedByDescending { it.rssi }
                 .take(20)
+        }
+    }
+
+    // Recording, keyed so it restarts cleanly when the phase or the target changes.
+    LaunchedEffect(stage, target) {
+        val address = target
+        val measuring = stage == Stage.OUTSIDE || stage == Stage.INSIDE
+        if (!measuring || address == null) return@LaunchedEffect
+        BleScanHub.adverts.collect { advert ->
+            if (advert.address != address) return@collect
+            liveRssi = advert.rssi
+            lastHeardMs.set(advert.atMs)
+            comparison.record(advert.rssi.toDouble())
+            when (comparison.phase) {
+                AbComparison.Phase.BASELINE -> outsideCount.incrementAndGet()
+                AbComparison.Phase.TEST -> insideCount.incrementAndGet()
+                AbComparison.Phase.IDLE -> Unit
+            }
         }
     }
 
@@ -173,6 +197,10 @@ private fun Live() {
             delay(SAMPLE_MS)
             phaseSeconds++
             result = comparison.result()
+            outsidePackets = outsideCount.get()
+            insidePackets = insideCount.get()
+            val heard = lastHeardMs.get()
+            silent = heard > 0 && System.currentTimeMillis() - heard > 4_000
         }
     }
 
@@ -201,15 +229,27 @@ private fun Live() {
             )
             Spacer(Modifier.height(6.dp))
             frozen.forEach { candidate ->
+                val label = notes[candidate.address.uppercase()]?.nickname
+                    ?: candidate.name?.takeIf { it.isNotBlank() }
+                    ?: candidate.vendor
+                    ?: candidate.address
                 Card(
                     Modifier
                         .fillMaxWidth()
                         .padding(bottom = 6.dp)
                         .clickable {
                             target = candidate.address
+                            // Settled once, here, rather than looked up in the live table
+                            // on every recomposition of the phase panels.
+                            targetLabel = label
                             comparison.reset()
+                            outsideCount.set(0)
+                            insideCount.set(0)
                             outsidePackets = 0
                             insidePackets = 0
+                            lastHeardMs.set(0L)
+                            silent = false
+                            liveRssi = null
                             comparison.startBaseline()
                             stage = Stage.OUTSIDE
                         },
@@ -223,10 +263,7 @@ private fun Live() {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                notes[candidate.address.uppercase()]?.nickname
-                                    ?: candidate.name?.takeIf { it.isNotBlank() }
-                                    ?: candidate.vendor
-                                    ?: candidate.address,
+                                label,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -259,11 +296,15 @@ private fun Live() {
             title = "Measuring it in the open",
             instruction = "Leave the device out in the open, a pace or two from the " +
                 "phone, and do not move either. This is the reference.",
+            label = targetLabel,
             seconds = phaseSeconds,
             samples = result.baseline.samples,
             liveRssi = liveRssi,
             packets = outsidePackets,
             onNext = {
+                // The timer publishes the count once a second, so take the final tally
+                // directly rather than leaving the last packets of the phase unreported.
+                outsidePackets = outsideCount.get()
                 comparison.startTest()
                 stage = Stage.INSIDE
             },
@@ -276,14 +317,16 @@ private fun Live() {
             title = "Measuring it shielded",
             instruction = "Put the device inside the container and close it properly. " +
                 "Keep the container where the device was, and keep the phone still.",
+            label = targetLabel,
             seconds = phaseSeconds,
             samples = result.test.samples,
             liveRssi = liveRssi,
             packets = insidePackets,
-            silent = lastHeardMs > 0 && System.currentTimeMillis() - lastHeardMs > 4_000,
+            silent = silent,
             onNext = {
                 comparison.stop()
                 result = comparison.result()
+                insidePackets = insideCount.get()
                 stage = Stage.RESULT
             },
             nextLabel = "Stop and compare",
@@ -296,13 +339,19 @@ private fun Live() {
             insidePackets = insidePackets,
             onAgain = {
                 comparison.reset()
+                outsideCount.set(0)
+                insideCount.set(0)
                 outsidePackets = 0
                 insidePackets = 0
+                lastHeardMs.set(0L)
+                silent = false
+                liveRssi = null
                 comparison.startBaseline()
                 stage = Stage.OUTSIDE
             },
             onNewTarget = {
                 target = null
+                targetLabel = "-"
                 comparison.reset()
                 stage = Stage.PICK
             },
@@ -315,6 +364,7 @@ private fun PhasePanel(
     step: String,
     title: String,
     instruction: String,
+    label: String,
     seconds: Int,
     samples: Int,
     liveRssi: Int?,
@@ -328,6 +378,11 @@ private fun PhasePanel(
 
     Spacer(Modifier.height(14.dp))
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             if (silent) "—" else liveRssi?.toString() ?: "—",
             fontSize = 72.sp,
