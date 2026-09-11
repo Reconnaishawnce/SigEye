@@ -26,7 +26,8 @@ class PulseAggregatorTest {
         var now = startAt
         var seq = 0
         // One seed advertisement so the first closeBin is a real bin even when perBin
-        // is zero - the phase clock only starts once data is flowing.
+        // is zero - otherwise the first tick would only anchor the boundary and every
+        // caller would be off by one bin.
         observe("seed-$startAt", -60, now)
         repeat(bins) {
             repeat(perBin) { observe("warm-$now-${seq++}", -60, now) }
@@ -101,13 +102,22 @@ class PulseAggregatorTest {
     }
 
     @Test
-    fun `the phase clock starts with the first advertisement, not the first tick`() {
+    fun `the first tick anchors the bin boundary without advancing the phase`() {
         val agg = PulseAggregator(config)
-        // Bins closed before any data has arrived only establish the bin boundary. If
-        // Bluetooth is slow to deliver, enrollment should not burn away on empty air.
-        repeat(10) { agg.closeBin(it * 5_000L) }
-        assertEquals(Phase.ENROLL, agg.phase())
-        assertEquals(config.armedAfterBins * config.binSeconds, agg.secondsUntilArmed())
+        val total = config.armedAfterBins * config.binSeconds
+
+        // Nothing has been observed yet, so there is no bin to close - this call only
+        // anchors where the first bin begins.
+        assertNull(agg.closeBin(0L))
+        assertEquals(total, agg.secondsUntilArmed())
+
+        // Every tick after that advances the phase, data or no data. A quiet street
+        // should still arm; only the very first tick is bookkeeping.
+        assertNotNull(agg.closeBin(5_000L))
+        assertEquals(total - config.binSeconds, agg.secondsUntilArmed())
+
+        assertNotNull(agg.closeBin(10_000L))
+        assertEquals(total - 2 * config.binSeconds, agg.secondsUntilArmed())
     }
 
     @Test
@@ -116,7 +126,7 @@ class PulseAggregatorTest {
         var now = 0L
         assertEquals(Phase.ENROLL, agg.phase())
 
-        // Seed one advertisement so the first bin is a real bin, see the test above.
+        // Seed one advertisement so the first close is a real bin, see the test above.
         agg.observe("seed", -60, now)
 
         repeat(config.enrollmentBins) { now += 5_000L; agg.closeBin(now) }
