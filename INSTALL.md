@@ -31,7 +31,8 @@ Open the phone's **Files** app → Downloads → tap `SigEye-apk.zip` → extrac
 
 ### 4. First run
 
-Open SigEye. It asks for three permissions in one prompt:
+Open SigEye. You land on the experiment list — tap **Train Spotter**. It then asks for
+three permissions in one prompt:
 
 - **Nearby devices** → Allow
 - **Location** → choose **While using the app** (this is enough; the foreground service
@@ -39,6 +40,9 @@ Open SigEye. It asks for three permissions in one prompt:
 - **Notifications** → Allow
 
 Then tap **Start scanning**. Within a few seconds the big number should start moving.
+
+Burst alerts stay disarmed for the first two minutes while the baseline builds — the screen
+tells you how many bins are left.
 
 ### 5. Exempt it from battery optimisation
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,9 +51,11 @@ fun TrainSpotterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack, contentPadding = androidx.compose.foundation.layout
-            .PaddingValues(0.dp)) {
-            Text("←  All experiments")
+        TextButton(
+            onClick = onBack,
+            contentPadding = PaddingValues(0.dp),
+        ) {
+            Text("← All experiments")
         }
         Spacer(Modifier.height(4.dp))
         Text(
