@@ -58,6 +58,7 @@ object Experiments {
     const val FARADAY = "faraday"
     const val SPEED = "speed"
     const val FADING = "fading"
+    const val DISCOVERY = "discovery"
 
     val all: List<Experiment> = listOf(
 
@@ -84,6 +85,41 @@ object Experiments {
             limits = "A nickname sticks to an address, and phones change theirs " +
                 "every fifteen minutes or so. Name fixed hardware, not people's " +
                 "phones.",
+        ),
+        Experiment(
+            id = DISCOVERY,
+            title = "Discovery",
+            blurb = "Learn what is normally here, then watch for what is not.",
+            teaches = "A scan of anywhere returns dozens of devices and no way to rank " +
+                "them. Almost every useful question is about change rather than presence - " +
+                "what arrived, what left, what got closer since last time.",
+            category = Experiment.Category.TOOLS,
+            status = Experiment.Status.READY,
+            needs = "Somewhere to stand still for half a minute while it learns the room.",
+            howTo = listOf(
+                "Stand where you mean to watch from and start the baseline. Everything " +
+                    "heard during it is filed as normal and will never be reported.",
+                "Thirty seconds suits most places. Somewhere with slow beacons needs " +
+                    "longer, or they will be announced as arrivals afterwards.",
+                "After that, only new devices appear. Anything getting steadily stronger " +
+                    "is marked as approaching and sorted to the top.",
+                "Tap 'not interesting' to file something away, or add the whole list to " +
+                    "the baseline once you have identified it.",
+                "For the at-home use: save a snapshot of a room you trust, then take " +
+                    "another next week and compare the two.",
+                "For the travelling-with-you use: snapshot three genuinely different " +
+                    "places and look at what fixed addresses appear in all of them.",
+            ),
+            reading = "Arrivals are devices unheard of during the baseline. The arrow is " +
+                "the signal trend, so a rising one is coming towards you. A comparison of " +
+                "two snapshots lists what arrived, what left, and what shifted by more " +
+                "than eight dB, which is about where a change stops being multipath.",
+            limits = "Randomised addresses defeat most of this and the app says so rather " +
+                "than pretending otherwise: a phone changes address roughly every fifteen " +
+                "minutes, which is indistinguishable from a stranger arriving, so " +
+                "suspected rotations are listed but not alerted on, and snapshot " +
+                "comparisons cover only fixed addresses. Something with no fixed address " +
+                "that never advertises during your baseline cannot be caught this way.",
         ),
         Experiment(
             id = RADAR,
