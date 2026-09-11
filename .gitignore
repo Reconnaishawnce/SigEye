@@ -8,3 +8,9 @@ captures/
 .externalNativeBuild
 .cxx
 *.apk
+
+# Never commit signing material
+*.p12
+*.jks
+*.keystore
+SigEye-signing/

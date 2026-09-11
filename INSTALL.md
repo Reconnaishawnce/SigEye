@@ -57,6 +57,36 @@ On Samsung also: Settings → Battery → Background usage limits → make sure 
 
 ---
 
+## Updating later
+
+Once the signing key is in place, updates install straight over the top and keep your
+settings and CSV logs.
+
+**Easiest: use Obtainium.** It watches the GitHub releases page and notifies you when a
+new SigEye build lands, then installs it in two taps. Install Obtainium from
+https://github.com/ImranR98/Obtainium/releases (or F-Droid), tap **Add App**, and paste:
+
+```
+https://github.com/Reconnaishawnce/SigEye
+```
+
+Turn on background update checks in its settings and you are done.
+
+**Or by hand:** open https://github.com/Reconnaishawnce/SigEye/releases/latest on the
+phone, tap SigEye.apk, and install over the existing app.
+
+**Or over adb**, if the phone is plugged in:
+
+```powershell
+cd C:\platform-tools
+./adb.exe install -r SigEye.apk
+```
+
+> If an update refuses to install with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the build was
+> signed with a different key than the copy on your phone. That happens for any build made
+> before the signing key was set up, and for builds from a fork. Uninstall first - and pull
+> your CSV logs before you do.
+
 ## Part 2 — Install adb on your PC (optional but worth it)
 
 You have no Android tooling installed. This is the 10 MB version, not the 1.5 GB one.

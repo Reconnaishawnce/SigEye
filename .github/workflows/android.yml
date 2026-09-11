@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+      SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +25,23 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      # Without a stable key every run signs with a fresh throwaway debug keystore, and
+      # Android then refuses to install the new build over the old one. The build still
+      # works without the secret - it just cannot produce an installable update.
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/sigeye.p12"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/sigeye.p12" >> "$GITHUB_ENV"
+            echo "Signing with the stable SigEye key."
+          else
+            echo "::warning::No SIGNING_KEYSTORE_BASE64 secret. Falling back to a"\
+                 "throwaway debug key - this APK will NOT install over an existing"\
+                 "SigEye, and updates will require an uninstall."
+          fi
 
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
@@ -36,36 +56,41 @@ jobs:
       - name: Stage APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk "out/SigEye-${GITHUB_SHA::7}.apk"
-          # Stable filename for the rolling release, so the download URL never changes.
           cp app/build/outputs/apk/debug/app-debug.apk out/SigEye.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SigEye-apk
-          path: out/SigEye-*.apk
+          path: out/SigEye.apk
           retention-days: 90
 
-      # Actions artifacts need an authenticated desktop session to download, which makes
-      # them useless from a phone. A release asset is a plain public URL any browser can
-      # fetch, so the newest build is always one tap away at /releases/latest.
-      - name: Publish rolling latest release
+      # One release per build, tagged by run number. /releases/latest still resolves to
+      # the newest, so the download URL never changes - but update managers such as
+      # Obtainium can now tell one build from the next, which a rolling tag hides.
+      - name: Publish release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          TAG="v${GITHUB_RUN_NUMBER}"
           SHA_SHORT="${GITHUB_SHA::7}"
-          BUILT_AT="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          NOTES="Debug APK built from main at ${SHA_SHORT} on ${BUILT_AT}."
-          NOTES="${NOTES}"$'\n\n'"Install straight over the previous version to update; settings and CSV logs are kept."
+          SUBJECT="$(git log -1 --pretty=%s)"
 
-          if ! gh release view latest >/dev/null 2>&1; then
-            gh release create latest --title "Latest debug build" --notes "${NOTES}"
+          NOTES="${SUBJECT}"
+          NOTES="${NOTES}"$'\n\n'"Build ${TAG} from ${SHA_SHORT}."
+          if [ -n "$SIGNING_KEYSTORE_PASSWORD" ]; then
+            NOTES="${NOTES} Installs over the previous version; settings and CSV logs are kept."
           else
-            gh release edit latest --title "Latest debug build" --notes "${NOTES}"
+            NOTES="${NOTES} UNSIGNED BUILD - will not install over an existing SigEye."
           fi
-          gh release upload latest out/SigEye.apk --clobber
+
+          gh release create "$TAG" out/SigEye.apk \
+            --title "SigEye $TAG" \
+            --notes "$NOTES"
+
+          # Retire the old rolling tag if it is still around; versioned releases replace it.
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
 
       - name: Upload test and lint reports
         if: always()
