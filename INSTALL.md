@@ -62,15 +62,22 @@ On Samsung also: Settings → Battery → Background usage limits → make sure 
 Once the signing key is in place, updates install straight over the top and keep your
 settings and CSV logs.
 
-**Easiest: use Obtainium.** It watches the GitHub releases page and notifies you when a
-new SigEye build lands, then installs it in two taps. Install Obtainium from
-https://github.com/ImranR98/Obtainium/releases (or F-Droid), tap **Add App**, and paste:
+**Easiest: use Obtainium.** It watches the GitHub releases page, notifies you when a new
+SigEye build lands, and installs it in two taps.
 
-```
-https://github.com/Reconnaishawnce/SigEye
-```
+Install it straight from GitHub - no F-Droid needed:
 
-Turn on background update checks in its settings and you are done.
+    https://github.com/ImranR98/Obtainium/releases/latest
+
+Take `app-arm64-v8a-release.apk` (24 MB, right for any modern phone). If that will not
+install, `app-release.apk` is universal but 67 MB. Avoid anything with `-fdroid-` in the
+name: those builds have Obtainium's own self-update disabled, because F-Droid would
+normally handle it.
+
+Then in Obtainium: **Add App**, paste the SigEye repo URL, and turn on background update
+checks.
+
+    https://github.com/Reconnaishawnce/SigEye
 
 **Or by hand:** open https://github.com/Reconnaishawnce/SigEye/releases/latest on the
 phone, tap SigEye.apk, and install over the existing app.
