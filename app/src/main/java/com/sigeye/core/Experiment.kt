@@ -45,6 +45,7 @@ object Experiments {
     const val DWELL = "dwell"
     const val CROWD = "crowd"
     const val CELLS = "cells"
+    const val ABSORPTION = "body"
 
     val all: List<Experiment> = listOf(
 
@@ -145,13 +146,15 @@ object Experiments {
             status = Experiment.Status.PLANNED,
         ),
         Experiment(
-            id = "body",
+            id = ABSORPTION,
             title = "Body Absorption",
             blurb = "Turn slowly in a circle and find your own shadow.",
-            teaches = "You are mostly water and water absorbs 2.4 GHz. A deep null appears " +
-                "when your torso is between phone and source.",
+            teaches = "You are mostly water and water absorbs 2.4 GHz, so a notch appears " +
+                "when your torso sits between the phone and the source. Several dB of it " +
+                "is a body; much more means a wall joined in.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "A compass. Most phones have one, but it must be calibrated.",
         ),
         Experiment(
             id = "bands",

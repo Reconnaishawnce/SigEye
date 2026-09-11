@@ -1,5 +1,7 @@
 package com.sigeye.core.analysis
 
+import com.sigeye.core.Vendors
+
 /** How long a device has stuck around. */
 enum class DwellClass(val label: String, val blurb: String) {
     PASSING("Passing", "Seen briefly and gone. Traffic."),
@@ -20,8 +22,7 @@ data class TrackedDevice(
     val companyId: Int? = null,
 ) {
     val vendor: String?
-        get() = com.sigeye.core.Vendors.byAddress(address)
-            ?: companyId?.let { com.sigeye.core.Vendors.byCompanyId(it) }
+        get() = Vendors.byAddress(address) ?: companyId?.let { Vendors.byCompanyId(it) }
 
     /** What to call it before the user names it themselves. */
     val fallbackName: String

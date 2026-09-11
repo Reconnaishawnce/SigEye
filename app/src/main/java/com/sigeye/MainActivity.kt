@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import com.sigeye.core.Experiments
+import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.inspector.InspectorScreen
@@ -57,6 +58,8 @@ private fun SigEyeApp() {
                 onBack = { openExperiment = null },
                 modifier = inset,
             )
+            Experiments.ABSORPTION ->
+                AbsorptionScreen(onBack = { openExperiment = null }, modifier = inset)
             Experiments.CELLS ->
                 CellScreen(onBack = { openExperiment = null }, modifier = inset)
             Experiments.CROWD -> PopulationScreen(
