@@ -22,7 +22,16 @@ class MotionDetectorTest {
 
     private fun detector() = MotionDetector(config)
 
-    /** Feeds [devices] steady traffic for [seconds], five packets a second each. */
+    /**
+     * Feeds [devices] traffic for [seconds], five packets a second each, alternating
+     * plus and minus [jitter] around [rssi].
+     *
+     * Alternating rather than cycling through a range on purpose: a cycle that is not
+     * completed within the call leaves the mean somewhere other than [rssi], which turns
+     * what was meant to be pure jitter into a level shift and makes the two
+     * indistinguishable - exactly the thing several of these tests are trying to tell
+     * apart.
+     */
     private fun MotionDetector.feedSteady(
         devices: List<String>,
         seconds: Int,
@@ -32,9 +41,8 @@ class MotionDetectorTest {
     ): Long {
         var now = startMs
         repeat(seconds * 5) { step ->
-            devices.forEach { address ->
-                observe(address, rssi + (step % (jitter * 2 + 1)) - jitter, now)
-            }
+            val offset = if (step % 2 == 0) jitter else -jitter
+            devices.forEach { address -> observe(address, rssi + offset, now) }
             now += 200L
         }
         return now

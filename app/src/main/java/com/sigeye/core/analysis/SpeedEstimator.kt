@@ -66,11 +66,17 @@ object SpeedEstimator {
                 "see a shape.")
         }
 
-        val peakIndex = samples.indices.maxByOrNull { samples[it].rssi } ?: 0
-        val peak = samples[peakIndex]
+        // Median-smooth before looking for shape. Raw RSSI swings several dB packet to
+        // packet, and every measurement here is a crossing - a single spurious sample
+        // dipping below the threshold near the peak would narrow the crossing and report
+        // a train going half again as fast as it was.
+        val series = smooth(samples)
 
-        val before = samples.take(peakIndex + 1)
-        val after = samples.drop(peakIndex)
+        val peakIndex = series.indices.maxByOrNull { series[it].rssi } ?: 0
+        val peak = series[peakIndex]
+
+        val before = series.take(peakIndex + 1)
+        val after = series.drop(peakIndex)
         // A pass has a rise and a fall. One-sided means the device was already alongside
         // when it appeared, or never left - either way the timing is not a crossing.
         val riseDb = peak.rssi - (before.minOfOrNull { it.rssi } ?: peak.rssi)
@@ -126,6 +132,23 @@ object SpeedEstimator {
                 null
             },
         )
+    }
+
+    /**
+     * Median filter, which removes spikes without dragging edges the way a mean would.
+     *
+     * A moving average would round off the peak itself, and the peak is where the
+     * measurement starts.
+     */
+    private fun smooth(samples: List<PassSample>, window: Int = 5): List<PassSample> {
+        if (samples.size < window) return samples
+        val half = window / 2
+        return samples.mapIndexed { index, sample ->
+            val from = (index - half).coerceAtLeast(0)
+            val to = (index + half).coerceAtMost(samples.lastIndex)
+            val values = (from..to).map { samples[it].rssi }.sorted()
+            sample.copy(rssi = values[values.size / 2])
+        }
     }
 
     /** Interpolated time at which the rising side last crossed [threshold]. */

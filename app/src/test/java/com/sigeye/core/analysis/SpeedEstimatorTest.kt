@@ -101,6 +101,26 @@ class SpeedEstimatorTest {
         assertEquals(15.0, result.speedMetresPerSecond!!, 4.0)
     }
 
+    @Test
+    fun `a single spurious dip near the peak does not narrow the crossing`() {
+        val clean = syntheticPass(speedMps = 12.0, distanceMetres = 12.0, hz = 8.0)
+        val fromClean = SpeedEstimator.analyse("A", clean, distanceMetres = 12.0)
+
+        // One packet arrives 12 dB low, just before closest approach. Unsmoothed, that
+        // would be read as an early crossing and report a much faster pass.
+        val spiked = clean.toMutableList()
+        val target = clean.size / 2 - 2
+        spiked[target] = spiked[target].copy(rssi = spiked[target].rssi - 12)
+        val fromSpiked = SpeedEstimator.analyse("A", spiked, distanceMetres = 12.0)
+
+        assertNotNull(fromSpiked.speedMetresPerSecond)
+        assertEquals(
+            fromClean.speedMetresPerSecond!!,
+            fromSpiked.speedMetresPerSecond!!,
+            2.0,
+        )
+    }
+
     // ------------------------------------------------------------- rejection
 
     @Test
