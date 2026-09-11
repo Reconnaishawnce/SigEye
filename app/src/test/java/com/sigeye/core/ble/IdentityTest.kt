@@ -90,7 +90,11 @@ class AppearanceTest {
 
     @Test
     fun `an unlisted category still says what it saw`() {
-        val described = Appearance.describe(0x3FC0)
+        // Top ten bits all set: category 1023, which the registry does not define and is
+        // never going to. Better to print the number than to swallow it.
+        val appearance = 0xFFC0
+        assertEquals(1023, Appearance.categoryOf(appearance))
+        val described = Appearance.describe(appearance)
         assertNotNull(described)
         assertTrue(described!!.contains("1023"))
     }
@@ -182,8 +186,21 @@ class IdentityTest {
 
     @Test
     fun `when nothing is backed by a registry it says so`() {
-        val clues = Identity.clues("4D:2A:6F:11:22:33", null, null, null)
+        // A fixed address whose prefix nobody holds: not randomised, so there is no firm
+        // statement to make about it either way. 00:27:6F is unassigned, and its top bits
+        // are the pattern no random address uses.
+        val clues = Identity.clues("00:27:6F:11:22:33", null, null, null)
+        assertTrue(clues.none { it.firm })
         assertTrue(clueText(clues).contains("Nothing in this advertisement"))
+    }
+
+    @Test
+    fun `a randomised address is itself a firm statement`() {
+        // It says the device is deliberately unidentifiable, which is worth knowing - so
+        // the "nothing to go on" fallback should not also fire.
+        val clues = Identity.clues("4D:2A:6F:11:22:33", null, null, null)
+        assertTrue(clues.any { it.firm })
+        assertTrue(!clueText(clues).contains("Nothing in this advertisement"))
     }
 
     @Test

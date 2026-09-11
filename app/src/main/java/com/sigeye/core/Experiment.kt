@@ -57,6 +57,7 @@ object Experiments {
     const val MOTION = "motion"
     const val FARADAY = "faraday"
     const val SPEED = "speed"
+    const val FADING = "fading"
 
     val all: List<Experiment> = listOf(
 
@@ -279,13 +280,37 @@ object Experiments {
             status = Experiment.Status.PLANNED,
         ),
         Experiment(
-            id = "fading",
+            id = FADING,
             title = "Multipath Fading",
             blurb = "Stand still and watch the signal move anyway.",
             teaches = "Reflections add and cancel, so signal swings several dB with " +
                 "nothing moving. This is why signal strength is a poor ruler.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "One transmitter that advertises often - a few packets a second. " +
+                "Earbuds, a fitness band or a beacon are ideal; a sensor that speaks once " +
+                "a minute is not.",
+            howTo = listOf(
+                "Pick a source from the list. The rate on the right matters more than " +
+                    "the signal strength - two packets a second or better.",
+                "Put the phone down and leave it alone for twenty or thirty seconds.",
+                "Save the spot, then move the phone about six centimetres - a hand's " +
+                    "width - in any direction and record again.",
+                "Do that three or four times, then compare. Indoors the spots will " +
+                    "disagree by several dB.",
+                "For the strongest effect, put a wall or a large metal object between " +
+                    "you and the source so no single path dominates.",
+            ),
+            reading = "Swing is the gap between the best and worst reading. K is how much " +
+                "of the signal arrives by one dominant path rather than by reflections, " +
+                "in dB: above 10 is a clear line of sight, near 0 means everything has " +
+                "bounced. The distance range at the bottom is the same fading fed through " +
+                "the formula every proximity feature uses, which is the point of the " +
+                "experiment.",
+            limits = "It assumes nothing moved while you recorded. A person walking past, " +
+                "or the transmitter changing its own power, will look exactly like " +
+                "fading. The K factor is a method-of-moments estimate and wants a few " +
+                "hundred readings before it settles.",
         ),
         Experiment(
             id = ABSORPTION,
