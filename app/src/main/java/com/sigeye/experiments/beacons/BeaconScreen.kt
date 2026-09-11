@@ -39,10 +39,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.Vendors
 import com.sigeye.core.ble.Beacon
 import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -114,6 +117,7 @@ private fun Live() {
     var protocolFilter by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<String?>(null) }
     var paused by remember { mutableStateOf(false) }
+    var showNewList by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -244,11 +248,19 @@ private fun Live() {
         }
     }
 
+    if (showNewList) {
+        NewListDialog(
+            onCreate = { book.createList(it) },
+            onDismiss = { showNewList = false },
+        )
+    }
+
     selected?.let { address ->
         devices.firstOrNull { it.address == address }?.let { device ->
             BeaconDetail(
                 device = device,
                 nickname = notes[address.uppercase()]?.nickname,
+                onRequestNewList = { showNewList = true },
                 onDismiss = { selected = null },
             )
         }
@@ -301,7 +313,12 @@ private fun BeaconRow(device: DecodedDevice, nickname: String?, onClick: () -> U
 }
 
 @Composable
-private fun BeaconDetail(device: DecodedDevice, nickname: String?, onDismiss: () -> Unit) {
+private fun BeaconDetail(
+    device: DecodedDevice,
+    nickname: String?,
+    onRequestNewList: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(nickname ?: device.beacon.summary) },
@@ -312,6 +329,15 @@ private fun BeaconDetail(device: DecodedDevice, nickname: String?, onDismiss: ()
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
+
+                Spacer(Modifier.height(12.dp))
+                DeviceActions(
+                    address = device.address,
+                    displayName = device.beacon.summary,
+                    isRandomAddress = Vendors.isRandomAddress(device.address),
+                    onRequestNewList = onRequestNewList,
+                )
+
                 Spacer(Modifier.height(12.dp))
 
                 device.beacon.fields.forEach { field ->

@@ -40,6 +40,27 @@ data class SweepResult(
             return high.meanRssi - low.meanRssi
         }
 
+    /**
+     * How far apart the strongest and weakest directions are, 0 to 180.
+     *
+     * With the phone held against your chest, facing the source gives line of sight and
+     * facing away puts your torso in the path - so a genuine body shadow sits close to
+     * opposite the source. A notch at some other angle is a reflection or an obstacle,
+     * not you.
+     */
+    val peakToNotchDegrees: Float?
+        get() {
+            val high = peak ?: return null
+            val low = notch ?: return null
+            var difference = kotlin.math.abs(high.centreDegrees - low.centreDegrees) % 360f
+            if (difference > 180f) difference = 360f - difference
+            return difference
+        }
+
+    /** Near-opposite peak and notch is the signature of a body rather than a room. */
+    val looksLikeBodyShadow: Boolean
+        get() = peakToNotchDegrees?.let { it >= 130f } == true
+
     /** True once there is enough of the circle to draw a conclusion from. */
     fun isUsable(minCoverage: Float = 0.75f): Boolean = coverage >= minCoverage
 }

@@ -55,6 +55,7 @@ object Experiments {
     const val RADAR = "radar"
     const val MICROWAVE = "microwave"
     const val MOTION = "motion"
+    const val FARADAY = "faraday"
 
     val all: List<Experiment> = listOf(
 
@@ -302,12 +303,31 @@ object Experiments {
             status = Experiment.Status.PLANNED,
         ),
         Experiment(
-            id = "faraday",
+            id = FARADAY,
             title = "Faraday Cage Test",
-            blurb = "How many dB does a microwave, a tin or a lift really block?",
-            teaches = "Shielding, apertures, and why the seams matter more than the metal.",
+            blurb = "How many dB does a tin, a fridge or a crisp packet really block?",
+            teaches = "Shielding, apertures, and why the seams matter more than the metal. " +
+                "A gap far smaller than the wavelength still leaks, and 2.4 GHz is 12 cm.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.READY,
+            needs = "A small Bluetooth device you can put inside something, and something " +
+                "to put it in.",
+            howTo = listOf(
+                "Pick a small transmitter you can physically enclose - earbuds in their " +
+                    "case, a tag, a beacon, a spare phone.",
+                "It goes in the container, not this phone. You need to keep pressing " +
+                    "buttons, and a shielded phone cannot hear anything either.",
+                "Measure it in the open first, a pace or two away, without moving either " +
+                    "device.",
+                "Put it in, close the container properly, and measure again in the same " +
+                    "spot.",
+            ),
+            reading = "The number is how many dB the container took off. Under 3 is " +
+                "nothing, 10 to 25 is a real shield with a leaky seam, and no packets at " +
+                "all means a complete block that cannot be measured further.",
+            limits = "Once nothing gets through there is no way to tell how much further " +
+                "it would have gone - infinity here just means more than the phone can " +
+                "hear.",
         ),
         Experiment(
             id = MICROWAVE,

@@ -70,6 +70,7 @@ class HeadingSensor(context: Context) {
     private var hasSmoothed = false
 
     private var quality = CompassQuality.UNKNOWN
+    private var lastPublishMs = 0L
 
     private val listener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
@@ -136,6 +137,13 @@ class HeadingSensor(context: Context) {
             smoothedCos += (cos - smoothedCos) * SMOOTHING
         }
 
+        // Publish at about 20 Hz rather than at sensor rate. The rotation vector fires
+        // roughly fifty times a second, and every update recomposes whatever is reading
+        // this flow - which is an entire experiment screen. Smooth needle, idle CPU.
+        val now = System.currentTimeMillis()
+        if (now - lastPublishMs < PUBLISH_INTERVAL_MS) return
+        lastPublishMs = now
+
         val smoothed = Math.toDegrees(Math.atan2(smoothedSin, smoothedCos)).toFloat()
         _heading.value = Heading(((smoothed % 360f) + 360f) % 360f, quality)
     }
@@ -146,15 +154,15 @@ class HeadingSensor(context: Context) {
             sensorManager.registerListener(
                 listener,
                 rotationVector,
-                SensorManager.SENSOR_DELAY_GAME,
+                SensorManager.SENSOR_DELAY_UI,
             )
             return
         }
         accelerometer?.let {
-            sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI)
         }
         magnetometer?.let {
-            sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI)
         }
     }
 
@@ -169,5 +177,8 @@ class HeadingSensor(context: Context) {
     private companion object {
         /** Low pass factor. Enough to steady the needle, quick enough to follow a turn. */
         const val SMOOTHING = 0.18
+
+        /** 20 Hz is far smoother than the eye needs and a tenth of the recompositions. */
+        const val PUBLISH_INTERVAL_MS = 50L
     }
 }

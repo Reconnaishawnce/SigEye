@@ -48,7 +48,9 @@ import com.sigeye.core.analysis.SweepSession
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.CompassQuality
 import com.sigeye.core.sensors.HeadingSensor
+import com.sigeye.ui.BodyDiagram
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.isBlocking
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -118,7 +120,6 @@ private fun Live() {
     var liveRssi by remember { mutableStateOf<Int?>(null) }
     var sourceRate by remember { mutableStateOf(0.0) }
     var turnRate by remember { mutableStateOf(0.0f) }
-    var lastHeading by remember { mutableStateOf<Pair<Long, Float>?>(null) }
     val sourcePackets = remember { java.util.concurrent.atomic.AtomicInteger(0) }
 
     DisposableEffect(Unit) {
@@ -175,20 +176,26 @@ private fun Live() {
     }
 
     // Degrees per second, for the turn-speed coaching.
-    LaunchedEffect(heading.degrees) {
-        val now = System.currentTimeMillis()
-        val previous = lastHeading
-        if (previous != null && now > previous.first) {
-            var delta = heading.degrees - previous.second
-            while (delta > 180f) delta -= 360f
-            while (delta < -180f) delta += 360f
-            val seconds = (now - previous.first) / 1000f
-            if (seconds > 0.05f) {
-                val instant = kotlin.math.abs(delta) / seconds
-                turnRate = turnRate * 0.7f + instant * 0.3f
+    //
+    // Collected in one long-lived coroutine. Keying a LaunchedEffect on the heading itself
+    // cancelled and relaunched it on every sensor sample, which was enough work to make
+    // the needle stutter and the whole screen feel broken.
+    LaunchedEffect(Unit) {
+        var previous: Pair<Long, Float>? = null
+        compass.heading.collect { current ->
+            val now = System.currentTimeMillis()
+            previous?.let { (thenMs, thenDegrees) ->
+                var delta = current.degrees - thenDegrees
+                while (delta > 180f) delta -= 360f
+                while (delta < -180f) delta += 360f
+                val seconds = (now - thenMs) / 1000f
+                if (seconds > 0.02f) {
+                    val instant = kotlin.math.abs(delta) / seconds
+                    turnRate = turnRate * 0.75f + instant * 0.25f
+                }
             }
+            previous = now to current.degrees
         }
-        lastHeading = now to heading.degrees
     }
 
     // The picker list, frozen on demand so a row can actually be tapped.
@@ -415,6 +422,40 @@ private fun Sweeping(
     CompassBanner(quality)
 
     val coverage = result?.coverage ?: 0f
+    val sourceBearing = result?.peak?.centreDegrees
+    val blocking = sourceBearing != null && isBlocking(heading, sourceBearing)
+
+    // The picture first, the plot second. The polar trace is the measurement, but this is
+    // the thing that makes the measurement make sense while you are doing it.
+    Spacer(Modifier.height(12.dp))
+    BodyDiagram(
+        headingDegrees = heading,
+        sourceBearingDegrees = sourceBearing,
+        strength = strengthFraction(rssi, result),
+        blocking = blocking,
+    )
+
+    Text(
+        when {
+            sourceBearing == null ->
+                "Turn a little further - the strongest direction is not clear yet."
+            blocking ->
+                "You are between the phone and the source now. This is the shadow, and " +
+                    "the signal should be at its weakest."
+            else ->
+                "Clear path to the source. Keep turning until your back is to it."
+        },
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = if (blocking) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+    )
+
     Spacer(Modifier.height(12.dp))
     PolarPlot(
         result = result ?: SweepResult(emptyList(), 0, 24, 0, null, null),
@@ -632,6 +673,19 @@ private fun interpret(result: SweepResult, session: SessionResult): String {
                 "wall, a pillar or an appliance in that direction too."
     }
 
+    val geometry = when {
+        result.peakToNotchDegrees == null -> ""
+        result.looksLikeBodyShadow ->
+            " The quietest direction is " +
+                "${result.peakToNotchDegrees!!.roundToInt()}° from the loudest, which is " +
+                "about opposite - exactly where a torso would sit."
+        else ->
+            " The quietest direction is only " +
+                "${result.peakToNotchDegrees!!.roundToInt()}° from the loudest. A body is " +
+                "always on the far side of you from the source, so a notch that close to " +
+                "the peak is something in the room rather than you."
+    }
+
     val confirmation = when (session.agreement) {
         SweepAgreement.UNKNOWN ->
             " One sweep cannot separate you from the room, though - run it again."
@@ -643,7 +697,7 @@ private fun interpret(result: SweepResult, session: SessionResult): String {
             " But the sweeps disagreed about where, which means you measured the room, " +
                 "not yourself."
     }
-    return depth + confirmation
+    return depth + geometry + confirmation
 }
 
 // --------------------------------------------------------------------- pieces
@@ -731,6 +785,16 @@ private fun Stat(label: String, value: String, caption: String) {
             textAlign = TextAlign.Center,
         )
     }
+}
+
+/** Where the current reading sits between the weakest and strongest seen so far. */
+private fun strengthFraction(rssi: Int?, result: SweepResult?): Float {
+    val value = rssi?.toDouble() ?: return 0f
+    val settled = result?.sectors?.filter { it.samples >= MIN_SAMPLES_PER_SECTOR }
+    val high = settled?.maxOfOrNull { it.meanRssi } ?: return 0.5f
+    val low = settled.minOfOrNull { it.meanRssi } ?: return 0.5f
+    val span = (high - low).coerceAtLeast(4.0)
+    return ((value - low) / span).coerceIn(0.0, 1.0).toFloat()
 }
 
 private fun compassPoint(degrees: Float): String {

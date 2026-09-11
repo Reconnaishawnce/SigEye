@@ -45,7 +45,9 @@ import com.sigeye.core.analysis.ProximityReading
 import com.sigeye.core.ble.Advert
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.experiments.watchlist.WatchStore
+import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.radar.RadarScene
@@ -139,6 +141,7 @@ private fun Live(onLocate: (String) -> Unit) {
     var filter by remember { mutableStateOf<RadarFilter>(RadarFilter.Everything) }
     var selected by remember { mutableStateOf<String?>(null) }
     var showList by remember { mutableStateOf(false) }
+    var showNewList by remember { mutableStateOf(false) }
     var outerDbm by remember { mutableStateOf(-100f) }
     val innerDbm = -35f
 
@@ -378,6 +381,15 @@ private fun Live(onLocate: (String) -> Unit) {
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
+                    Spacer(Modifier.height(12.dp))
+                    DeviceActions(
+                        address = address,
+                        displayName = advert.name?.takeIf { it.isNotBlank() }
+                            ?: advert.vendor
+                            ?: address,
+                        isRandomAddress = advert.isRandomAddress,
+                        onRequestNewList = { showNewList = true },
+                    )
                     Spacer(Modifier.height(10.dp))
                     Button(
                         onClick = { onLocate(address) },
@@ -391,6 +403,13 @@ private fun Live(onLocate: (String) -> Unit) {
             }
         }
     }
+
+    RadarNewListDialog(showNewList, book) { showNewList = false }
+}
+
+@Composable
+private fun RadarNewListDialog(show: Boolean, book: DeviceBook, onDismiss: () -> Unit) {
+    if (show) NewListDialog(onCreate = { book.createList(it) }, onDismiss = onDismiss)
 }
 
 private fun matches(

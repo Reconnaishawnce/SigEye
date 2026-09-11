@@ -132,6 +132,48 @@ class PolarSweepTest {
     }
 
     @Test
+    fun `a body shadow sits opposite the source`() {
+        val s = sweep()
+        // Facing the source is loud, facing away is quiet - the phone is on your chest.
+        (0 until 360 step 15).forEach { heading ->
+            val facingSource = heading < 60 || heading > 300
+            val facingAway = heading in 120..240
+            val rssi = when {
+                facingSource -> -50
+                facingAway -> -72
+                else -> -60
+            }
+            repeat(4) { s.add(heading.toFloat() + 7f, rssi) }
+        }
+        val result = s.result()
+        assertTrue("separation ${result.peakToNotchDegrees}", result.looksLikeBodyShadow)
+        assertTrue(result.peakToNotchDegrees!! >= 130f)
+    }
+
+    @Test
+    fun `a notch beside the peak is a reflection, not a body`() {
+        val s = sweep()
+        s.fillCircle(-60)
+        // A hard notch only 45 degrees from the strongest direction. A torso cannot do
+        // that - it is always on the far side of you from the source.
+        repeat(6) { s.add(90f, -40) }
+        repeat(6) { s.add(135f, -85) }
+        val result = s.result()
+        assertTrue("separation ${result.peakToNotchDegrees}", result.peakToNotchDegrees!! < 130f)
+        assertFalse(result.looksLikeBodyShadow)
+    }
+
+    @Test
+    fun `separation is measured the short way round`() {
+        val s = sweep()
+        s.fillCircle(-60)
+        repeat(6) { s.add(352f, -40) }
+        repeat(6) { s.add(7f, -80) }
+        // 352 and 7 are fifteen degrees apart, not three hundred and forty-five.
+        assertTrue(s.result().peakToNotchDegrees!! < 30f)
+    }
+
+    @Test
     fun `reset clears everything`() {
         val s = sweep()
         s.fillCircle(-60)
