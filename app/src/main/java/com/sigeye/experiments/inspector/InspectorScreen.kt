@@ -49,8 +49,10 @@ import com.sigeye.core.IgnoreList
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
+import com.sigeye.core.ble.Appearance
 import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.ble.Identity
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchRule
 import com.sigeye.experiments.watchlist.WatchStore
@@ -510,6 +512,9 @@ private fun DeviceDetail(
                             (Vendors.byCompanyId(it)?.let { name -> "  $name" } ?: ""),
                     )
                 }
+                Appearance.describe(device.appearance)?.let {
+                    Field("Appearance", it)
+                }
                 Field("Signal", "${device.rssi} dBm, best ${device.bestRssi}")
                 Field("Rough range", String.format(Locale.US, "~%.1f m", device.roughMetres()))
                 device.txPower?.let { Field("TX power", "$it dBm") }
@@ -534,10 +539,36 @@ private fun DeviceDetail(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+                val clues = Identity.clues(
+                    address = device.address,
+                    name = device.name,
+                    companyId = device.companyId,
+                    appearance = device.appearance,
+                    serviceUuids = device.serviceUuids,
+                )
+                if (clues.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text("What this actually tells you",
+                        style = MaterialTheme.typography.labelLarge)
+                    clues.forEach { clue ->
+                        Text(
+                            clue.label + ": " + clue.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (clue.firm) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "Rough range assumes a clear path and is routinely wrong by a factor " +
-                        "of two indoors.",
+                        "of two indoors. There is no database that turns a Bluetooth name " +
+                        "into a product - names are free text, and nobody registers them.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

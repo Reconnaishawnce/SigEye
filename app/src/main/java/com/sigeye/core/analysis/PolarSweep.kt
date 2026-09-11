@@ -27,6 +27,19 @@ data class SweepResult(
     val coverage: Float
         get() = if (totalSectors == 0) 0f else settledSectors.toFloat() / totalSectors
 
+    /** Sectors with any reading at all, settled or not. */
+    val touchedSectors: Int get() = sectors.count { it.samples > 0 }
+
+    /**
+     * How much of the circle has been visited, as opposed to measured.
+     *
+     * The difference matters while a sweep is running: a slow advertiser leaves most
+     * sectors touched but unsettled for the whole first turn, and a screen that only shows
+     * settled coverage looks broken to someone who is plainly turning round.
+     */
+    val touchedFraction: Float
+        get() = if (totalSectors == 0) 0f else touchedSectors.toFloat() / totalSectors
+
     /**
      * How much louder the best direction is than the worst, in dB.
      *

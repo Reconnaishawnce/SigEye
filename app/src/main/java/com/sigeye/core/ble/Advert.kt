@@ -20,6 +20,8 @@ data class Advert(
     val serviceUuids: List<String> = emptyList(),
     val serviceData: Map<String, ByteArray> = emptyMap(),
     val txPower: Int? = null,
+    /** GAP Appearance, when the device bothered to declare one. */
+    val appearance: Int? = null,
 ) {
     val oui: String get() = Vendors.ouiOf(address)
 
@@ -27,6 +29,9 @@ data class Advert(
 
     val vendor: String?
         get() = Vendors.byAddress(address) ?: companyId?.let { Vendors.byCompanyId(it) }
+
+    /** What the device says it is, e.g. "Wearable audio - earbud". */
+    val appearanceLabel: String? get() = Appearance.describe(appearance)
 
     /** Identity by address; the payload arrays would otherwise compare by reference. */
     override fun equals(other: Any?): Boolean =
@@ -60,6 +65,7 @@ data class Advert(
                     ?.mapValues { it.value ?: ByteArray(0) }
                     .orEmpty(),
                 txPower = record?.txPowerLevel?.takeIf { it != Int.MIN_VALUE },
+                appearance = Appearance.parse(record?.bytes),
             )
         }
     }

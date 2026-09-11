@@ -2,6 +2,7 @@ package com.sigeye.experiments.absorption
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
-import com.sigeye.core.DeviceNote
 import com.sigeye.core.Permissions
 import com.sigeye.core.Experiments
 import com.sigeye.core.analysis.PolarSweep
@@ -112,12 +112,20 @@ private fun Live() {
     val session = remember { SweepSession() }
     var stage by remember { mutableStateOf(Stage.PICK_SOURCE) }
     var sourceAddress by remember { mutableStateOf<String?>(null) }
-    var candidates by remember { mutableStateOf<Map<String, Candidate>>(emptyMap()) }
+    // A plain map, deliberately not Compose state. Writing a new immutable map on every
+    // advertisement copied the whole thing per packet and recomposed the screen hundreds
+    // of times a second, which starved the recording coroutine badly enough that most of
+    // the turn never reached the sweep.
+    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
     var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
+    var sourceLabel by remember { mutableStateOf("-") }
     var paused by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<SweepResult?>(null) }
     var sessionResult by remember { mutableStateOf(session.result()) }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
+    // The worst the compass got at any point during the sweep. Recording no longer stops
+    // when it degrades, so the result has to carry the caveat instead.
+    var worstCompass by remember { mutableStateOf(CompassQuality.HIGH) }
     var sourceRate by remember { mutableStateOf(0.0) }
     var turnRate by remember { mutableStateOf(0.0f) }
     val sourcePackets = remember { java.util.concurrent.atomic.AtomicInteger(0) }
@@ -132,11 +140,14 @@ private fun Live() {
         }
     }
 
-    LaunchedEffect(Unit) {
+    // Candidates are only needed while picking one, so nothing is collected for them
+    // during the sweep.
+    LaunchedEffect(stage) {
+        if (stage != Stage.PICK_SOURCE) return@LaunchedEffect
         BleScanHub.adverts.collect { advert ->
-            val existing = candidates[advert.address]
-            candidates = candidates + (
-                advert.address to Candidate(
+            synchronized(candidateTable) {
+                val existing = candidateTable[advert.address]
+                candidateTable[advert.address] = Candidate(
                     address = advert.address,
                     name = advert.name ?: existing?.name,
                     vendor = advert.vendor,
@@ -146,14 +157,30 @@ private fun Live() {
                     firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
                     lastSeenMs = advert.atMs,
                 )
-                )
+            }
+        }
+    }
 
-            if (advert.address == sourceAddress) {
-                liveRssi = advert.rssi
-                sourcePackets.incrementAndGet()
-                // Only record while the compass is worth believing.
-                if (stage == Stage.SWEEP && heading.quality.isUsable) {
-                    sweep.add(heading.degrees, advert.rssi)
+    // Recording, keyed so it restarts cleanly when the stage or the source changes.
+    //
+    // The heading is read straight off the sensor's StateFlow rather than through the
+    // Compose state this composable also holds: a value captured by a long-lived
+    // coroutine is one recomposition away from being stale, and if it goes stale here the
+    // whole sweep piles into whichever sector the phone happened to be facing.
+    LaunchedEffect(stage, sourceAddress) {
+        val target = sourceAddress
+        if (stage != Stage.SWEEP || target == null) return@LaunchedEffect
+        BleScanHub.adverts.collect { advert ->
+            if (advert.address != target) return@collect
+            liveRssi = advert.rssi
+            sourcePackets.incrementAndGet()
+            val current = compass.heading.value
+            // Anything but a missing magnetometer is recorded. See CompassQuality's note
+            // on why the strict gate belongs on printing bearings and not on capture.
+            if (current.quality.isUsableForSweep) {
+                sweep.add(current.degrees, advert.rssi)
+                if (current.quality.rank < worstCompass.rank) {
+                    worstCompass = current.quality
                 }
             }
         }
@@ -198,11 +225,12 @@ private fun Live() {
         }
     }
 
-    // The picker list, frozen on demand so a row can actually be tapped.
-    LaunchedEffect(paused, candidates) {
-        if (!paused) {
+    // The picker list, snapshotted on a timer and freezable so a row can be tapped.
+    LaunchedEffect(paused, stage) {
+        while (stage == Stage.PICK_SOURCE && !paused) {
+            delay(700)
             val now = System.currentTimeMillis()
-            frozen = candidates.values
+            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
                 .filter { now - it.lastSeenMs < 15_000 && it.sightings >= 3 }
                 .sortedByDescending { it.rssi }
                 .take(25)
@@ -218,7 +246,14 @@ private fun Live() {
             compassQuality = heading.quality,
             onPick = { address ->
                 sourceAddress = address
+                sourceLabel = frozen.firstOrNull { it.address == address }?.let {
+                    notes[address.uppercase()]?.nickname
+                        ?: it.name?.takeIf { name -> name.isNotBlank() }
+                        ?: it.vendor
+                        ?: address
+                } ?: address
                 sourcePackets.set(0)
+                worstCompass = CompassQuality.HIGH
                 sweep.reset()
                 session.clear()
                 sessionResult = session.result()
@@ -228,7 +263,7 @@ private fun Live() {
         )
 
         Stage.SWEEP -> Sweeping(
-            sourceLabel = labelFor(sourceAddress, candidates, notes),
+            sourceLabel = sourceLabel,
             heading = heading.degrees,
             quality = heading.quality,
             rssi = liveRssi,
@@ -247,10 +282,12 @@ private fun Live() {
         )
 
         Stage.RESULT -> Results(
-            sourceLabel = labelFor(sourceAddress, candidates, notes),
+            sourceLabel = sourceLabel,
             session = sessionResult,
+            worstCompass = worstCompass,
             onAgain = {
                 sweep.reset()
+                worstCompass = CompassQuality.HIGH
                 result = null
                 stage = Stage.SWEEP
             },
@@ -288,17 +325,6 @@ private data class Candidate(
         }
 
     val isChatty: Boolean get() = rate >= 3.0
-}
-
-private fun labelFor(
-    address: String?,
-    candidates: Map<String, Candidate>,
-    notes: Map<String, DeviceNote>,
-): String {
-    if (address == null) return "-"
-    notes[address.uppercase()]?.nickname?.takeIf { it.isNotBlank() }?.let { return it }
-    val candidate = candidates[address] ?: return address
-    return candidate.name?.takeIf { it.isNotBlank() } ?: candidate.vendor ?: address
 }
 
 // ------------------------------------------------------------------ stage one
@@ -422,6 +448,10 @@ private fun Sweeping(
     CompassBanner(quality)
 
     val coverage = result?.coverage ?: 0f
+    // Visited, as opposed to measured. A slow source leaves most sectors touched but
+    // unsettled through the whole first turn, and showing only the settled figure made a
+    // sweep that was working look like one that was not.
+    val touched = result?.touchedFraction ?: 0f
     // The region centroid, not the single best sector - it does not jump between
     // near-tied sectors while you turn.
     val sourceBearing = result?.peakBearingDegrees
@@ -469,11 +499,24 @@ private fun Sweeping(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Stat("Heading", "${heading.roundToInt()}°", compassPoint(heading))
         Stat("Signal", rssi?.let { "$it" } ?: "-", "dBm now")
-        Stat("Covered", "${(coverage * 100).roundToInt()}%", "of the circle")
+        Stat(
+            "Covered",
+            "${(coverage * 100).roundToInt()}%",
+            "measured, ${(touched * 100).roundToInt()}% visited",
+        )
     }
 
     Spacer(Modifier.height(10.dp))
-    LinearProgressIndicator(progress = { coverage }, modifier = Modifier.fillMaxWidth())
+    // Two bars in one: the faint one is how far round you have been, the solid one how
+    // much of that has enough readings to count.
+    Box(Modifier.fillMaxWidth()) {
+        LinearProgressIndicator(
+            progress = { touched },
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+        )
+        LinearProgressIndicator(progress = { coverage }, modifier = Modifier.fillMaxWidth())
+    }
 
     // Turn-speed coaching. Sectors are 15 degrees and need three readings, so the fastest
     // usable turn is roughly a fifth of the source's packet rate in degrees per second.
@@ -484,6 +527,9 @@ private fun Sweeping(
         maxUsableTurn > 1f && turnRate > maxUsableTurn ->
             "Too fast for this source - slow down or sectors will stay empty."
         coverage >= 0.75f -> "Enough of the circle covered. Finish whenever you like."
+        touched > 0.8f && coverage < 0.5f ->
+            "You have been all the way round, but the sectors are thin. Turn again - a " +
+                "second lap adds to the same plot."
         else -> "Good pace. Keep going."
     }
     Text(
@@ -531,6 +577,7 @@ private fun Sweeping(
 private fun Results(
     sourceLabel: String,
     session: SessionResult,
+    worstCompass: CompassQuality,
     onAgain: () -> Unit,
     onNewSource: () -> Unit,
 ) {
@@ -550,6 +597,39 @@ private fun Results(
         body = "Radius is signal strength, north is up. A notch means something was " +
             "absorbing in that direction.",
     )
+
+    // Recording no longer stops when the compass wobbles, so this is where the wobble gets
+    // declared. The shape - how deep the notch is, how far it sits from the peak - holds
+    // up; the compass rose it is drawn on may be rotated or stretched.
+    if (!worstCompass.isUsable) {
+        Spacer(Modifier.height(10.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    "Compass was " + worstCompass.label.removePrefix("Compass ").lowercase(
+                        Locale.US,
+                    ) + " during part of this turn",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Text(
+                    "The sweep was still recorded, and the shape of it - how deep the " +
+                        "notch is, and how far round it sits from the peak - is what the " +
+                        "measurement rests on. Treat the compass headings themselves as " +
+                        "approximate. Calibrating with a figure of eight and sweeping " +
+                        "again will tighten them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        }
+    }
 
     Spacer(Modifier.height(12.dp))
     PolarPlot(result = combined, minSamplesPerSector = MIN_SAMPLES_PER_SECTOR)
@@ -735,8 +815,11 @@ private fun StepCard(step: String, title: String, body: String) {
 }
 
 /**
- * An uncalibrated magnetometer returns a confident wrong number rather than failing, so
- * this says so loudly and recording stops until it settles.
+ * An uncalibrated magnetometer returns a confident wrong number rather than failing.
+ *
+ * Recording carries on regardless - the shape of a sweep survives a wonky compass even
+ * when the bearings printed against it do not - so this warns about the bearings rather
+ * than announcing a stop.
  */
 @Composable
 private fun CompassBanner(quality: CompassQuality) {

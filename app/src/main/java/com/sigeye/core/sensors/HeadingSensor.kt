@@ -28,8 +28,44 @@ enum class CompassQuality(val label: String, val advice: String?) {
     ),
     ;
 
-    /** Below medium, a sweep will be plotted against fiction. */
+    /** Good enough to print a bearing and call it north. */
     val isUsable: Boolean get() = this == MEDIUM || this == HIGH
+
+    /**
+     * Good enough to *record* against.
+     *
+     * Deliberately far looser than [isUsable], because the two questions are different. A
+     * sweep measures how the signal changes between one facing and another, and every
+     * number it produces - the depth of the notch, how far the notch sits from the peak -
+     * is a difference between bearings rather than a bearing. A miscalibrated magnetometer
+     * distorts those; it does not invent them.
+     *
+     * The strict gate was used here too, and it silently threw away most of a turn: phone
+     * compasses drop to LOW or UNRELIABLE whenever you sweep past anything metal, which is
+     * to say during most of any turn taken indoors, and a good many devices never report an
+     * accuracy for the fused rotation vector at all and sit on UNKNOWN forever. The needle
+     * kept moving, so the screen looked alive while recording nothing. Losing the data is
+     * the worse failure; the result screen says plainly when the compass was poor.
+     */
+    val isUsableForSweep: Boolean get() = this != ABSENT
+
+    /**
+     * How good this is, low to high, for picking the worst reading of a run.
+     *
+     * Not the declaration order: UNKNOWN is the absence of an accuracy report rather than a
+     * bad one - plenty of phones never report accuracy for the fused rotation vector, and
+     * their compasses are fine - so it ranks above a compass that has actually said it is
+     * struggling, and below one that has said it is well.
+     */
+    val rank: Int
+        get() = when (this) {
+            ABSENT -> 0
+            UNRELIABLE -> 1
+            LOW -> 2
+            UNKNOWN -> 3
+            MEDIUM -> 4
+            HIGH -> 5
+        }
 }
 
 data class Heading(

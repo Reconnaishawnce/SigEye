@@ -61,6 +61,8 @@ class ScanService : Service() {
     override fun onCreate() {
         super.onCreate()
         BleScanHub.init(this)
+        // The service can outlive the activity that normally loads this.
+        OuiRegistry.load(this)
         watchStore = WatchStore.get(this)
         createChannels()
         WatchEngine.createChannel(this)

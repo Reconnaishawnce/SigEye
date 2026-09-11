@@ -16,6 +16,7 @@ data class SeenDevice(
     val serviceUuids: List<String> = emptyList(),
     val serviceData: Map<String, ByteArray> = emptyMap(),
     val txPower: Int? = null,
+    val appearance: Int? = null,
     val firstSeenMs: Long = 0,
     val lastSeenMs: Long = 0,
     val sightings: Int = 0,
@@ -61,6 +62,7 @@ data class SeenDevice(
         serviceUuids = advert.serviceUuids.ifEmpty { serviceUuids },
         serviceData = advert.serviceData.ifEmpty { serviceData },
         txPower = advert.txPower ?: txPower,
+        appearance = advert.appearance ?: appearance,
         lastSeenMs = advert.atMs,
         sightings = sightings + 1,
     )
@@ -76,6 +78,7 @@ data class SeenDevice(
             serviceUuids = advert.serviceUuids,
             serviceData = advert.serviceData,
             txPower = advert.txPower,
+            appearance = advert.appearance,
             firstSeenMs = advert.atMs,
             lastSeenMs = advert.atMs,
             sightings = 1,

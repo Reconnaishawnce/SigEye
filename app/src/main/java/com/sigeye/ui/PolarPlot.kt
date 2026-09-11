@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -33,6 +34,12 @@ import kotlin.math.sin
  *
  * Unsampled sectors are drawn as gaps rather than interpolated across: a plot that closes
  * a hole it never measured invents the very shape the experiment is looking for.
+ *
+ * A sector needs several readings before it is drawn as measured, which used to leave the
+ * whole plot blank through most of a first turn - the experiment looked broken to someone
+ * who was visibly turning round. The outer ring fixes that without lying: it fills in as
+ * each sector is visited, showing progress around the circle separately from the
+ * measurement itself.
  */
 @Composable
 fun PolarPlot(
@@ -90,6 +97,14 @@ fun PolarPlot(
                 )
             }
             drawCompassLabels(measurer, centre, maxRadius, label)
+            drawCoverageRing(
+                sectors = result.sectors,
+                minSamples = minSamplesPerSector,
+                centre = centre,
+                radius = maxRadius,
+                partial = line.copy(alpha = 0.25f),
+                complete = line.copy(alpha = 0.7f),
+            )
 
             if (settled.isNotEmpty()) {
                 drawSweepOutline(
@@ -122,6 +137,39 @@ fun PolarPlot(
                 )
             }
         }
+    }
+}
+
+/**
+ * The progress ring: one tick per sector, faint once visited and solid once measured.
+ *
+ * Deliberately outside the plot area and in a different weight, so it reads as "how far
+ * round have I got" rather than as data.
+ */
+private fun DrawScope.drawCoverageRing(
+    sectors: List<Sector>,
+    minSamples: Int,
+    centre: Offset,
+    radius: Float,
+    partial: Color,
+    complete: Color,
+) {
+    if (sectors.isEmpty()) return
+    val width = 360f / sectors.size
+    val ringRadius = radius * 1.12f
+    sectors.forEach { sector ->
+        if (sector.samples <= 0) return@forEach
+        // Compass degrees run clockwise from north; Canvas angles run clockwise from east.
+        val start = sector.centreDegrees - width / 2f - 90f
+        drawArc(
+            color = if (sector.samples >= minSamples) complete else partial,
+            startAngle = start + 1f,
+            sweepAngle = width - 2f,
+            useCenter = false,
+            topLeft = Offset(centre.x - ringRadius, centre.y - ringRadius),
+            size = Size(ringRadius * 2f, ringRadius * 2f),
+            style = Stroke(width = 5f),
+        )
     }
 }
 

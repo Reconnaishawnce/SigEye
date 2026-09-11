@@ -191,4 +191,38 @@ class PolarSweepTest {
         assertEquals(7.5f, sectors[0].centreDegrees, 0.001f)
         assertEquals(187.5f, sectors[12].centreDegrees, 0.001f)
     }
+
+    // ------------------------------------------------- progress versus measurement
+
+    @Test
+    fun `a visited sector counts as touched long before it counts as measured`() {
+        val sweep = PolarSweep(sectorCount = 24, minSamplesPerSector = 3)
+        // One packet in each of six sectors: a turn plainly under way, nothing settled.
+        repeat(6) { sweep.add(it * 15f, -60) }
+        val result = sweep.result()
+
+        assertEquals(6, result.touchedSectors)
+        assertEquals(0, result.settledSectors)
+        assertEquals(0f, result.coverage, 0.001f)
+        assertEquals(0.25f, result.touchedFraction, 0.001f)
+    }
+
+    @Test
+    fun `touched and settled converge once the sectors fill`() {
+        val sweep = PolarSweep(sectorCount = 8, minSamplesPerSector = 3)
+        repeat(8) { sector ->
+            repeat(3) { sweep.add(sector * 45f + 5f, -70) }
+        }
+        val result = sweep.result()
+        assertEquals(8, result.touchedSectors)
+        assertEquals(8, result.settledSectors)
+        assertEquals(1f, result.touchedFraction, 0.001f)
+    }
+
+    @Test
+    fun `an untouched circle reports nothing rather than dividing by zero`() {
+        val result = PolarSweep(sectorCount = 12).result()
+        assertEquals(0, result.touchedSectors)
+        assertEquals(0f, result.touchedFraction, 0.001f)
+    }
 }

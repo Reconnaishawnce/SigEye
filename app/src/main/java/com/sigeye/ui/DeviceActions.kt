@@ -51,6 +51,7 @@ fun DeviceActions(
     val ignoreList = remember { IgnoreList.get(context) }
     val watchStore = remember { WatchStore.get(context) }
 
+    val rules by watchStore.rules.collectAsStateWithLifecycle()
     val notes by book.notes.collectAsStateWithLifecycle()
     val lists by book.lists.collectAsStateWithLifecycle()
     val ignored by ignoreList.addresses.collectAsStateWithLifecycle()
@@ -115,23 +116,45 @@ fun DeviceActions(
             }
         }
 
+        // The rule this device would have added, if it is there. Matching on value rather
+        // than on a remembered id so a rule added from any other screen is recognised too.
+        val existingRule = rules.firstOrNull {
+            it.kind == MatchKind.ADDRESS && it.value.equals(address, ignoreCase = true)
+        }
+
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(
                 onClick = {
-                    watchStore.upsert(
-                        WatchRule(
-                            id = watchStore.newId(),
-                            label = draft.ifBlank { displayName },
-                            kind = MatchKind.ADDRESS,
-                            value = address,
-                        ),
-                    )
+                    if (existingRule != null) {
+                        watchStore.delete(existingRule.id)
+                    } else {
+                        watchStore.upsert(
+                            WatchRule(
+                                id = watchStore.newId(),
+                                label = draft.ifBlank { displayName },
+                                kind = MatchKind.ADDRESS,
+                                value = address,
+                            ),
+                        )
+                    }
                 },
-            ) { Text("Add to watchlist") }
+            ) {
+                Text(
+                    if (existingRule != null) "Remove from watchlist" else "Add to watchlist",
+                )
+            }
             TextButton(onClick = { ignoreList.toggle(address) }) {
                 Text(if (muted) "Unmute" else "Mute")
             }
+        }
+        if (existingRule != null) {
+            Text(
+                "On the watchlist as \"" + existingRule.label + "\". Alerts need Signal " +
+                    "Watch switched on.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
         }
         if (muted) {
             Text(

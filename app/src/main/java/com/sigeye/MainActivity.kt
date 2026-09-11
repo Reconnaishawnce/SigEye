@@ -12,7 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import com.sigeye.core.Experiments
+import com.sigeye.core.OuiRegistry
 import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
@@ -29,10 +31,15 @@ import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
 import com.sigeye.home.HomeScreen
 import com.sigeye.ui.SigEyeTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A megabyte off disk, so not on the main thread. Everything that asks for a vendor
+        // before it lands falls back to the curated table rather than waiting.
+        lifecycleScope.launch(Dispatchers.IO) { OuiRegistry.load(applicationContext) }
         setContent { SigEyeTheme { SigEyeApp() } }
     }
 }

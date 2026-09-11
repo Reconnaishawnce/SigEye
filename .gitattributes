@@ -2,5 +2,8 @@
 *.jar binary
 *.apk binary
 *.png binary
+# The OUI table is fixed-width records. Left to text=auto, an 0D0A pair inside a
+# record would be rewritten as 0A and shift every byte after it.
+*.bin binary
 gradlew text eol=lf
 gradlew.bat text eol=crlf

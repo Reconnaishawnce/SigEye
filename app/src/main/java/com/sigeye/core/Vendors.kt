@@ -30,19 +30,48 @@ object Vendors {
 
     private val HID_OUIS = setOf("00:06:8E", "00:30:8E", "00:06:33")
 
-    /** Second bit of the first octet set means the address is locally administered. */
+    /**
+     * Whether this address is one the device made up rather than one it was assigned.
+     *
+     * Three tells, in order of how much they are worth:
+     *
+     *  1. The prefix is in the IEEE registry. Blocks are assigned to real companies and are
+     *     not used as random addresses, so this settles it.
+     *  2. The locally-administered bit. The classic MAC tell, but only half of Bluetooth's
+     *     resolvable private addresses happen to set it.
+     *  3. The top two bits, which for a random address encode its kind - 11 static,
+     *     01 resolvable, 00 non-resolvable. A *public* address can land on those same
+     *     patterns (Espressif's 48:CA:43 reads as 01), which is why this is only trusted
+     *     once the full registry is loaded and has been given its chance to say otherwise.
+     */
     fun isRandomAddress(address: String): Boolean {
         val firstOctet = address.substringBefore(':').toIntOrNull(16) ?: return false
-        return (firstOctet and 0x02) != 0
+        if (registered(address) != null) return false
+        if ((firstOctet and 0x02) != 0) return true
+        if (!OuiRegistry.available) return false
+        val topBits = (firstOctet shr 6) and 0x03
+        return topBits == 0b01 || topBits == 0b11
     }
 
     fun ouiOf(address: String): String =
         address.uppercase().replace('-', ':').split(':').take(3).joinToString(":")
 
+    /**
+     * Whoever the IEEE assigned this prefix to, ignoring whether the address looks random.
+     *
+     * The curated table wins where it has an entry: its names are shorter and it is the one
+     * that knows which vendors are worth remarking on. The full registry covers the other
+     * forty thousand.
+     */
+    private fun registered(address: String): String? {
+        val oui = ouiOf(address)
+        return VendorData.OUI[oui] ?: OuiRegistry.lookup(oui)
+    }
+
     /** Vendor for a MAC, or null when the address is randomised or simply unknown. */
     fun byAddress(address: String): String? {
         if (isRandomAddress(address)) return null
-        return VendorData.OUI[ouiOf(address)]
+        return registered(address)
     }
 
     fun byCompanyId(id: Int): String? = VendorData.COMPANY[id]
