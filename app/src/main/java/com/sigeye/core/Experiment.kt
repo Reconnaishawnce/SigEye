@@ -46,6 +46,7 @@ object Experiments {
     const val CROWD = "crowd"
     const val CELLS = "cells"
     const val ABSORPTION = "body"
+    const val RADAR = "radar"
 
     val all: List<Experiment> = listOf(
 
@@ -56,6 +57,16 @@ object Experiments {
             blurb = "Everything broadcasting around you, decoded.",
             teaches = "Who made it, what it is saying, how close it is. Name devices and " +
                 "group them into lists that other experiments can use.",
+            category = Experiment.Category.TOOLS,
+            status = Experiment.Status.READY,
+        ),
+        Experiment(
+            id = RADAR,
+            title = "Proximity Radar",
+            blurb = "Everything around you, arranged by how close it sounds.",
+            teaches = "Signal strength is a usable proxy for distance and a useless one " +
+                "for direction. Filter to a watchlist or a list of your own to hunt for " +
+                "one kind of thing.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.READY,
         ),

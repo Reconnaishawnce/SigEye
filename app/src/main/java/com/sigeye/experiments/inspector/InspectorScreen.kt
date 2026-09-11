@@ -66,7 +66,11 @@ private const val HUB_TAG = "inspector"
 private const val REFRESH_MS = 400L
 
 @Composable
-fun InspectorScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun InspectorScreen(
+    onBack: () -> Unit,
+    onLocate: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
@@ -101,13 +105,13 @@ fun InspectorScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             footnote = "Advertisements are public broadcasts. Listening is passive - " +
                 "nothing you see here can tell it was seen.",
         ) {
-            Live()
+            Live(onLocate)
         }
     }
 }
 
 @Composable
-private fun Live() {
+private fun Live(onLocate: (String) -> Unit) {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val ignoreList = remember { IgnoreList.get(context) }
@@ -260,6 +264,7 @@ private fun Live() {
                     table.forget(address)
                     selected = null
                 },
+                onLocate = { onLocate(address) },
                 onWatch = {
                     watchStore.upsert(
                         WatchRule(
@@ -417,6 +422,7 @@ private fun DeviceDetail(
     onToggleList: (String) -> Unit,
     onNewList: () -> Unit,
     onMute: () -> Unit,
+    onLocate: () -> Unit,
     onWatch: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -549,6 +555,7 @@ private fun DeviceDetail(
         },
         confirmButton = {
             Row {
+                TextButton(onClick = onLocate) { Text("Locate") }
                 TextButton(onClick = onWatch) { Text("Watch") }
                 TextButton(onClick = onMute) { Text(if (muted) "Unmute" else "Mute") }
             }

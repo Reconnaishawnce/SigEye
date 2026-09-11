@@ -4,21 +4,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import com.sigeye.core.Experiments
 import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.inspector.InspectorScreen
+import com.sigeye.experiments.locate.LocateScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
+import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
 import com.sigeye.home.HomeScreen
@@ -32,43 +34,85 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Two destinations is not worth a navigation library. `null` is the home screen, any
- * other value is an experiment id from [Experiments].
+ * A handful of destinations is not worth a navigation library.
+ *
+ * `null` is the home screen; any other value is an experiment id, optionally with an
+ * argument after a colon - which only Locate needs, and only ever an address.
  */
+private const val LOCATE_PREFIX = "locate:"
+
 @Composable
 private fun SigEyeApp() {
-    var openExperiment by rememberSaveable { mutableStateOf<String?>(null) }
+    var route by rememberSaveable { mutableStateOf<String?>(null) }
+    // Where Locate was opened from, so Back returns there rather than to the home screen.
+    var locateOrigin by rememberSaveable { mutableStateOf<String?>(null) }
 
-    BackHandler(enabled = openExperiment != null) { openExperiment = null }
+    BackHandler(enabled = route != null) {
+        route = if (route?.startsWith(LOCATE_PREFIX) == true) locateOrigin else null
+    }
 
     Scaffold { padding ->
         val inset = Modifier.padding(padding)
-        when (openExperiment) {
-            null -> HomeScreen(onOpen = { openExperiment = it }, modifier = inset)
+        val current = route
+
+        if (current != null && current.startsWith(LOCATE_PREFIX)) {
+            LocateScreen(
+                address = current.removePrefix(LOCATE_PREFIX),
+                onBack = { route = locateOrigin },
+                modifier = inset,
+            )
+            return@Scaffold
+        }
+
+        val openLocate: (String) -> Unit = { address ->
+            locateOrigin = route
+            route = LOCATE_PREFIX + address
+        }
+
+        when (current) {
+            null -> HomeScreen(onOpen = { route = it }, modifier = inset)
+
             Experiments.TRAIN_SPOTTER ->
-                TrainSpotterScreen(onBack = { openExperiment = null }, modifier = inset)
-            Experiments.INSPECTOR ->
-                InspectorScreen(onBack = { openExperiment = null }, modifier = inset)
+                TrainSpotterScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.INSPECTOR -> InspectorScreen(
+                onBack = { route = null },
+                onLocate = openLocate,
+                modifier = inset,
+            )
+
             Experiments.WATCHLIST ->
-                WatchlistScreen(onBack = { openExperiment = null }, modifier = inset)
+                WatchlistScreen(onBack = { route = null }, modifier = inset)
+
             Experiments.BEACONS ->
-                BeaconScreen(onBack = { openExperiment = null }, modifier = inset)
+                BeaconScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.RADAR -> RadarScreen(
+                onBack = { route = null },
+                onLocate = openLocate,
+                modifier = inset,
+            )
+
+            Experiments.ABSORPTION ->
+                AbsorptionScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.CELLS ->
+                CellScreen(onBack = { route = null }, modifier = inset)
+
             Experiments.DWELL -> PopulationScreen(
                 mode = PopulationMode.DWELL,
-                onBack = { openExperiment = null },
+                onBack = { route = null },
                 modifier = inset,
             )
-            Experiments.ABSORPTION ->
-                AbsorptionScreen(onBack = { openExperiment = null }, modifier = inset)
-            Experiments.CELLS ->
-                CellScreen(onBack = { openExperiment = null }, modifier = inset)
+
             Experiments.CROWD -> PopulationScreen(
                 mode = PopulationMode.CROWD,
-                onBack = { openExperiment = null },
+                onBack = { route = null },
                 modifier = inset,
             )
+
             // An unknown id can only come from a stale saved state after an update.
-            else -> HomeScreen(onOpen = { openExperiment = it }, modifier = inset)
+            else -> HomeScreen(onOpen = { route = it }, modifier = inset)
         }
     }
 }
