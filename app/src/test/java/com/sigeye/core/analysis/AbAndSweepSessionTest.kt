@@ -170,4 +170,34 @@ class SweepSessionTest {
         assertEquals(0, session.count())
         assertEquals(SweepAgreement.UNKNOWN, session.result().agreement)
     }
+
+    @Test
+    fun `runs at different resolutions combine by bearing, not by sector number`() {
+        // A fast source binned finely and a slow one binned coarsely, both with the same
+        // hole due south. Lining these up by sector index would average 135 degrees with
+        // 52 and drop two thirds of the coarse run.
+        fun run(sectors: Int, packets: Int): SweepResult {
+            val sweep = PolarSweep(sectorCount = sectors, minSamplesPerSector = 3)
+            repeat(packets) { index ->
+                val heading = index * 360f / packets
+                val rssi = if (kotlin.math.abs(heading - 180f) < 30f) -85 else -60
+                sweep.add(heading, rssi, index * 100L)
+            }
+            return sweep.result(sectors)
+        }
+
+        val session = SweepSession()
+        session.add(run(24, 240))
+        session.add(run(8, 40))
+        val combined = session.result().combined
+
+        // No finer than the coarsest run that went into it.
+        assertEquals(8, combined.totalSectors)
+        // Every reading is still accounted for.
+        assertEquals(280, combined.totalSamples)
+        // And the hole is still due south rather than smeared somewhere else.
+        val notch = combined.notchBearingDegrees
+        assertNotNull(notch)
+        assertEquals(180f, notch!!, 30f)
+    }
 }

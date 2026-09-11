@@ -225,4 +225,90 @@ class PolarSweepTest {
         assertEquals(0, result.touchedSectors)
         assertEquals(0f, result.touchedFraction, 0.001f)
     }
+
+    // ------------------------------------------------------ adaptive resolution
+
+    /** A turn at a given packet rate, one lap, evenly spread. */
+    private fun lap(packets: Int, rssiAt: (Float) -> Int = { -60 }): PolarSweep {
+        val sweep = PolarSweep(sectorCount = 24, minSamplesPerSector = 3)
+        repeat(packets) { index ->
+            val heading = index * 360f / packets
+            sweep.add(heading, rssiAt(heading), index * 100L)
+        }
+        return sweep
+    }
+
+    @Test
+    fun `a chatty source keeps the full resolution`() {
+        // 24 sectors need 72 well-spread packets; 200 is comfortable.
+        assertEquals(24, lap(200).bestResolution())
+    }
+
+    @Test
+    fun `a slow source drops to a coarser binning rather than staying empty`() {
+        // Thirty packets cannot settle 24 sectors, but settle 8 easily. The old fixed
+        // binning drew almost nothing here, which is what "it only captures a tiny bit of
+        // my turn" looked like from the outside.
+        val sweep = lap(30)
+        assertEquals(0, sweep.result(24).settledSectors)
+        val resolution = sweep.bestResolution()
+        assertTrue("resolution was $resolution", resolution <= 12)
+        assertTrue(sweep.result(resolution).coverage >= 0.75f)
+    }
+
+    @Test
+    fun `the adaptive result is the one the resolution chose`() {
+        val sweep = lap(30)
+        assertEquals(sweep.bestResolution(), sweep.adaptiveResult().totalSectors)
+    }
+
+    @Test
+    fun `too little for any resolution falls back to the coarsest rather than failing`() {
+        val sweep = lap(3)
+        assertEquals(8, sweep.bestResolution())
+        assertEquals(8, sweep.adaptiveResult().totalSectors)
+    }
+
+    @Test
+    fun `re-binning the same turn keeps every reading`() {
+        val sweep = lap(48)
+        assertEquals(48, sweep.sampleCount)
+        listOf(8, 12, 18, 24).forEach {
+            assertEquals("at $it sectors", 48, sweep.result(it).totalSamples)
+        }
+    }
+
+    @Test
+    fun `a notch survives being re-binned coarser`() {
+        // A 20 dB hole centred on due south should still be the weakest direction at any
+        // resolution - the measurement must not depend on the binning that draws it.
+        val sweep = lap(240) { heading ->
+            if (kotlin.math.abs(heading - 180f) < 25f) -85 else -60
+        }
+        listOf(8, 12, 18, 24).forEach { resolution ->
+            val notch = sweep.result(resolution).notchBearingDegrees
+            assertNotNull("no notch at $resolution sectors", notch)
+            assertEquals("at $resolution sectors", 180f, notch!!, 25f)
+        }
+    }
+
+    @Test
+    fun `readings come back in arrival order for export`() {
+        val sweep = PolarSweep(sectorCount = 24)
+        sweep.add(10f, -50, 100L)
+        sweep.add(20f, -55, 200L)
+        sweep.add(30f, -60, 300L)
+        val readings = sweep.readings()
+        assertEquals(listOf(100L, 200L, 300L), readings.map { it.atMs })
+        assertEquals(listOf(-50, -55, -60), readings.map { it.rssi })
+    }
+
+    @Test
+    fun `reset clears the readings, not just the bins`() {
+        val sweep = lap(50)
+        sweep.reset()
+        assertEquals(0, sweep.sampleCount)
+        assertTrue(sweep.readings().isEmpty())
+        assertEquals(0, sweep.result().totalSamples)
+    }
 }

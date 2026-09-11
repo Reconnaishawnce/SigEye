@@ -83,32 +83,51 @@ class SweepSession(private val sectorCount: Int = 24) {
         )
     }
 
-    /** Sector-wise mean across runs, weighted by how many readings each contributed. */
+    /**
+     * Mean across runs by bearing, weighted by how many readings each contributed.
+     *
+     * By bearing rather than by sector index, which matters now that a run's resolution is
+     * chosen from what its source actually delivered: a slow turn binned into 8 sectors
+     * and a fast one binned into 24 do not agree about what sector 3 means, and lining
+     * them up by index would have averaged 135 degrees with 52 and quietly dropped two
+     * thirds of the coarse run on top.
+     *
+     * The combined plot is no finer than the coarsest run in it, because a session cannot
+     * be more certain about direction than its worst contributor.
+     */
     private fun combine(): SweepResult {
         if (runs.isEmpty()) {
             return SweepResult(emptyList(), 0, sectorCount, 0, null, null)
         }
 
-        val sectors = (0 until sectorCount).map { index ->
-            var weighted = 0.0
-            var weight = 0
-            var min = Int.MAX_VALUE
-            var max = Int.MIN_VALUE
-            runs.forEach { run ->
-                val sector = run.sectors.getOrNull(index) ?: return@forEach
+        val resolution = runs.minOf { it.totalSectors }.coerceIn(4, 72)
+        val width = 360f / resolution
+
+        val weighted = DoubleArray(resolution)
+        val weights = IntArray(resolution)
+        val mins = IntArray(resolution) { Int.MAX_VALUE }
+        val maxs = IntArray(resolution) { Int.MIN_VALUE }
+
+        runs.forEach { run ->
+            run.sectors.forEach { sector ->
                 if (sector.samples <= 0) return@forEach
-                weighted += sector.meanRssi * sector.samples
-                weight += sector.samples
-                if (sector.minRssi < min) min = sector.minRssi
-                if (sector.maxRssi > max) max = sector.maxRssi
+                val bearing = ((sector.centreDegrees % 360f) + 360f) % 360f
+                val index = (bearing / width).toInt().coerceIn(0, resolution - 1)
+                weighted[index] += sector.meanRssi * sector.samples
+                weights[index] += sector.samples
+                if (sector.minRssi < mins[index]) mins[index] = sector.minRssi
+                if (sector.maxRssi > maxs[index]) maxs[index] = sector.maxRssi
             }
+        }
+
+        val sectors = (0 until resolution).map { index ->
             Sector(
                 index = index,
-                centreDegrees = index * (360f / sectorCount) + (360f / sectorCount) / 2f,
-                samples = weight,
-                meanRssi = if (weight == 0) 0.0 else weighted / weight,
-                minRssi = if (weight == 0) 0 else min,
-                maxRssi = if (weight == 0) 0 else max,
+                centreDegrees = index * width + width / 2f,
+                samples = weights[index],
+                meanRssi = if (weights[index] == 0) 0.0 else weighted[index] / weights[index],
+                minRssi = if (weights[index] == 0) 0 else mins[index],
+                maxRssi = if (weights[index] == 0) 0 else maxs[index],
             )
         }
 
@@ -116,7 +135,7 @@ class SweepSession(private val sectorCount: Int = 24) {
         return SweepResult(
             sectors = sectors,
             settledSectors = settled.size,
-            totalSectors = sectorCount,
+            totalSectors = resolution,
             totalSamples = runs.sumOf { it.totalSamples },
             peak = settled.maxByOrNull { it.meanRssi },
             notch = settled.minByOrNull { it.meanRssi },

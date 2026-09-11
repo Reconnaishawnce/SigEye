@@ -131,47 +131,66 @@ data class SweepResult(
  *
  * Pure and Android-free: the binning and the statistics are testable without a compass.
  */
+/** One reading, kept as it arrived. */
+data class HeadingSample(val atMs: Long, val headingDegrees: Float, val rssi: Int)
+
 class PolarSweep(
     val sectorCount: Int = 24,
     /** Readings needed before a sector counts as measured rather than glanced at. */
     private val minSamplesPerSector: Int = 3,
 ) {
-    private val counts = IntArray(sectorCount)
-    private val sums = LongArray(sectorCount)
-    private val mins = IntArray(sectorCount) { Int.MAX_VALUE }
-    private val maxs = IntArray(sectorCount) { Int.MIN_VALUE }
-    private var samples = 0
+    // Readings are kept rather than accumulated straight into bins.
+    //
+    // Binning on arrival fixes the resolution before anything is known about how fast the
+    // source talks, and that was the flaw: 24 sectors needing three readings each is 72
+    // well-spread packets, which a transmitter advertising once a second cannot deliver
+    // inside a turn anyone is willing to perform. Most of the circle stayed unsettled, was
+    // therefore not drawn, and the experiment looked like it had captured almost nothing.
+    // Keeping the readings means the resolution can be chosen afterwards, from what
+    // actually arrived - and the same turn can be re-binned instead of re-walked.
+    private val samples = mutableListOf<HeadingSample>()
 
     val sectorWidthDegrees: Float get() = 360f / sectorCount
 
-    fun reset() {
-        counts.fill(0)
-        sums.fill(0)
-        mins.fill(Int.MAX_VALUE)
-        maxs.fill(Int.MIN_VALUE)
-        samples = 0
+    val sampleCount: Int get() = samples.size
+
+    fun reset() = samples.clear()
+
+    fun add(headingDegrees: Float, rssi: Int, atMs: Long = 0L) {
+        samples.add(HeadingSample(atMs, headingDegrees, rssi))
     }
 
-    fun add(headingDegrees: Float, rssi: Int) {
-        val index = sectorOf(headingDegrees)
-        counts[index]++
-        sums[index] += rssi.toLong()
-        if (rssi < mins[index]) mins[index] = rssi
-        if (rssi > maxs[index]) maxs[index] = rssi
-        samples++
-    }
+    /** Every reading, in arrival order. For export and diagnosis. */
+    fun readings(): List<HeadingSample> = samples.toList()
 
     /** Normalises any heading, including negative and over-360, into a sector. */
-    fun sectorOf(headingDegrees: Float): Int {
+    fun sectorOf(headingDegrees: Float, count: Int = sectorCount): Int {
         val normalised = ((headingDegrees % 360f) + 360f) % 360f
-        return (normalised / sectorWidthDegrees).toInt().coerceIn(0, sectorCount - 1)
+        return (normalised / (360f / count)).toInt().coerceIn(0, count - 1)
     }
 
-    fun result(): SweepResult {
-        val sectors = (0 until sectorCount).map { index ->
+    fun result(): SweepResult = result(sectorCount)
+
+    fun result(count: Int): SweepResult {
+        val resolution = count.coerceIn(4, 72)
+        val counts = IntArray(resolution)
+        val sums = LongArray(resolution)
+        val mins = IntArray(resolution) { Int.MAX_VALUE }
+        val maxs = IntArray(resolution) { Int.MIN_VALUE }
+
+        samples.forEach { sample ->
+            val index = sectorOf(sample.headingDegrees, resolution)
+            counts[index]++
+            sums[index] += sample.rssi.toLong()
+            if (sample.rssi < mins[index]) mins[index] = sample.rssi
+            if (sample.rssi > maxs[index]) maxs[index] = sample.rssi
+        }
+
+        val width = 360f / resolution
+        val sectors = (0 until resolution).map { index ->
             Sector(
                 index = index,
-                centreDegrees = index * sectorWidthDegrees + sectorWidthDegrees / 2f,
+                centreDegrees = index * width + width / 2f,
                 samples = counts[index],
                 meanRssi = if (counts[index] == 0) {
                     0.0
@@ -187,12 +206,36 @@ class PolarSweep(
         return SweepResult(
             sectors = sectors,
             settledSectors = settled.size,
-            totalSectors = sectorCount,
-            totalSamples = samples,
+            totalSectors = resolution,
+            totalSamples = samples.size,
             // Only settled sectors can be the answer - one stray packet must not get to
             // define where the shadow is.
             peak = settled.maxByOrNull { it.meanRssi },
             notch = settled.minByOrNull { it.meanRssi },
         )
+    }
+
+    /**
+     * The finest binning this turn can actually support.
+     *
+     * Walks from fine to coarse and takes the first resolution where enough of the circle
+     * settles. A chatty beacon keeps the full 24 sectors; a sensor that speaks once a
+     * second drops to 8, which is 45 degrees a sector - blunt, but a blunt answer drawn
+     * from real readings beats a fine one that is three quarters empty.
+     */
+    fun bestResolution(minCoverage: Float = 0.75f): Int {
+        RESOLUTIONS.forEach { resolution ->
+            if (result(resolution).coverage >= minCoverage) return resolution
+        }
+        return RESOLUTIONS.last()
+    }
+
+    /** The best result this turn supports, at the resolution that supports it. */
+    fun adaptiveResult(minCoverage: Float = 0.75f): SweepResult =
+        result(bestResolution(minCoverage))
+
+    private companion object {
+        /** Finest first. Each divides 360 evenly so sector centres stay tidy. */
+        val RESOLUTIONS = listOf(24, 18, 12, 8)
     }
 }

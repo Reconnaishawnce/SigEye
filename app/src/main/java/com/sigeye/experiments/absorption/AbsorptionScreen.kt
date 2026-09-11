@@ -40,7 +40,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Permissions
 import com.sigeye.core.Experiments
+import com.sigeye.core.SweepExport
+import com.sigeye.core.analysis.DropReason
 import com.sigeye.core.analysis.PolarSweep
+import com.sigeye.core.analysis.SweepCounters
+import com.sigeye.core.analysis.SweepDiagnostics
 import com.sigeye.core.analysis.SweepAgreement
 import com.sigeye.core.analysis.SweepResult
 import com.sigeye.core.analysis.SessionResult
@@ -126,6 +130,10 @@ private fun Live() {
     // The worst the compass got at any point during the sweep. Recording no longer stops
     // when it degrades, so the result has to carry the caveat instead.
     var worstCompass by remember { mutableStateOf(CompassQuality.HIGH) }
+    val diagnostics = remember { SweepDiagnostics() }
+    var counters by remember { mutableStateOf(SweepCounters()) }
+    var resolution by remember { mutableStateOf(24) }
+    var exported by remember { mutableStateOf<String?>(null) }
     var sourceRate by remember { mutableStateOf(0.0) }
     var turnRate by remember { mutableStateOf(0.0f) }
     val sourcePackets = remember { java.util.concurrent.atomic.AtomicInteger(0) }
@@ -170,18 +178,27 @@ private fun Live() {
     LaunchedEffect(stage, sourceAddress) {
         val target = sourceAddress
         if (stage != Stage.SWEEP || target == null) return@LaunchedEffect
+        diagnostics.reset(System.currentTimeMillis())
         BleScanHub.adverts.collect { advert ->
-            if (advert.address != target) return@collect
+            diagnostics.packet(advert.atMs)
+            if (advert.address != target) {
+                diagnostics.dropped(DropReason.NOT_THE_SOURCE)
+                return@collect
+            }
+            diagnostics.fromSource(advert.atMs)
             liveRssi = advert.rssi
             sourcePackets.incrementAndGet()
             val current = compass.heading.value
             // Anything but a missing magnetometer is recorded. See CompassQuality's note
             // on why the strict gate belongs on printing bearings and not on capture.
             if (current.quality.isUsableForSweep) {
-                sweep.add(current.degrees, advert.rssi)
+                sweep.add(current.degrees, advert.rssi, advert.atMs)
+                diagnostics.recorded(current.degrees)
                 if (current.quality.rank < worstCompass.rank) {
                     worstCompass = current.quality
                 }
+            } else {
+                diagnostics.dropped(DropReason.NO_COMPASS)
             }
         }
     }
@@ -189,7 +206,12 @@ private fun Live() {
     LaunchedEffect(stage) {
         while (stage == Stage.SWEEP) {
             delay(300)
-            result = sweep.result()
+            // Resolution is chosen from what the source has actually delivered, not fixed
+            // in advance - a slow advertiser now gets a coarse plot that fills rather
+            // than a fine one that stays empty.
+            resolution = sweep.bestResolution()
+            result = sweep.result(resolution)
+            counters = diagnostics.counters(System.currentTimeMillis())
         }
     }
 
@@ -210,6 +232,7 @@ private fun Live() {
     LaunchedEffect(Unit) {
         var previous: Pair<Long, Float>? = null
         compass.heading.collect { current ->
+            diagnostics.heading()
             val now = System.currentTimeMillis()
             previous?.let { (thenMs, thenDegrees) ->
                 var delta = current.degrees - thenDegrees
@@ -264,6 +287,8 @@ private fun Live() {
 
         Stage.SWEEP -> Sweeping(
             sourceLabel = sourceLabel,
+            counters = counters,
+            resolution = resolution,
             heading = heading.degrees,
             quality = heading.quality,
             rssi = liveRssi,
@@ -272,7 +297,7 @@ private fun Live() {
             runNumber = session.count() + 1,
             result = result,
             onFinish = {
-                val finished = sweep.result()
+                val finished = sweep.adaptiveResult()
                 session.add(finished)
                 sessionResult = session.result()
                 result = finished
@@ -285,6 +310,13 @@ private fun Live() {
             sourceLabel = sourceLabel,
             session = sessionResult,
             worstCompass = worstCompass,
+            counters = counters,
+            exported = exported,
+            onExport = {
+                val file = SweepExport.write(context, sourceLabel, sweep.readings())
+                exported = file?.name
+                file?.let { SweepExport.share(context, it) }
+            },
             onAgain = {
                 sweep.reset()
                 worstCompass = CompassQuality.HIGH
@@ -427,6 +459,8 @@ private fun PickSource(
 @Composable
 private fun Sweeping(
     sourceLabel: String,
+    counters: SweepCounters,
+    resolution: Int,
     heading: Float,
     quality: CompassQuality,
     rssi: Int?,
@@ -507,6 +541,9 @@ private fun Sweeping(
     }
 
     Spacer(Modifier.height(10.dp))
+    SweepDiagnosticsCard(counters, resolution)
+
+    Spacer(Modifier.height(10.dp))
     // Two bars in one: the faint one is how far round you have been, the solid one how
     // much of that has enough readings to count.
     Box(Modifier.fillMaxWidth()) {
@@ -578,6 +615,9 @@ private fun Results(
     sourceLabel: String,
     session: SessionResult,
     worstCompass: CompassQuality,
+    counters: SweepCounters,
+    exported: String?,
+    onExport: () -> Unit,
     onAgain: () -> Unit,
     onNewSource: () -> Unit,
 ) {
@@ -719,6 +759,22 @@ private fun Results(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
+    Spacer(Modifier.height(12.dp))
+    SweepDiagnosticsCard(counters, session.combined.totalSectors)
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth()) {
+        Text("Export this sweep as CSV")
+    }
+    exported?.let {
+        Text(
+            "Wrote $it - every reading in arrival order, with elapsed time, heading and " +
+                "signal. The raw turn, so it can be looked at rather than guessed about.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+
     Spacer(Modifier.height(10.dp))
     Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) {
         Text(if (session.runCount == 1) "Sweep again (recommended)" else "Sweep again")
@@ -726,6 +782,68 @@ private fun Results(
     Spacer(Modifier.height(6.dp))
     OutlinedButton(onClick = onNewSource, modifier = Modifier.fillMaxWidth()) {
         Text("Different source")
+    }
+}
+
+/**
+ * What the sweep is actually seeing, in counters rather than conclusions.
+ *
+ * This experiment's capture has been diagnosed from first principles twice and fixed
+ * wrongly twice. The third attempt makes the running app answer the question instead:
+ * packets in, packets from the source, packets recorded, and where they went.
+ */
+@Composable
+private fun SweepDiagnosticsCard(counters: SweepCounters, resolution: Int) {
+    val verdict = counters.verdict()
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (verdict == null) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.errorContainer
+            },
+        ),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                "What the sweep is seeing",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Stat("From source", counters.packetsFromSource.toString(), "packets")
+                Stat("Recorded", counters.recorded.toString(), "into sectors")
+                Stat(
+                    "Rate",
+                    String.format(Locale.US, "%.1f/s", counters.sourceRate),
+                    "from source",
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Stat("All devices", counters.packetsSeen.toString(), "packets seen")
+                Stat("Compass", counters.headingUpdates.toString(), "updates")
+                Stat("Sectors", "$resolution", "${360 / resolution}° each")
+            }
+            if (counters.droppedNoCompass > 0) {
+                Text(
+                    "${counters.droppedNoCompass} dropped for want of a compass reading.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            verdict?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        }
     }
 }
 
