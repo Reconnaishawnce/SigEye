@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
@@ -53,121 +57,127 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * A handful of destinations is not worth a navigation library.
+ * A handful of destinations is not worth a navigation library, but they do need a stack.
  *
- * `null` is the home screen; any other value is an experiment id, optionally with an
- * argument after a colon - which only Locate needs, and only ever an address.
+ * There was a single current route and a one-off field remembering where Locate had been
+ * opened from. Everything else hard-coded Back to the home screen, so any screen reached
+ * from another screen threw you all the way out rather than back one step. A list of
+ * routes costs nothing and removes the special case with it.
+ *
+ * A route is an experiment id, optionally with an argument after a colon - which only
+ * Locate needs, and only ever an address.
  */
 private const val LOCATE_PREFIX = "locate:"
 
 @Composable
 private fun SigEyeApp() {
-    var route by rememberSaveable { mutableStateOf<String?>(null) }
-    // Where Locate was opened from, so Back returns there rather than to the home screen.
-    var locateOrigin by rememberSaveable { mutableStateOf<String?>(null) }
+    val stack = rememberSaveable(
+        saver = listSaver<SnapshotStateList<String>, String>(
+            save = { it.toList() },
+            restore = { it.toMutableStateList() },
+        ),
+    ) { mutableStateListOf<String>() }
 
-    BackHandler(enabled = route != null) {
-        route = if (route?.startsWith(LOCATE_PREFIX) == true) locateOrigin else null
-    }
+    val goBack: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
+    val open: (String) -> Unit = { stack.add(it) }
+
+    BackHandler(enabled = stack.isNotEmpty(), onBack = goBack)
 
     Scaffold { padding ->
         val inset = Modifier.padding(padding)
-        val current = route
+        val current = stack.lastOrNull()
 
         if (current != null && current.startsWith(LOCATE_PREFIX)) {
             LocateScreen(
                 address = current.removePrefix(LOCATE_PREFIX),
-                onBack = { route = locateOrigin },
+                onBack = goBack,
                 modifier = inset,
             )
             return@Scaffold
         }
 
-        val openLocate: (String) -> Unit = { address ->
-            locateOrigin = route
-            route = LOCATE_PREFIX + address
-        }
+        val openLocate: (String) -> Unit = { address -> open(LOCATE_PREFIX + address) }
 
         when (current) {
-            null -> HomeScreen(onOpen = { route = it }, modifier = inset)
+            null -> HomeScreen(onOpen = open, modifier = inset)
 
             Experiments.TRAIN_SPOTTER ->
-                TrainSpotterScreen(onBack = { route = null }, modifier = inset)
+                TrainSpotterScreen(onBack = goBack, modifier = inset)
 
             Experiments.INSPECTOR -> InspectorScreen(
-                onBack = { route = null },
+                onBack = goBack,
                 onLocate = openLocate,
                 modifier = inset,
             )
 
             Experiments.WATCHLIST ->
-                WatchlistScreen(onBack = { route = null }, modifier = inset)
+                WatchlistScreen(onBack = goBack, modifier = inset)
 
             Experiments.BEACONS ->
-                BeaconScreen(onBack = { route = null }, modifier = inset)
+                BeaconScreen(onBack = goBack, modifier = inset)
 
             Experiments.RADAR -> RadarScreen(
-                onBack = { route = null },
+                onBack = goBack,
                 onLocate = openLocate,
                 modifier = inset,
             )
 
             Experiments.ABSORPTION ->
-                AbsorptionScreen(onBack = { route = null }, modifier = inset)
+                AbsorptionScreen(onBack = goBack, modifier = inset)
 
             Experiments.MICROWAVE ->
-                MicrowaveScreen(onBack = { route = null }, modifier = inset)
+                MicrowaveScreen(onBack = goBack, modifier = inset)
 
             Experiments.FARADAY ->
-                FaradayScreen(onBack = { route = null }, modifier = inset)
+                FaradayScreen(onBack = goBack, modifier = inset)
 
             Experiments.FADING ->
-                FadingScreen(onBack = { route = null }, modifier = inset)
+                FadingScreen(onBack = goBack, modifier = inset)
 
             Experiments.DISCOVERY ->
-                DiscoveryScreen(onBack = { route = null }, modifier = inset)
+                DiscoveryScreen(onBack = goBack, modifier = inset)
 
             Experiments.EXPLORER ->
-                ExplorerScreen(onBack = { route = null }, modifier = inset)
+                ExplorerScreen(onBack = goBack, modifier = inset)
 
             Experiments.WIFI ->
-                WifiScreen(onBack = { route = null }, modifier = inset)
+                WifiScreen(onBack = goBack, modifier = inset)
 
             Experiments.PLACE ->
-                PlaceScreen(onBack = { route = null }, modifier = inset)
+                PlaceScreen(onBack = goBack, modifier = inset)
 
             Experiments.FORENSICS ->
-                ForensicsScreen(onBack = { route = null }, modifier = inset)
+                ForensicsScreen(onBack = goBack, modifier = inset)
 
             Experiments.CONVOY ->
-                ConvoyScreen(onBack = { route = null }, modifier = inset)
+                ConvoyScreen(onBack = goBack, modifier = inset)
 
             Experiments.ROTATION ->
-                RotationScreen(onBack = { route = null }, modifier = inset)
+                RotationScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
-                MotionScreen(onBack = { route = null }, modifier = inset)
+                MotionScreen(onBack = goBack, modifier = inset)
 
             Experiments.SPEED ->
-                SpeedScreen(onBack = { route = null }, modifier = inset)
+                SpeedScreen(onBack = goBack, modifier = inset)
 
             Experiments.CELLS ->
-                CellScreen(onBack = { route = null }, modifier = inset)
+                CellScreen(onBack = goBack, modifier = inset)
 
             Experiments.DWELL -> PopulationScreen(
                 mode = PopulationMode.DWELL,
-                onBack = { route = null },
+                onBack = goBack,
                 modifier = inset,
             )
 
             Experiments.CROWD -> PopulationScreen(
                 mode = PopulationMode.CROWD,
-                onBack = { route = null },
+                onBack = goBack,
                 modifier = inset,
             )
 
             // An unknown id can only come from a stale saved state after an update.
-            else -> HomeScreen(onOpen = { route = it }, modifier = inset)
+            else -> HomeScreen(onOpen = open, modifier = inset)
         }
     }
 }

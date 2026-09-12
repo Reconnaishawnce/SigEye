@@ -1,5 +1,6 @@
 package com.sigeye.experiments.fading
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -187,6 +188,10 @@ private fun Live() {
             stats = FadingAnalysis.analyse(snapshot)
             trace = snapshot.takeLast(TRACE_POINTS).map { it.rssi }
         }
+    }
+
+    BackHandler(enabled = stage != Stage.PICK) {
+        stage = if (stage == Stage.RESULT) Stage.RECORD else Stage.PICK
     }
 
     when (stage) {

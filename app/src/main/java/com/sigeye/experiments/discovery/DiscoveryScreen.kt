@@ -1,5 +1,6 @@
 package com.sigeye.experiments.discovery
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -191,6 +192,9 @@ private fun Live() {
             }
         }
     }
+
+    // Back from the snapshots tab returns to watching rather than leaving Discovery.
+    BackHandler(enabled = tab != Tab.WATCH) { tab = Tab.WATCH }
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Tab.entries.forEach { entry ->

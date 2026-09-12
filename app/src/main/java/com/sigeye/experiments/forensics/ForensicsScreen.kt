@@ -1,5 +1,6 @@
 package com.sigeye.experiments.forensics
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -164,6 +165,9 @@ private fun Live() {
             packets = recorder.packetCount
         }
     }
+
+    // Back leaves the review and returns to the start, rather than out of Forensics.
+    BackHandler(enabled = reviewing) { reviewing = false }
 
     if (!recording && !reviewing) {
         Card(

@@ -1,5 +1,6 @@
 package com.sigeye.experiments.explorer
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -160,6 +161,13 @@ private fun Live() {
                 )
                 .take(25)
         }
+    }
+
+    // Back returns to the picker rather than leaving the experiment, and disconnects
+    // on the way out - walking away from an open GATT connection would leave it open.
+    BackHandler(enabled = exploration.state != ExploreState.IDLE) {
+        explorer.close()
+        explorer.reset()
     }
 
     if (exploration.state != ExploreState.IDLE) {

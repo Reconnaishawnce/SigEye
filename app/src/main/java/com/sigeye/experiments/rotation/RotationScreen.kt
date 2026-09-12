@@ -1,5 +1,6 @@
 package com.sigeye.experiments.rotation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -149,6 +150,13 @@ private fun Live() {
                 feedback.alert(alertStyle, urgent = true)
             }
         }
+    }
+
+    // Back abandons the hunt and returns to the picker rather than leaving.
+    BackHandler(enabled = state.stage != HuntStage.PICK) {
+        hunt.reset()
+        walkNote = null
+        state = hunt.state(System.currentTimeMillis())
     }
 
     when (state.stage) {
