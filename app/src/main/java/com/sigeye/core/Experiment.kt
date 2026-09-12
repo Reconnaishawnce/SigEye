@@ -63,6 +63,7 @@ object Experiments {
     const val WIFI = "wifi"
     const val PLACE = "place"
     const val FORENSICS = "forensics"
+    const val CONVOY = "convoy"
 
     val all: List<Experiment> = listOf(
 
@@ -147,6 +148,39 @@ object Experiments {
             limits = "The angle is not a direction. One antenna cannot measure a " +
                 "bearing, so the angle is only a hash of the address that keeps " +
                 "each device in its own spot. Never read the radar as a map.",
+        ),
+        Experiment(
+            id = CONVOY,
+            title = "Travelling Companions",
+            blurb = "Record here, then there, then somewhere else. What appears in all of it?",
+            teaches = "Anything present in three unrelated places was travelling with you " +
+                "rather than living in any of them. The idea is simple; being honest " +
+                "about how weak it is takes most of the work.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.READY,
+            needs = "Genuinely different places, and enough time between them. File your " +
+                "own devices under a list called Mine first.",
+            howTo = listOf(
+                "In Device Inspector, put your own earbuds, watch and car on a list " +
+                    "called Mine. They follow you perfectly, and without this the results " +
+                    "are forty rows of your own belongings.",
+                "Start a leg where you are and give it a few minutes, so everything nearby " +
+                    "has a chance to advertise at least once.",
+                "Finish the leg, travel somewhere genuinely different, and start another.",
+                "Three legs over an hour is the point at which the answer starts to mean " +
+                    "something. It will tell you when it is not there yet.",
+                "Tap any candidate for the reasoning, and mark it as yours if it is.",
+            ),
+            reading = "Something in every leg with a fixed address, over a real span of " +
+                "time, is the only thing rated strongly. Anything randomised is capped at " +
+                "the weakest rating however often it appears, because the same random " +
+                "address turning up repeatedly means either it is not rotating or the " +
+                "legs were too close together, and nothing here can tell those apart.",
+            limits = "This cannot catch a phone that rotates its address, which is most " +
+                "phones - it catches fitted equipment, tyre sensors and cheap trackers. " +
+                "Legs recorded close together in time and place share their contents by " +
+                "accident, so short journeys produce long innocent lists, and the app " +
+                "refuses to conclude anything until there is real separation.",
         ),
         Experiment(
             id = WATCHLIST,
