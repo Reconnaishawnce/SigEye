@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
+import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
 import com.sigeye.core.analysis.AdvertChannelLoad
 import com.sigeye.core.analysis.ChannelLoad
@@ -258,6 +260,23 @@ private fun Live() {
 
     Spacer(Modifier.height(10.dp))
     OffGrid(band24)
+
+    Spacer(Modifier.height(14.dp))
+    OutlinedButton(
+        onClick = {
+            CsvExport.shareText(
+                context = context,
+                folder = "congestion",
+                prefix = "band",
+                content = CsvExport.header(
+                    "2.4 GHz congestion",
+                    "wifi_scans=${wifi.scans}",
+                ) + Spectrum.csv(band24),
+            )
+        },
+        enabled = band24.isNotEmpty(),
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Export the band") }
 
     Spacer(Modifier.height(14.dp))
     DiagnosticsPanel(

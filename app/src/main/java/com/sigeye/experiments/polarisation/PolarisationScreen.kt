@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
+import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.PolarSweep
@@ -251,6 +252,7 @@ private fun Live() {
             label = targetLabel,
             result = result,
             recorded = recorded,
+            sweep = sweep,
             onAgain = {
                 rollSensor.start()
                 sweep.reset()
@@ -499,9 +501,11 @@ private fun Results(
     label: String,
     result: PolarisationResult?,
     recorded: Int,
+    sweep: PolarSweep,
     onAgain: () -> Unit,
     onNewSource: () -> Unit,
 ) {
+    val context = LocalContext.current
     val polarisation = result
     if (polarisation == null) {
         Text("Nothing recorded.", style = MaterialTheme.typography.bodyMedium)
@@ -614,6 +618,20 @@ private fun Results(
             "by one dominant path. Measuring it two different ways and getting a similar " +
             "answer is worth more than either measurement alone.",
     )
+
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = {
+            CsvExport.shareText(
+                context = context,
+                folder = "polarisation",
+                prefix = "roll",
+                content = CsvExport.header("polarisation roll sweep", "source=$label") +
+                    Polarisation.csv(sweep, polarisation),
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Export the sweep") }
 
     Spacer(Modifier.height(16.dp))
     Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("Roll it again") }

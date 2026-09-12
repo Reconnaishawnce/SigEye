@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.pow
@@ -71,6 +72,41 @@ object PathLossFit {
 
     /** Readings closer than this are in the near field, where the model does not hold. */
     const val NEAR_FIELD_METRES = 0.5
+
+    /**
+     * The walk as it was recorded, plus the fit that came out of it.
+     *
+     * Distance and signal per reading, unaggregated. The fit is one line through these
+     * points and a reader with the points can put a different line through them - which is
+     * the whole reason to hand over raw readings rather than a conclusion.
+     */
+    fun csv(samples: List<WalkSample>, result: PathLossResult, strideMetres: Double): String =
+        buildString {
+            appendLine("# stride_m=$strideMetres readings=${samples.size}")
+            appendLine(
+                "# exponent=" + String.format(Locale.US, "%.3f", result.exponent) +
+                    " reference_dbm=" + String.format(Locale.US, "%.1f", result.referenceRssi) +
+                    " r_squared=" + String.format(Locale.US, "%.3f", result.rSquared) +
+                    " residual_db=" + String.format(Locale.US, "%.2f", result.residualDb) +
+                    " span_m=" + String.format(Locale.US, "%.1f", result.spanMetres) +
+                    " quality=" + result.quality.name,
+            )
+            appendLine("metres,rssi_dbm,log10_metres,modelled_dbm")
+            samples.forEach { sample ->
+                val modelled = result.referenceRssi -
+                    10.0 * result.exponent * log10(sample.metres.coerceAtLeast(0.01))
+                appendLine(
+                    String.format(
+                        Locale.US,
+                        "%.3f,%d,%.4f,%.2f",
+                        sample.metres,
+                        sample.rssi,
+                        log10(sample.metres.coerceAtLeast(0.01)),
+                        modelled,
+                    ),
+                )
+            }
+        }
 
     fun fit(samples: List<WalkSample>): PathLossResult {
         val usable = samples.filter { it.metres >= NEAR_FIELD_METRES }

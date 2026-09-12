@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
+import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
 import com.sigeye.core.analysis.BandPair
 import com.sigeye.core.analysis.DualBand
@@ -314,6 +315,24 @@ private fun Live() {
             style = MaterialTheme.typography.bodySmall,
         )
     }
+
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = {
+            CsvExport.shareText(
+                context = context,
+                folder = "bands",
+                prefix = "penetration",
+                content = CsvExport.header(
+                    "2.4 against 5 GHz penetration",
+                    "scans=${wifi.scans}",
+                    "spots_saved=${spots.size}",
+                ) + DualBand.csv(penetrations, baseline != null),
+            )
+        },
+        enabled = pairs.isNotEmpty(),
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Export the pairs") }
 
     Spacer(Modifier.height(12.dp))
     DiagnosticsPanel(

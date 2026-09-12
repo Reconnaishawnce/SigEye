@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
+import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
 import com.sigeye.core.analysis.FitQuality
 import com.sigeye.core.analysis.PathLossFit
@@ -244,6 +245,7 @@ private fun Live() {
             label = targetLabel,
             result = result,
             walk = synchronized(walk) { walk.toList() },
+            strideMetres = stride,
             onAgain = {
                 synchronized(walk) { walk.clear() }
                 samples = 0
@@ -503,9 +505,11 @@ private fun Results(
     label: String,
     result: PathLossResult?,
     walk: List<WalkSample>,
+    strideMetres: Float,
     onAgain: () -> Unit,
     onNewSource: () -> Unit,
 ) {
+    val context = LocalContext.current
     val fit = result
     if (fit == null || fit.quality == FitQuality.REJECTED) {
         Text(
@@ -602,6 +606,20 @@ private fun Results(
             "is -10n. Scatter about that line is multipath, which is exactly what the " +
             "Multipath Fading experiment exists to show.",
     )
+
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = {
+            CsvExport.shareText(
+                context = context,
+                folder = "pathloss",
+                prefix = "walk",
+                content = CsvExport.header("path loss walk", "source=$label") +
+                    PathLossFit.csv(walk, fit, strideMetres.toDouble()),
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Export the walk") }
 
     Spacer(Modifier.height(16.dp))
     Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) {

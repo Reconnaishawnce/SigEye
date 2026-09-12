@@ -119,5 +119,5 @@ green CI run and a release on GitHub.
 - [x] **Primetime pass.** Home screen organisation (favourites: starred, ordered, seeded
       once with the recommended set), a welcome card rather than a wizard, README rewritten
       around what the app actually is now, and `continue-on-error` gone from the lint step.
-      Still to do afterwards: export and share on the screens that lack it, and a look at
-      `docs/EXPERIMENTS.md`, which still describes the app as a train spotter.
+      Export and share now on every screen that produces a measurement, and
+      `docs/EXPERIMENTS.md` rewritten as the constraints that shape the work.

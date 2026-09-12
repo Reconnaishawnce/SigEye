@@ -152,6 +152,46 @@ object Polarisation {
      * quantity the fading experiment calls K - arrived at from a completely different
      * measurement, which is a pleasing thing to be able to check.
      */
+    /**
+     * The roll sweep as it was recorded, plus what was made of it.
+     *
+     * Roll is given both as it was measured and as it was plotted, because the doubling in
+     * [plotAngle] is the one step a reader would not guess from the numbers - and without
+     * it the bearings in the summary look like they disagree with the readings.
+     */
+    fun csv(sweep: PolarSweep, result: PolarisationResult): String = buildString {
+        appendLine(
+            "# depth_db=" + (result.depthDb?.let { String.format(Locale.US, "%.2f", it) } ?: "") +
+                " best_roll_deg=" + (result.bestRollDegrees?.let {
+                    String.format(Locale.US, "%.1f", it)
+                } ?: "") +
+                " worst_roll_deg=" + (result.worstRollDegrees?.let {
+                    String.format(Locale.US, "%.1f", it)
+                } ?: "") +
+                " separation_deg=" + (result.separationDegrees?.let {
+                    String.format(Locale.US, "%.1f", it)
+                } ?: "") +
+                " coverage=" + String.format(Locale.US, "%.2f", result.coverage) +
+                " polarisation=" + result.looksLikePolarisation,
+        )
+        appendLine("# roll_deg is the measured roll; plot_deg is roll folded to a half turn and doubled")
+        appendLine("elapsed_ms,plot_deg,roll_deg,rssi_dbm")
+        val readings = sweep.readings()
+        val first = readings.firstOrNull()?.atMs ?: 0L
+        readings.forEach {
+            appendLine(
+                String.format(
+                    Locale.US,
+                    "%d,%.1f,%.1f,%d",
+                    it.atMs - first,
+                    it.headingDegrees,
+                    fold(it.headingDegrees / 2f),
+                    it.rssi,
+                ),
+            )
+        }
+    }
+
     fun directPathFraction(depthDb: Double): Double {
         if (depthDb <= 0.0) return 0.0
         val ratio = Math.pow(10.0, -depthDb / 10.0)

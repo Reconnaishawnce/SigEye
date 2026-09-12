@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis
 
+import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -214,4 +215,45 @@ object Spectrum {
     }
 
     fun formatDbm(dbm: Double?): String = dbm?.let { "${it.roundToInt()} dBm" } ?: "quiet"
+
+    /**
+     * The band as measured: every channel, every advertising frequency, every occupant.
+     *
+     * Three sections in one file rather than three files. Someone reading it later wants
+     * to see the occupant that explains the channel load in the same place as the load,
+     * and a spreadsheet skips the hash-commented section headers happily.
+     */
+    fun csv(occupants: List<Occupant>): String = buildString {
+        val band = occupants.filter { it.centreMhz in 2400..2500 }
+        appendLine(
+            "# occupants_24ghz=${band.size} busy_fraction=" +
+                String.format(Locale.US, "%.2f", busyFraction(band)) +
+                " busy_threshold_dbm=$BUSY_DBM",
+        )
+        appendLine("# section=wifi_channels")
+        appendLine("channel,centre_mhz,occupants,load_dbm,strongest_dbm,busy")
+        channels24(band).forEach {
+            appendLine(
+                "${it.channel},${it.centreMhz},${it.occupants}," +
+                    (it.loadDbm?.let { load -> String.format(Locale.US, "%.2f", load) } ?: "") +
+                    ",${it.strongestDbm ?: ""},${it.busy}",
+            )
+        }
+        appendLine("# section=ble_advertising_channels")
+        appendLine("channel,frequency_mhz,occupants,load_dbm,clear")
+        advertChannels(band).forEach {
+            appendLine(
+                "${it.channel},${it.frequencyMhz},${it.occupants}," +
+                    (it.loadDbm?.let { load -> String.format(Locale.US, "%.2f", load) } ?: "") +
+                    ",${it.clear}",
+            )
+        }
+        appendLine("# section=occupants")
+        appendLine("label,centre_mhz,width_mhz,rssi_dbm")
+        band.sortedByDescending { it.rssi }.forEach {
+            appendLine(
+                "${it.label?.replace(',', ' ') ?: ""},${it.centreMhz},${it.widthMhz},${it.rssi}",
+            )
+        }
+    }
 }

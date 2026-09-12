@@ -222,6 +222,48 @@ object DualBand {
      */
     fun meaningful(excessDb: Double?): Boolean = excessDb != null && abs(excessDb) >= 3.0
 
+    /**
+     * Every pair, with the gap here and the gap at the baseline side by side.
+     *
+     * Both are in the file on purpose. The excess is the answer, but it is a subtraction,
+     * and a reader who cannot see what was subtracted has to take the answer on trust.
+     */
+    fun csv(penetrations: List<Penetration>, baselineSet: Boolean): String = buildString {
+        appendLine(
+            "# pairs=${penetrations.size} baseline=" +
+                (if (baselineSet) "set" else "not set") +
+                " typical_excess_db=" +
+                (typicalExcessDb(penetrations)?.let { String.format(Locale.US, "%.2f", it) } ?: ""),
+        )
+        appendLine("# excess_db = gap_db - baseline_gap_db, and is the part the building did")
+        appendLine(
+            "ssid,bssid_24,bssid_5,freq_24_mhz,freq_5_mhz,rssi_24_dbm,rssi_5_dbm," +
+                "gap_db,free_space_gap_db,baseline_gap_db,excess_db,same_hardware,usable_5",
+        )
+        penetrations.forEach { penetration ->
+            val pair = penetration.pair
+            appendLine(
+                String.format(
+                    Locale.US,
+                    "%s,%s,%s,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%b,%b",
+                    pair.ssid?.replace(',', ' ') ?: "",
+                    pair.low.bssid,
+                    pair.high.bssid,
+                    pair.low.frequencyMhz,
+                    pair.high.frequencyMhz,
+                    pair.low.rssi,
+                    pair.high.rssi,
+                    pair.gapDb,
+                    pair.freeSpaceGapDb,
+                    penetration.baselineGapDb?.let { String.format(Locale.US, "%.2f", it) } ?: "",
+                    penetration.excessDb?.let { String.format(Locale.US, "%.2f", it) } ?: "",
+                    pair.sameHardware,
+                    penetration.usable5,
+                ),
+            )
+        }
+    }
+
     fun describe(excessDb: Double?): String = when {
         excessDb == null -> "no baseline yet"
         !meaningful(excessDb) -> "same as the baseline"
