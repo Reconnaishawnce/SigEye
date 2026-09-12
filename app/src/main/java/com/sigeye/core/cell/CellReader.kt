@@ -9,7 +9,10 @@ import android.telephony.CellInfoLte
 import android.telephony.CellInfoNr
 import android.telephony.CellInfoWcdma
 import android.telephony.CellSignalStrengthNr
+import android.telephony.CellIdentityGsm
+import android.telephony.CellIdentityLte
 import android.telephony.CellIdentityNr
+import android.telephony.CellIdentityWcdma
 import android.telephony.TelephonyManager
 import android.util.Log
 
@@ -61,7 +64,7 @@ class CellReader(context: Context) {
         val strength = info.cellSignalStrength
         return CellSample(
             technology = "LTE",
-            operator = operatorOf(id.mccString, id.mncString),
+            operator = operatorOf(mccOf(id), mncOf(id)),
             cellId = id.ci.takeIf { it != Int.MAX_VALUE }?.toLong(),
             areaCode = id.tac.takeIf { it != Int.MAX_VALUE },
             pci = id.pci.takeIf { it != Int.MAX_VALUE },
@@ -77,7 +80,7 @@ class CellReader(context: Context) {
         val id = info.cellIdentity
         return CellSample(
             technology = "WCDMA",
-            operator = operatorOf(id.mccString, id.mncString),
+            operator = operatorOf(mccOf(id), mncOf(id)),
             cellId = id.cid.takeIf { it != Int.MAX_VALUE }?.toLong(),
             areaCode = id.lac.takeIf { it != Int.MAX_VALUE },
             pci = id.psc.takeIf { it != Int.MAX_VALUE },
@@ -93,7 +96,7 @@ class CellReader(context: Context) {
         val id = info.cellIdentity
         return CellSample(
             technology = "GSM",
-            operator = operatorOf(id.mccString, id.mncString),
+            operator = operatorOf(mccOf(id), mncOf(id)),
             cellId = id.cid.takeIf { it != Int.MAX_VALUE }?.toLong(),
             areaCode = id.lac.takeIf { it != Int.MAX_VALUE },
             pci = null,
@@ -124,6 +127,63 @@ class CellReader(context: Context) {
             neighbours = neighbours,
         )
     }
+
+    /**
+     * Network codes, in whichever form this Android version offers.
+     *
+     * The string getters arrived in API 28 and this app supports 26, so on Android 8 they
+     * are not merely absent - calling them throws NoSuchMethodError and takes the whole
+     * experiment down. The integer getters they replaced are deprecated but present all
+     * the way back, and carry the same value with leading zeroes lost, which for a
+     * display string is worth the trade.
+     */
+    @Suppress("DEPRECATION")
+    private fun mccOf(id: CellIdentityLte): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            id.mccString
+        } else {
+            id.mcc.takeIf { it != Int.MAX_VALUE }?.toString()
+        }
+
+    @Suppress("DEPRECATION")
+    private fun mncOf(id: CellIdentityLte): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            id.mncString
+        } else {
+            id.mnc.takeIf { it != Int.MAX_VALUE }?.toString()
+        }
+
+    @Suppress("DEPRECATION")
+    private fun mccOf(id: CellIdentityWcdma): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            id.mccString
+        } else {
+            id.mcc.takeIf { it != Int.MAX_VALUE }?.toString()
+        }
+
+    @Suppress("DEPRECATION")
+    private fun mncOf(id: CellIdentityWcdma): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            id.mncString
+        } else {
+            id.mnc.takeIf { it != Int.MAX_VALUE }?.toString()
+        }
+
+    @Suppress("DEPRECATION")
+    private fun mccOf(id: CellIdentityGsm): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            id.mccString
+        } else {
+            id.mcc.takeIf { it != Int.MAX_VALUE }?.toString()
+        }
+
+    @Suppress("DEPRECATION")
+    private fun mncOf(id: CellIdentityGsm): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            id.mncString
+        } else {
+            id.mnc.takeIf { it != Int.MAX_VALUE }?.toString()
+        }
 
     private fun operatorOf(mcc: String?, mnc: String?): String? =
         if (mcc.isNullOrBlank() || mnc.isNullOrBlank()) null else mcc + mnc
