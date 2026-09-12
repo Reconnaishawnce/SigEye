@@ -65,6 +65,7 @@ object Experiments {
     const val FORENSICS = "forensics"
     const val CONVOY = "convoy"
     const val ROTATION = "rotation"
+    const val DOPPLER = "doppler"
 
     val all: List<Experiment> = listOf(
 
@@ -405,6 +406,40 @@ object Experiments {
         ),
 
         // ----------------------------------------------------------- physics
+        Experiment(
+            id = DOPPLER,
+            title = "Doppler Walk",
+            blurb = "Walk away counting your steps, and measure the number everything guesses.",
+            teaches = "Signal becomes distance through one formula with one unknown - the " +
+                "path loss exponent. Every proximity feature ever shipped guesses it. " +
+                "With a real distance from the step counter it can be measured instead.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.READY,
+            needs = "Something that stays put, a straight line to walk, and ideally a step " +
+                "counter - most phones have one.",
+            howTo = listOf(
+                "Set your stride length. About 0.415 times your height is the usual " +
+                    "estimate, but pacing out a known distance and dividing is better - " +
+                    "an error here goes straight into the answer.",
+                "Pick something fixed and leave it where it is. A beacon, a speaker, a " +
+                    "television.",
+                "Walk steadily away in a straight line. Fifteen metres is plenty.",
+                "Do not turn back before finishing. The fit reads a return trip as the " +
+                    "signal refusing to fall, and says so rather than reporting nonsense.",
+                "Try it again in a corridor, then through a wall. The number moves a long " +
+                    "way, which is the point.",
+            ),
+            reading = "The model is rssi = reference - 10 n log10(distance), so signal " +
+                "against the logarithm of distance is a straight line of slope -10n. Two " +
+                "is free space, three or so is a normal room, four is several walls, and " +
+                "below two means a corridor guiding the wave. Scatter about the line is " +
+                "multipath.",
+            limits = "The distance is only as good as the stride length, and the step " +
+                "counter needs physical activity permission or it returns nothing at all. " +
+                "A walk that curves, or one where the transmitter is not actually fixed, " +
+                "measures something other than path loss. Under a few metres of travel it " +
+                "declines to fit.",
+        ),
         Experiment(
             id = "pathloss",
             title = "Path Loss Exponent",

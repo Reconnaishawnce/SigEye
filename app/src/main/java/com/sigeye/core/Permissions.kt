@@ -20,6 +20,11 @@ object Permissions {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
+        // Doppler Walk's step counter. Not blocking - every other experiment works
+        // without it, and that one falls back to entering the distance by hand.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            add(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
     }.toTypedArray()
 
     /**

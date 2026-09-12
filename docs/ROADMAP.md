@@ -63,7 +63,7 @@ green CI run and a release on GitHub.
       `KeepScreenOn`. Add `ScanService.Mode` entries, a notification per running mode, and
       a way to reattach the UI to a running recording. This is the difference between a
       thing you can demo and a thing you can leave running.
-- [ ] **Doppler Walk.** Use the step counter (`Sensor.TYPE_STEP_COUNTER`) to get true
+- [x] **Doppler Walk.** Use the step counter (`Sensor.TYPE_STEP_COUNTER`) to get true
       distance walked, then solve the log-distance path loss model for the exponent `n`
       from RSSI against real metres. Turns "guess the distance" into a measurement.
 - [ ] **Rotational Polarisation.** Roll the phone about its long axis (gyroscope, not

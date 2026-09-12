@@ -24,6 +24,10 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
+    <!-- Doppler Walk. The step counter returns nothing without this on Android 10+,
+         silently, which is why the screen checks and says so. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
     <!-- Alerts. This is a normal permission, granted at install, and without it
          Vibrator.vibrate() throws a SecurityException that costs nothing to ignore and
          silently does nothing - which is exactly what it did until someone noticed. -->
