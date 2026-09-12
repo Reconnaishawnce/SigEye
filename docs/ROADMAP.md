@@ -73,7 +73,7 @@ green CI run and a release on GitHub.
 - [x] **Channel Congestion.** BLE advertises on channels 37/38/39, which sit in the gaps
       between Wi-Fi 1/6/11. Infer per-channel health from arrival gaps and cross-reference
       the Wi-Fi survey's channel occupancy. Explains *why* a link is bad.
-- [ ] **2.4 versus 5 GHz penetration.** Using `WifiScanHub`, compare how the same access
+- [x] **2.4 versus 5 GHz penetration.** Using `WifiScanHub`, compare how the same access
       point's two bands attenuate through walls. 5 GHz loses far more. Needs a dual-band
       AP broadcasting both.
 - [ ] **Vulnerability Scan.** Flag insecure things nearby. Directly detectable from what is

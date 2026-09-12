@@ -68,6 +68,7 @@ object Experiments {
     const val DOPPLER = "doppler"
     const val POLARISATION = "polarisation"
     const val CONGESTION = "congestion"
+    const val BANDS = "bands"
 
     val all: List<Experiment> = listOf(
 
@@ -513,6 +514,44 @@ object Experiments {
                 "reception is measured per device rather than per channel. Bluetooth " +
                 "Classic, microwaves, video senders and cordless phones are all in this " +
                 "band and none of them appear in a Wi-Fi scan.",
+        ),
+        Experiment(
+            id = BANDS,
+            title = "Wall Penetration",
+            blurb = "Measure how much more the building takes from 5 GHz than from 2.4.",
+            teaches = "Everyone has heard that 5 GHz does not go through walls as well. " +
+                "The two radios of one router already differ before any wall is involved, " +
+                "so the measurement is not the gap - it is how the gap changes when you " +
+                "walk. What is left is the building.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.READY,
+            needs = "A dual-band access point broadcasting on both 2.4 and 5 GHz, which " +
+                "most routers of the last ten years do, and Wi-Fi switched on.",
+            howTo = listOf(
+                "Stand where you can see the router, with nothing between you and it. " +
+                    "Wait for the pairs to settle - three scans each.",
+                "Set the baseline. That records what the two bands look like with no " +
+                    "building in the way, which is everything that is not the answer.",
+                "Walk. Another room, the next floor, the far end of the garden.",
+                "Read the excess. That is how much more the walls took from 5 GHz than " +
+                    "from 2.4 - the one number the phrase everybody repeats actually " +
+                    "refers to.",
+                "Save a spot in each room, and you have surveyed the building.",
+            ),
+            reading = "An antenna's effective area falls with the square of frequency, so " +
+                "5 GHz starts about 6.6 dB down on 2.4 in open air with nothing in the " +
+                "way. On top of that the regulations permit different transmit powers per " +
+                "band, the vendor may have chosen differently again, and the phone's two " +
+                "receive chains are not equally sensitive - all constant, all cancelled by " +
+                "the baseline. Under 3 dB of excess is scan noise; over 10 dB is " +
+                "structural; and a negative number means 2.4 GHz is being interfered with " +
+                "rather than 5 GHz being blocked.",
+            limits = "Pairs are matched by BSSID where two radios differ only in the last " +
+                "octet, which is one box saying so, and otherwise by network name and " +
+                "vendor - which in a building full of mesh nodes can pair two different " +
+                "boxes, and the screen marks those. Android's RSSI is uncalibrated and a " +
+                "single scan wanders several dB, so readings are averaged over several. " +
+                "Moving the baseline invalidates every saved spot, so it clears them.",
         ),
         Experiment(
             id = "pathloss",
