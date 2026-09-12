@@ -69,6 +69,7 @@ object Experiments {
     const val POLARISATION = "polarisation"
     const val CONGESTION = "congestion"
     const val BANDS = "bands"
+    const val VULNERABILITY = "vulnerability"
 
     val all: List<Experiment> = listOf(
 
@@ -788,6 +789,37 @@ object Experiments {
         ),
 
         // ----------------------------------------------------------- privacy
+        Experiment(
+            id = VULNERABILITY,
+            title = "Exposure Scan",
+            blurb = "Insecure and over-sharing things in range, from what they broadcast.",
+            teaches = "Every network and every Bluetooth device describes its own security " +
+                "in the beacons it sends to everyone. WPS, WEP, missing frame protection, " +
+                "a permanent address, a person's name - all of it is readable without " +
+                "connecting to anything.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.READY,
+            needs = "Wi-Fi switched on to scan, which does not require being connected.",
+            howTo = listOf(
+                "Open it and let both scans run. Findings are grouped by device, worst " +
+                    "first.",
+                "Tap a device for what each finding means and what to change.",
+                "Start with your own network and your own devices. Most of what a scan " +
+                    "picks up belongs to neighbours and is not yours to change.",
+                "Use the neighbours as calibration. Once you know how common WPS and " +
+                    "missing frame protection are, your own network stops being a guess.",
+            ),
+            reading = "Critical and high are worth acting on today; medium is a decision " +
+                "worth making deliberately rather than by accident; low is hygiene. A " +
+                "finding marked good is there because getting it right deserves saying " +
+                "so - an open network running OWE is not the same as an open network.",
+            limits = "No CVEs are named. Matching a real vulnerability needs a model and " +
+                "a firmware version and neither is in a beacon, so a scanner that infers " +
+                "one from a vendor name is producing fiction that looks like a finding. " +
+                "Nothing is connected to either: whether a Bluetooth device accepts an " +
+                "unauthenticated connection cannot be established without making one, " +
+                "which is an active act against equipment that is probably not yours.",
+        ),
         Experiment(
             id = EXPLORER,
             title = "Bluetooth Explorer",

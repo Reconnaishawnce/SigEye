@@ -25,6 +25,7 @@ import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.convoy.ConvoyScreen
 import com.sigeye.experiments.discovery.DiscoveryScreen
 import com.sigeye.experiments.bands.BandsScreen
+import com.sigeye.experiments.vulnerability.VulnerabilityScreen
 import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.doppler.DopplerScreen
 import com.sigeye.experiments.polarisation.PolarisationScreen
@@ -170,6 +171,9 @@ private fun SigEyeApp() {
 
             Experiments.BANDS ->
                 BandsScreen(onBack = goBack, modifier = inset)
+
+            Experiments.VULNERABILITY ->
+                VulnerabilityScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = goBack, modifier = inset)

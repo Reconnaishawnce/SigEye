@@ -76,7 +76,7 @@ green CI run and a release on GitHub.
 - [x] **2.4 versus 5 GHz penetration.** Using `WifiScanHub`, compare how the same access
       point's two bands attenuate through walls. 5 GHz loses far more. Needs a dual-band
       AP broadcasting both.
-- [ ] **Vulnerability Scan.** Flag insecure things nearby. Directly detectable from what is
+- [x] **Vulnerability Scan.** Shipped as Exposure Scan. Flag insecure things nearby. Directly detectable from what is
       already collected: WEP, open networks, WPS enabled, WPA1, hidden-but-broadcasting
       networks, BLE devices accepting unauthenticated connections, and unencrypted
       telemetry such as the TPMS sensors. Named CVEs need a model *and* a firmware
