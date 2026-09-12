@@ -1005,14 +1005,17 @@ object Experiments {
     fun byId(id: String): Experiment? = all.firstOrNull { it.id == id }
 
     /**
-     * The handful worth opening first.
+     * What a new install starts with starred.
      *
-     * Twenty-three experiments across five categories is a good library and a bad front
+     * Twenty-seven experiments across five categories is a good library and a bad front
      * door - someone arriving for the first time has no way to tell which of them is the
-     * one that will make them care. These five are the ones that produce a result in under
-     * a minute and that a person would show someone else, so they get to jump the
-     * categories. They still appear in their own section below, because a shortcut that
-     * removes things from where they belong is a maze.
+     * one that will make them care. These five produce a result in under a minute and are
+     * the ones a person would show someone else, so they seed the favourites list.
+     *
+     * Only a starting point. The list belongs to the user from the first tap of a star,
+     * and is never re-seeded afterwards - see [FavouriteStore]. Starred experiments still
+     * appear in their own categories below, because a shortcut that removes things from
+     * where they belong is a maze.
      */
     val featuredIds: List<String> = listOf(ROTATION, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
 
@@ -1024,10 +1027,6 @@ object Experiments {
         FORENSICS to "Record a place, then go through what was there afterwards.",
         DISCOVERY to "Learn what is normally here, then watch for what is not.",
     )
-
-    fun featured(): List<Experiment> =
-        featuredIds.mapNotNull { id -> byId(id) }
-            .filter { it.status == Experiment.Status.READY }
 
     fun byCategory(): List<Pair<Experiment.Category, List<Experiment>>> =
         Experiment.Category.entries

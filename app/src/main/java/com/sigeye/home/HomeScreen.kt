@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CheckLevel
 import com.sigeye.core.Experiment
 import com.sigeye.core.Experiments
+import com.sigeye.core.FavouriteStore
 import com.sigeye.core.Preflight
 import com.sigeye.core.ScanService
 import com.sigeye.core.ble.BleScanHub
@@ -43,6 +44,15 @@ import java.util.Locale
 
 @Composable
 fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val store = remember { FavouriteStore.get(context) }
+    val favouriteIds by store.ids.collectAsStateWithLifecycle()
+    var arranging by remember { mutableStateOf(false) }
+
+    val favourites = remember(favouriteIds) {
+        favouriteIds.mapNotNull { Experiments.byId(it) }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -72,7 +82,13 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         PreflightCard()
         Spacer(Modifier.height(14.dp))
 
-        Featured(onOpen)
+        FavouritesSection(
+            favourites = favourites,
+            editing = arranging,
+            store = store,
+            onEditToggle = { arranging = !arranging },
+            onOpen = onOpen,
+        )
 
         Experiments.byCategory().forEach { (category, experiments) ->
             Text(
@@ -90,6 +106,8 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             experiments.forEach { experiment ->
                 ExperimentCard(
                     experiment = experiment,
+                    favourite = favouriteIds.contains(experiment.id),
+                    onToggleFavourite = { store.toggle(experiment.id) },
                     onClick = {
                         if (experiment.status == Experiment.Status.READY) onOpen(experiment.id)
                     },
@@ -109,45 +127,68 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
 }
 
 /**
- * The front door.
+ * The front door: the user's own shortlist, in the user's own order.
  *
- * A categorised list of twenty-three experiments is a good library and a bad first
- * impression: everything is equally weighted, so nothing is. These five produce a result
- * quickly and are the ones worth showing someone else, and they are deliberately drawn in
- * a different shape from the list below so it reads as a recommendation rather than as
- * another category that happens to be at the top.
+ * A categorised list of twenty-seven experiments is a good library and a bad first
+ * impression, because everything is equally weighted and so nothing is. This starts
+ * pre-filled with the recommended set - an empty shelf on first launch would be worse than
+ * a guess - and from then on it is the user's. Starring is on every card everywhere, and
+ * the arrows only appear once the header's edit toggle is on, so the common case stays a
+ * list of cards rather than a list of controls.
  */
 @Composable
-private fun Featured(onOpen: (String) -> Unit) {
-    val featured = Experiments.featured()
-    if (featured.isEmpty()) return
-
-    Text(
-        text = "Featured",
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Bold,
-    )
-    Text(
-        text = "Start here. Each of these gives you something in about a minute.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun FavouritesSection(
+    favourites: List<Experiment>,
+    editing: Boolean,
+    store: FavouriteStore,
+    onEditToggle: () -> Unit,
+    onOpen: (String) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text = "Favourites",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = if (favourites.isEmpty()) {
+                    "Star anything below to put it up here."
+                } else if (editing) {
+                    "Move them about, or tap a star to remove one."
+                } else {
+                    "Start here. Yours to rearrange."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (favourites.isNotEmpty() || editing) {
+            TextButton(onClick = onEditToggle) {
+                Text(if (editing) "Done" else "Arrange")
+            }
+        }
+    }
     Spacer(Modifier.height(10.dp))
 
-    featured.forEach { experiment ->
+    favourites.forEach { experiment ->
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onOpen(experiment.id) },
+                .clickable(enabled = !editing) { onOpen(experiment.id) },
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
             ),
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(14.dp),
+                Modifier.fillMaxWidth().padding(start = 14.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                     Text(
                         text = experiment.title,
                         style = MaterialTheme.typography.titleMedium,
@@ -161,16 +202,69 @@ private fun Featured(onOpen: (String) -> Unit) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
-                Text(
-                    text = "›",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                if (editing) {
+                    // Enabled from the list actually on screen rather than from the store,
+                    // so the arrow a thumb is over always matches what it can see.
+                    Glyph(
+                        text = "▲",
+                        enabled = favourites.first().id != experiment.id,
+                        colour = MaterialTheme.colorScheme.onPrimaryContainer,
+                        description = "Move ${experiment.title} up",
+                    ) { store.moveUp(experiment.id) }
+                    Glyph(
+                        text = "▼",
+                        enabled = favourites.last().id != experiment.id,
+                        colour = MaterialTheme.colorScheme.onPrimaryContainer,
+                        description = "Move ${experiment.title} down",
+                    ) { store.moveDown(experiment.id) }
+                }
+                Glyph(
+                    text = "★",
+                    colour = MaterialTheme.colorScheme.onPrimaryContainer,
+                    description = "Remove ${experiment.title} from favourites",
+                ) { store.toggle(experiment.id) }
+                if (!editing) {
+                    Text(
+                        text = "›",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(end = 14.dp),
+                    )
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
     }
+
+    if (editing && favourites.isNotEmpty()) {
+        TextButton(onClick = { store.reset() }) { Text("Back to the recommended set") }
+    }
     Spacer(Modifier.height(16.dp))
+}
+
+/**
+ * A tappable character.
+ *
+ * Text rather than an icon: the app pulls in no icon library, and a star and two arrows
+ * are three glyphs every font already has. The touch target is padded out to something a
+ * thumb can hit, which is the part that actually matters.
+ */
+@Composable
+private fun Glyph(
+    text: String,
+    colour: Color,
+    description: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = if (enabled) colour else colour.copy(alpha = 0.25f),
+        modifier = Modifier
+            .clickable(enabled = enabled, onClickLabel = description, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+    )
 }
 
 /**
@@ -357,7 +451,12 @@ private fun PreflightCard() {
 }
 
 @Composable
-private fun ExperimentCard(experiment: Experiment, onClick: () -> Unit) {
+private fun ExperimentCard(
+    experiment: Experiment,
+    favourite: Boolean,
+    onToggleFavourite: () -> Unit,
+    onClick: () -> Unit,
+) {
     val ready = experiment.status == Experiment.Status.READY
     Card(
         modifier = Modifier
@@ -384,7 +483,24 @@ private fun ExperimentCard(experiment: Experiment, onClick: () -> Unit) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
-                if (!ready) {
+                if (ready) {
+                    // Hollow when it is not a favourite, so the row of cards reads as
+                    // cards rather than as a column of controls.
+                    Glyph(
+                        text = if (favourite) "★" else "☆",
+                        colour = if (favourite) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        description = if (favourite) {
+                            "Remove ${experiment.title} from favourites"
+                        } else {
+                            "Add ${experiment.title} to favourites"
+                        },
+                        onClick = onToggleFavourite,
+                    )
+                } else {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,

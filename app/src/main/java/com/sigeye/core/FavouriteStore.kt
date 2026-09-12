@@ -1,0 +1,79 @@
+package com.sigeye.core
+
+import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * The user's starred experiments, in their order, kept between launches.
+ *
+ * Seeded once with the recommended set, and then never seeded again. The flag matters: a
+ * person who deliberately unstars everything has said they want an unadorned list, and
+ * refilling it on the next launch would read as the app arguing with them.
+ */
+class FavouriteStore private constructor(context: Context) {
+
+    private val prefs = context.applicationContext
+        .getSharedPreferences("favourites", Context.MODE_PRIVATE)
+
+    private val _ids = MutableStateFlow(load())
+
+    /** Starred experiment ids, in the order they should appear. */
+    val ids: StateFlow<List<String>> = _ids
+
+    fun isFavourite(id: String): Boolean = _ids.value.contains(id)
+
+    fun toggle(id: String) = update(Favourites.toggle(_ids.value, id))
+
+    fun moveUp(id: String) = update(Favourites.moveUp(_ids.value, id))
+
+    fun moveDown(id: String) = update(Favourites.moveDown(_ids.value, id))
+
+    /** Puts the recommended set back, for someone who has arranged themselves into a corner. */
+    fun reset() = update(Favourites.seed(Experiments.featuredIds, knownIds()))
+
+    private fun update(next: List<String>) {
+        _ids.value = next
+        prefs.edit()
+            .putString(KEY_IDS, next.joinToString(SEPARATOR))
+            .putBoolean(KEY_SEEDED, true)
+            .apply()
+    }
+
+    private fun load(): List<String> {
+        val known = knownIds()
+        if (!prefs.getBoolean(KEY_SEEDED, false)) {
+            val seeded = Favourites.seed(Experiments.featuredIds, known)
+            prefs.edit()
+                .putString(KEY_IDS, seeded.joinToString(SEPARATOR))
+                .putBoolean(KEY_SEEDED, true)
+                .apply()
+            return seeded
+        }
+        val stored = prefs.getString(KEY_IDS, null)
+            ?.split(SEPARATOR)
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        return Favourites.sanitise(stored, known)
+    }
+
+    private fun knownIds(): Set<String> = Experiments.all
+        .filter { it.status == Experiment.Status.READY }
+        .map { it.id }
+        .toSet()
+
+    companion object {
+        private const val KEY_IDS = "ids"
+        private const val KEY_SEEDED = "seeded"
+        /** Ids are lowercase words, so a comma cannot appear inside one. */
+        private const val SEPARATOR = ","
+
+        @Volatile
+        private var instance: FavouriteStore? = null
+
+        fun get(context: Context): FavouriteStore =
+            instance ?: synchronized(this) {
+                instance ?: FavouriteStore(context).also { instance = it }
+            }
+    }
+}
