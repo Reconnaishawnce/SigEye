@@ -124,7 +124,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
                     favourite = favouriteIds.contains(experiment.id),
                     onToggleFavourite = { store.toggle(experiment.id) },
                     onClick = {
-                        if (experiment.status == Experiment.Status.READY) onOpen(experiment.id)
+                        if (experiment.status.openable) onOpen(experiment.id)
                     },
                 )
                 Spacer(Modifier.height(10.dp))
@@ -535,7 +535,7 @@ private fun ExperimentCard(
     onToggleFavourite: () -> Unit,
     onClick: () -> Unit,
 ) {
-    val ready = experiment.status == Experiment.Status.READY
+    val ready = experiment.status.openable
     Card(
         modifier = Modifier
             .fillMaxWidth()

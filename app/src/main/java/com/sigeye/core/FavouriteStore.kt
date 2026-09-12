@@ -58,7 +58,7 @@ class FavouriteStore private constructor(context: Context) {
     }
 
     private fun knownIds(): Set<String> = Experiments.all
-        .filter { it.status == Experiment.Status.READY }
+        .filter { it.status.openable }
         .map { it.id }
         .toSet()
 

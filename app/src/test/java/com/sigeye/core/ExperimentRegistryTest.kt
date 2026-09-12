@@ -14,7 +14,7 @@ import org.junit.Test
  */
 class ExperimentRegistryTest {
 
-    private val ready = Experiments.all.filter { it.status == Experiment.Status.READY }
+    private val ready = Experiments.all.filter { it.status.openable }
 
     @Test
     fun `ids are unique, so one experiment cannot shadow another`() {
@@ -42,7 +42,7 @@ class ExperimentRegistryTest {
         Experiments.featuredIds.forEach { id ->
             val experiment = Experiments.byId(id)
             assertNotNull("seeded favourite $id does not exist", experiment)
-            assertEquals(Experiment.Status.READY, experiment!!.status)
+            assertTrue("seeded favourite $id is not openable", experiment!!.status.openable)
         }
     }
 

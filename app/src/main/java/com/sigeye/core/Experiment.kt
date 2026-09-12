@@ -24,7 +24,29 @@ data class Experiment(
     /** The honest limits. Shown in red, because this is the part that gets skipped. */
     val limits: String? = null,
 ) {
-    enum class Status { READY, PLANNED }
+    /**
+     * How much this experiment has been put through.
+     *
+     * The distinction that matters is not "finished or not" but "has anyone actually run
+     * this on a phone". An experiment can be complete, tested, lint-clean and still wrong,
+     * because a unit test cannot tell you whether a sensor reads the axis its documentation
+     * claims. Saying so on the card is more honest than shipping everything as equal and
+     * letting the user find out.
+     */
+    enum class Status(val label: String, val badge: String?) {
+        /** Run on real hardware, in the real world, and behaved. */
+        ACTIVE("Active", null),
+
+        /** Complete and tested, but never yet run anywhere but a build server. */
+        BETA("Beta", "beta"),
+
+        /** Described, wanted, not built. */
+        DEVELOPMENT("In development", "soon"),
+        ;
+
+        /** Whether tapping it opens anything. */
+        val openable: Boolean get() = this != DEVELOPMENT
+    }
 
     enum class Category(val label: String, val blurb: String) {
         TOOLS("Tools", "See and name what is around you."),
@@ -85,7 +107,7 @@ object Experiments {
                 "stranger. This follows it across, and refuses loudly whenever it cannot " +
                 "be certain.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "At least one named device on a list, made in Device Inspector. " +
                 "Something has to be scanning: this is a passenger, never a scan of its " +
                 "own.",
@@ -120,7 +142,7 @@ object Experiments {
             teaches = "Who made it, what it is saying, how close it is. Name devices and " +
                 "group them into lists that other experiments can use.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Let the list fill for a few seconds.",
                 "Tap Pause to freeze it, then tap any device to open its " +
@@ -144,7 +166,7 @@ object Experiments {
                 "them. Almost every useful question is about change rather than presence - " +
                 "what arrived, what left, what got closer since last time.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "Somewhere to stand still for half a minute while it learns the room.",
             howTo = listOf(
                 "Stand where you mean to watch from and start the baseline. Everything " +
@@ -179,7 +201,7 @@ object Experiments {
                 "for direction. Filter to a watchlist or a list of your own to hunt for " +
                 "one kind of thing.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Pick a filter: everything, your watchlist, flagged vendors, or " +
                     "one of your lists.",
@@ -202,7 +224,7 @@ object Experiments {
                 "rather than living in any of them. The idea is simple; being honest " +
                 "about how weak it is takes most of the work.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "Genuinely different places, and enough time between them. File your " +
                 "own devices under a list called Mine first.",
             howTo = listOf(
@@ -234,7 +256,7 @@ object Experiments {
             teaches = "Which identifiers survive address randomisation and which do not. " +
                 "Manufacturer prefixes and service data outlive a rotating MAC.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Turn on Watching to run in the background, with the screen " +
                     "off.",
@@ -260,7 +282,7 @@ object Experiments {
             teaches = "A passing train is a hundred phones crossing your radio horizon at " +
                 "once. That shows up as a spike in previously unseen addresses.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Put the phone where it will live - a windowsill facing the " +
                     "tracks beats the next room by a wide margin.",
@@ -285,7 +307,7 @@ object Experiments {
                 "from the track is a right-angled triangle - so the length of track " +
                 "between the two crossings falls out, and time gives speed.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A known perpendicular distance to the road or track.",
             howTo = listOf(
                 "Measure or pace the distance from where the phone sits to the middle of " +
@@ -310,7 +332,7 @@ object Experiments {
             teaches = "Devices are a proxy for people, and a bad one until calibrated " +
                 "against a headcount you actually know.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Set the signal floor to define what counts as here - around " +
                     "-70 dBm is a room, -85 is a building.",
@@ -333,7 +355,7 @@ object Experiments {
                 "about is indistinguishable in the moment. Recording first and filtering " +
                 "afterwards turns an impossible live problem into an easy review.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "Somewhere with traffic, and a few minutes.",
             howTo = listOf(
                 "Start recording and leave it for as long as the thing you are after " +
@@ -363,7 +385,7 @@ object Experiments {
                 "over twenty is a fixture - and only the fixtures are trustworthy, " +
                 "because a phone changes address before it can become one.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Leave it running for at least twenty minutes - the classes " +
                     "need time to separate.",
@@ -386,7 +408,7 @@ object Experiments {
                 "and cancel at the receiver. The signal becomes unstable long before it " +
                 "becomes weak, which is why this watches steadiness rather than strength.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A few Bluetooth devices sitting still nearby to use as links.",
             howTo = listOf(
                 "Put the phone down where it will stay, somewhere with a television, " +
@@ -416,7 +438,7 @@ object Experiments {
                 "nothing alike over an afternoon. A car park is flat and full overnight; " +
                 "a corridor is spiky and empty. The shape is the fingerprint.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A few hours, and a charger. The screen has to stay open.",
             howTo = listOf(
                 "Choose a slice length. Ten minutes over four hours gives twenty-four " +
@@ -445,7 +467,7 @@ object Experiments {
             teaches = "Commute peaks, quiet Sundays, the pub emptying. Long-run logging " +
                 "turns noise into a schedule.",
             category = Experiment.Category.SENSING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.DEVELOPMENT,
         ),
 
         // ----------------------------------------------------------- physics
@@ -457,7 +479,7 @@ object Experiments {
                 "path loss exponent. Every proximity feature ever shipped guesses it. " +
                 "With a real distance from the step counter it can be measured instead.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "Something that stays put, a straight line to walk, and ideally a step " +
                 "counter - most phones have one.",
             howTo = listOf(
@@ -492,7 +514,7 @@ object Experiments {
                 "of the wrist, and the depth of that null says how much of the signal " +
                 "reached you without bouncing off anything.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "One chatty transmitter a few metres away, and an accelerometer - " +
                 "which every phone has. No compass, so nothing to calibrate.",
             howTo = listOf(
@@ -527,7 +549,7 @@ object Experiments {
                 "Wi-Fi 1, 6 and 11. An access point parked anywhere else lands on them, " +
                 "and the packets stop arriving. This shows both halves at once.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "Wi-Fi switched on - being connected is not required, being enabled " +
                 "is. Scan throttling off helps the chart keep up.",
             howTo = listOf(
@@ -564,7 +586,7 @@ object Experiments {
                 "so the measurement is not the gap - it is how the gap changes when you " +
                 "walk. What is left is the building.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "A dual-band access point broadcasting on both 2.4 and 5 GHz, which " +
                 "most routers of the last ten years do, and Wi-Fi switched on.",
             howTo = listOf(
@@ -600,7 +622,7 @@ object Experiments {
             teaches = "Reflections add and cancel, so signal swings several dB with " +
                 "nothing moving. This is why signal strength is a poor ruler.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "One transmitter that advertises often - a few packets a second. " +
                 "Earbuds, a fitness band or a beacon are ideal; a sensor that speaks once " +
                 "a minute is not.",
@@ -634,7 +656,7 @@ object Experiments {
                 "when your torso sits between the phone and the source. Several dB of it " +
                 "is a body; much more means a wall joined in.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A compass. Most phones have one, but it must be calibrated.",
             howTo = listOf(
                 "Pick a chatty source. The list shows how many packets a second " +
@@ -664,7 +686,7 @@ object Experiments {
                 "bytes of its address name whoever registered the block. Hidden networks " +
                 "are still perfectly visible - hiding the name hides nothing else.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "Wi-Fi switched on, or Wi-Fi scanning enabled in location settings.",
             howTo = listOf(
                 "Open it and leave it. A scan is requested every ten seconds.",
@@ -692,7 +714,7 @@ object Experiments {
             teaches = "Shielding, apertures, and why the seams matter more than the metal. " +
                 "A gap far smaller than the wavelength still leaks, and 2.4 GHz is 12 cm.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A small Bluetooth device you can put inside something, and something " +
                 "to put it in.",
             howTo = listOf(
@@ -720,7 +742,7 @@ object Experiments {
                 "the band Bluetooth uses. Measure how many advertisements survive with " +
                 "it off, then with it on.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A microwave oven, and something to heat in it.",
             howTo = listOf(
                 "Stand near the microwave with a Bluetooth device in the room, " +
@@ -744,7 +766,7 @@ object Experiments {
             teaches = "802.11mc measures time of flight in centimetres. Put it beside an " +
                 "RSSI estimate and the gap is the whole lesson.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.DEVELOPMENT,
             needs = "802.11mc support on both this phone and the access point.",
         ),
         Experiment(
@@ -754,7 +776,7 @@ object Experiments {
             teaches = "Step the transmit power and the received signal tracks it one for " +
                 "one. The calibration rig for every other experiment here.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.DEVELOPMENT,
             needs = "A second Android device running SigEye.",
         ),
 
@@ -765,7 +787,7 @@ object Experiments {
             blurb = "Walk the building, find where the signal dies.",
             teaches = "Where the router should actually go, and how much one wall costs.",
             category = Experiment.Category.MAPPING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.DEVELOPMENT,
         ),
         Experiment(
             id = "route",
@@ -774,7 +796,7 @@ object Experiments {
             teaches = "Tunnels, stations, dead zones and platform geometry, plotted " +
                 "against a GPS track.",
             category = Experiment.Category.MAPPING,
-            status = Experiment.Status.PLANNED,
+            status = Experiment.Status.DEVELOPMENT,
         ),
         Experiment(
             id = CELLS,
@@ -784,7 +806,7 @@ object Experiments {
                 "minute or two, and a handover taken while signal was still strong is " +
                 "load balancing rather than lost coverage.",
             category = Experiment.Category.MAPPING,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "A SIM. Nothing to read in aeroplane mode.",
             howTo = listOf(
                 "Open it and leave it while you travel.",
@@ -811,7 +833,7 @@ object Experiments {
                 "to an hour, it runs from the last change rather than from a clock, and " +
                 "that free-running offset is an identifier every rotation preserves.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "A room with people in it. A cafe, a train, an office - somewhere with " +
                 "more than a handful of phones, and time to sit still.",
             howTo = listOf(
@@ -852,7 +874,7 @@ object Experiments {
                 "a permanent address, a person's name - all of it is readable without " +
                 "connecting to anything.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.BETA,
             needs = "Wi-Fi switched on to scan, which does not require being connected.",
             howTo = listOf(
                 "Open it and let both scans run. Findings are grouped by device, worst " +
@@ -883,7 +905,7 @@ object Experiments {
                 "people expect - names, makers, model and serial numbers, firmware " +
                 "versions - with no pairing at all.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "Something you own, or have permission to poke at. This is the only " +
                 "experiment here that transmits.",
             howTo = listOf(
@@ -915,7 +937,7 @@ object Experiments {
             teaches = "iBeacon, Eddystone, AltBeacon and Apple's Continuity messages are " +
                 "structured data, not blobs. Decoded, they name themselves.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             howTo = listOf(
                 "Let it listen. Anything speaking a known format appears.",
                 "Use the protocol chips to isolate one format.",
@@ -938,7 +960,7 @@ object Experiments {
                 "firmware, which the privacy scheme never touches. That is the gap, and " +
                 "this is how wide it actually is.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.READY,
+            status = Experiment.Status.ACTIVE,
             needs = "Your own phone, and somewhere you can carry it out of range and back.",
             howTo = listOf(
                 "Pick your own phone from the list. A randomised address is the point - a " +
