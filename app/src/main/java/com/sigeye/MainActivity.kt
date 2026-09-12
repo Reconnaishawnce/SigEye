@@ -45,6 +45,7 @@ import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.rotation.RotationScreen
 import com.sigeye.experiments.rotationlab.RotationLabScreen
+import com.sigeye.experiments.settings.SettingsScreen
 import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
@@ -80,6 +81,9 @@ class MainActivity : ComponentActivity() {
  * Locate needs, and only ever an address.
  */
 private const val LOCATE_PREFIX = "locate:"
+
+/** Not an experiment, so it is routed by a reserved id rather than through the registry. */
+private const val SETTINGS = "settings"
 
 @Composable
 private fun SigEyeApp() {
@@ -187,6 +191,9 @@ private fun SigEyeApp() {
 
             Experiments.ROTATION_LAB ->
                 RotationLabScreen(onBack = goBack, modifier = inset)
+
+            SETTINGS ->
+                SettingsScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = goBack, modifier = inset)

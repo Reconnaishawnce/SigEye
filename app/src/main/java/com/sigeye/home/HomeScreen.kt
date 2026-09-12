@@ -83,7 +83,9 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "${Experiments.readyCount} ready · ${Experiments.all.size} planned in total",
+            text = "${Experiments.count(Experiment.Status.ACTIVE)} active · " +
+                "${Experiments.count(Experiment.Status.BETA)} in beta · " +
+                "${Experiments.count(Experiment.Status.DEVELOPMENT)} in development",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -137,6 +139,8 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = { onOpen("settings") }) { Text("Settings") }
         Spacer(Modifier.height(32.dp))
     }
 }
@@ -561,6 +565,30 @@ private fun ExperimentCard(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
+                experiment.status.badge?.let { badge ->
+                    // Beta and in-development both get a badge, in different weights: one
+                    // says "this might be wrong", the other says "this does not exist".
+                    val beta = experiment.status == Experiment.Status.BETA
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (beta) {
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ) {
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (beta) {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
                 if (ready) {
                     // Hollow when it is not a favourite, so the row of cards reads as
                     // cards rather than as a column of controls.
@@ -578,18 +606,6 @@ private fun ExperimentCard(
                         },
                         onClick = onToggleFavourite,
                     )
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                    ) {
-                        Text(
-                            "soon",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -598,9 +614,9 @@ private fun ExperimentCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // Planned entries get the "why" too - the roadmap should be readable, not a
-            // row of teasers.
-            if (!ready) {
+            // In-development entries get the "why" too - the wish list should be
+            // readable, not a row of teasers.
+            if (experiment.status == Experiment.Status.DEVELOPMENT) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = experiment.teaches,

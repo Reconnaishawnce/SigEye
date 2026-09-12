@@ -42,6 +42,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.SettingsStore
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.DwellClass
 import com.sigeye.core.analysis.PopulationConfig
@@ -122,7 +123,12 @@ private fun Live(dwell: Boolean) {
 
     var snapshot by remember { mutableStateOf<PopulationSnapshot?>(null) }
     var rssiFloor by remember { mutableStateOf(-85f) }
-    var perPerson by remember { mutableStateOf(2.0f) }
+    // Seeded from the surroundings profile in Settings rather than a flat 2.0. It is a
+    // starting point and stays a slider - the profile is a guess about where you are, and
+    // a headcount you actually know beats it.
+    var perPerson by remember {
+        mutableStateOf(SettingsStore.get(context).tuning.devicesPerPerson.toFloat())
+    }
     var showSettings by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<String?>(null) }
     var showNewList by remember { mutableStateOf(false) }

@@ -43,6 +43,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
+import com.sigeye.core.SettingsStore
 import com.sigeye.core.SnapshotStore
 import com.sigeye.core.analysis.Arrival
 import com.sigeye.core.analysis.DiscoveryEngine
@@ -115,7 +116,13 @@ private fun Live() {
 
     var tab by remember { mutableStateOf(Tab.WATCH) }
     var stage by remember { mutableStateOf(DiscoveryStage.IDLE) }
-    var baselineSeconds by remember { mutableStateOf(30f) }
+    // Thirty seconds suits a suburban street and is far too short on a concourse, where
+    // slow beacons are still arriving for the first time two minutes in and would be
+    // announced as arrivals afterwards. Seeded from the surroundings profile; still a
+    // slider, because the profile is a guess and the user may know better.
+    var baselineSeconds by remember {
+        mutableStateOf(SettingsStore.get(context).tuning.baselineSeconds.toFloat())
+    }
     var progress by remember { mutableStateOf(0f) }
     var arrivals by remember { mutableStateOf<List<Arrival>>(emptyList()) }
     var baselineSize by remember { mutableStateOf(0) }

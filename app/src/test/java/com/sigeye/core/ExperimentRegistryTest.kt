@@ -2,6 +2,7 @@ package com.sigeye.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,5 +67,49 @@ class ExperimentRegistryTest {
     @Test
     fun `the ready count matches the registry`() {
         assertEquals(ready.size, Experiments.readyCount)
+    }
+
+    // ------------------------------------------------------------------------ tiers
+
+    @Test
+    fun `every experiment sits in exactly one tier and they add up`() {
+        val total = Experiment.Status.entries.sumOf { Experiments.count(it) }
+        assertEquals(Experiments.all.size, total)
+    }
+
+    @Test
+    fun `only in-development experiments refuse to open`() {
+        Experiments.all.forEach { experiment ->
+            assertEquals(
+                experiment.id,
+                experiment.status != Experiment.Status.DEVELOPMENT,
+                experiment.status.openable,
+            )
+        }
+    }
+
+    @Test
+    fun `active experiments wear no badge and the other two do`() {
+        // The badge is the whole point of the tier on a card: active is the unremarkable
+        // case and should look like it.
+        assertNull(Experiment.Status.ACTIVE.badge)
+        assertNotNull(Experiment.Status.BETA.badge)
+        assertNotNull(Experiment.Status.DEVELOPMENT.badge)
+    }
+
+    @Test
+    fun `a category lists its proven experiments before its unproven ones`() {
+        Experiments.byCategory().forEach { (category, experiments) ->
+            val tiers = experiments.map { it.status.ordinal }
+            assertEquals(category.label, tiers.sorted(), tiers)
+        }
+    }
+
+    @Test
+    fun `nothing in development is seeded as a favourite`() {
+        Experiments.featuredIds.forEach { id ->
+            val experiment = Experiments.byId(id)!!
+            assertTrue("$id is not built", experiment.status.openable)
+        }
     }
 }

@@ -1045,10 +1045,25 @@ object Experiments {
         CELLS to "See how often your phone hands you to a different tower.",
     )
 
+    /**
+     * Each category's experiments, proven ones first.
+     *
+     * Tier orders within a category rather than replacing it. Someone looking for the
+     * microwave experiment is thinking about what it does, not about how well tested it
+     * is - so the categories stay, and the tier decides where a card sits inside one and
+     * what badge it carries.
+     */
     fun byCategory(): List<Pair<Experiment.Category, List<Experiment>>> =
         Experiment.Category.entries
-            .map { category -> category to all.filter { it.category == category } }
+            .map { category ->
+                category to all
+                    .filter { it.category == category }
+                    .sortedBy { it.status.ordinal }
+            }
             .filter { it.second.isNotEmpty() }
 
-    val readyCount: Int get() = all.count { it.status == Experiment.Status.READY }
+    fun count(status: Experiment.Status): Int = all.count { it.status == status }
+
+    /** Everything that opens: active and beta together. */
+    val readyCount: Int get() = all.count { it.status.openable }
 }

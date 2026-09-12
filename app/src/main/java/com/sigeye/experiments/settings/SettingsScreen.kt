@@ -1,0 +1,349 @@
+package com.sigeye.experiments.settings
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.DeviceBook
+import com.sigeye.core.IgnoreList
+import com.sigeye.core.SettingsStore
+import com.sigeye.core.Vendors
+import com.sigeye.core.analysis.Density
+import com.sigeye.core.analysis.Environment
+import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.BackupWarning
+import com.sigeye.ui.Field
+import com.sigeye.ui.Section
+import kotlinx.coroutines.delay
+import java.util.Locale
+
+private const val HUB_TAG = "settings-detect"
+
+@Composable
+fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val settings = remember { SettingsStore.get(context) }
+    val ignore = remember { IgnoreList.get(context) }
+    val book = remember { DeviceBook.get(context) }
+
+    val density by settings.density.collectAsStateWithLifecycle()
+    val detected by settings.detected.collectAsStateWithLifecycle()
+    val muted by ignore.addresses.collectAsStateWithLifecycle()
+    val notes by book.notes.collectAsStateWithLifecycle()
+    val lists by book.lists.collectAsStateWithLifecycle()
+
+    var showBackup by remember { mutableStateOf(false) }
+
+    if (showBackup) {
+        BackupWarning(onDismiss = { showBackup = false })
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onBack) { Text("← All experiments") }
+        Text(
+            "Settings",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "What applies everywhere. Anything that belongs to one experiment lives on " +
+                "that experiment's screen, next to the reading it changes.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(16.dp))
+        DensitySection(
+            density = density,
+            detected = detected,
+            onChoose = { settings.setDensity(it, detected = false) },
+            onDetect = { settings.setDensity(it, detected = true) },
+        )
+
+        Spacer(Modifier.height(16.dp))
+        Text("Muted devices", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "Dropped before they are counted, in every experiment. Your own earbuds, the " +
+                "fridge, the beacon in the ceiling. Muting happens in Device Inspector.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (muted.isEmpty()) {
+            Text(
+                "Nothing is muted.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            muted.sorted().forEach { address ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            book.nicknameOf(address)
+                                ?: Vendors.byAddress(address)
+                                ?: "Unnamed",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            address,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { ignore.remove(address) }) { Text("Unmute") }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Lists", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "Made in Device Inspector and used by Signal Watch, Persistent Tracking and " +
+                "anything else that needs to know which devices you care about.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (lists.isEmpty()) {
+            Text(
+                "No lists yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            lists.forEach { list ->
+                val count = notes.values.count { it.lists.contains(list) }
+                Field(list, "$count device${if (count == 1) "" else "s"}")
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Section(
+            title = "What leaves this phone",
+            summary = "Names and settings go to Google backup. Recordings do not.",
+            emphasis = true,
+        ) {
+            Text(
+                "This app records what devices around you are broadcasting, including " +
+                    "things that identify them and where they were. All of it stays on " +
+                    "this phone, apart from the names and settings Android's backup " +
+                    "copies to your Google account.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { showBackup = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Read the whole thing again")
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Section(
+            title = "Where the rest of the settings are",
+            summary = "On the experiment they belong to.",
+        ) {
+            Text(
+                "A stride length means nothing outside Doppler Walk, and a burst threshold " +
+                    "means nothing outside Train Spotter. Putting them in a list here would " +
+                    "separate every number from the reading it changes, which is the one " +
+                    "thing that makes it possible to tell whether changing it helped.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+// --------------------------------------------------------------------------- density
+
+@Composable
+private fun DensitySection(
+    density: Density,
+    detected: Boolean,
+    onChoose: (Density) -> Unit,
+    onDetect: (Density) -> Unit,
+) {
+    val context = LocalContext.current
+    var listening by remember { mutableStateOf(false) }
+    var heard by remember { mutableStateOf(0) }
+    var elapsed by remember { mutableStateOf(0L) }
+    var verdict by remember { mutableStateOf<Density?>(null) }
+    val seen = remember { mutableSetOf<String>() }
+
+    if (listening) {
+        DisposableEffect(Unit) {
+            BleScanHub.init(context)
+            BleScanHub.acquire(HUB_TAG)
+            onDispose { BleScanHub.release(HUB_TAG) }
+        }
+        LaunchedEffect(Unit) {
+            seen.clear()
+            heard = 0
+            verdict = null
+            val startedAt = System.currentTimeMillis()
+            BleScanHub.adverts.collect { advert ->
+                if (seen.add(advert.address)) heard = seen.size
+                elapsed = System.currentTimeMillis() - startedAt
+            }
+        }
+        LaunchedEffect(Unit) {
+            val startedAt = System.currentTimeMillis()
+            while (true) {
+                delay(500)
+                elapsed = System.currentTimeMillis() - startedAt
+                if (elapsed >= Environment.MINIMUM_SAMPLE_MS) {
+                    verdict = Environment.detect(seen.size, elapsed)
+                    listening = false
+                    verdict?.let(onDetect)
+                    break
+                }
+            }
+        }
+    }
+
+    Text("Surroundings", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    Text(
+        "How busy the app should assume it is here. This changes how long several " +
+            "experiments wait before they are willing to say something - not what they " +
+            "measure. No dB threshold, no path loss term and no specification constant is " +
+            "touched by it.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(10.dp))
+
+    Density.entries.forEach { option ->
+        val chosen = option == density
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp)
+                .clickable { onChoose(option) },
+            colors = CardDefaults.cardColors(
+                containerColor = if (chosen) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+            ),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        option.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
+                    )
+                    if (chosen) {
+                        Text(
+                            if (detected) "measured" else "chosen",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
+                Text(
+                    option.blurb,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (chosen) {
+                    val tuning = Environment.tuningFor(option)
+                    Spacer(Modifier.height(6.dp))
+                    Field("Discovery baseline", "${tuning.baselineSeconds} s")
+                    Field(
+                        "Train Spotter burst",
+                        String.format(
+                            Locale.US,
+                            "%.1fx baseline, at least %d devices",
+                            tuning.burstMultiple,
+                            tuning.minimumBurst,
+                        ),
+                    )
+                    Field("Dwell Time resident", "${tuning.residentMinutes} min")
+                    Field(
+                        "Crowd Counter",
+                        String.format(
+                            Locale.US,
+                            "%.1f devices per person",
+                            tuning.devicesPerPerson,
+                        ),
+                    )
+                    Field("Lists drop a device after", "${tuning.freshnessSeconds} s")
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(4.dp))
+    if (listening) {
+        Text(
+            Environment.describe(heard, elapsed),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = {
+                (elapsed.toFloat() / Environment.MINIMUM_SAMPLE_MS).coerceIn(0f, 1f)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else {
+        Button(onClick = { listening = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Work it out by listening")
+        }
+        Text(
+            "Counts how many distinct addresses arrive in three quarters of a minute. " +
+                "Measures radio business rather than crowd size - a street where every " +
+                "phone rotates produces more addresses than one where nothing does, at the " +
+                "same number of people. For deciding how long to learn a room, that is the " +
+                "quantity that matters anyway.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
