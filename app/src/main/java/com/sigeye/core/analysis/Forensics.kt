@@ -171,28 +171,33 @@ data class Track(
         }
 
     /**
-     * How irregular the spacing is, as a fraction of the typical gap.
+     * The longest ordinary gap as a multiple of the typical one.
      *
-     * Median absolute deviation rather than standard deviation, because one missed packet
-     * doubles a gap and a mean-based measure would call every real device sporadic.
+     * A median absolute deviation was tried here first and is the wrong tool: it is robust
+     * to a minority, and a minority of long gaps is precisely what burstiness *is*. A
+     * device sending four fast packets then pausing has a MAD of zero and reads as
+     * perfectly metronomic.
+     *
+     * The ninety-fifth percentile against the median catches that - the pause shows up in
+     * the percentile and not in the median - while still ignoring the single doubled gap
+     * that a dropped packet produces, which is the thing a plain maximum would trip over.
      */
-    val gapJitter: Double
+    val gapSpread: Double
         get() {
-            val gaps = gapsMs
-            if (gaps.size < 3) return 0.0
+            val gaps = gapsMs.sorted()
+            if (gaps.size < 5) return 1.0
             val median = medianGapMs.toDouble()
-            if (median <= 0.0) return 0.0
-            val deviations = gaps.map { abs(it - median) }.sorted()
-            val mad = deviations[deviations.size / 2].toDouble()
-            return mad / median
+            if (median <= 0.0) return 1.0
+            val index = ((gaps.size - 1) * 0.95 + 0.5).toInt().coerceIn(0, gaps.size - 1)
+            return gaps[index] / median
         }
 
     val cadence: Cadence
         get() = when {
             gapsMs.size < 5 -> Cadence.UNKNOWN
-            gapJitter <= 0.10 -> Cadence.METRONOMIC
-            gapJitter <= 0.35 -> Cadence.REGULAR
-            gapJitter <= 1.2 -> Cadence.BURSTY
+            gapSpread <= 1.3 -> Cadence.METRONOMIC
+            gapSpread <= 2.5 -> Cadence.REGULAR
+            gapSpread <= 12.0 -> Cadence.BURSTY
             else -> Cadence.SPORADIC
         }
 
