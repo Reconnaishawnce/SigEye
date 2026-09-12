@@ -143,8 +143,10 @@ class PlaceProfileTest {
 
     @Test
     fun `a big step is ignored on a device that is noisy anyway`() {
-        // Eight dB means nothing on a link that swings twenty on its own, so the step has
-        // to be large relative to that device's own spread as well as in absolute terms.
+        // A move is one big step among near-zeroes; oscillation is the same big step
+        // every slice. Comparing against the device's overall spread does not separate
+        // those - this link has a spread of about 22 and a step of 45 every time, so it
+        // clears any multiple of its own spread. Comparing against the typical step does.
         val place = profile()
         place.start(0L)
         place.present("NOISY", 0..9, rssi = { index -> if (index % 2 == 0) -40 else -85 })

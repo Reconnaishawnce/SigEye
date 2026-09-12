@@ -200,21 +200,40 @@ class PlaceProfile(
             kotlin.math.sqrt(all.sumOf { (it - mean) * (it - mean) } / all.size)
         }
 
-        // The largest step between one slice and the next. A fixture that was moved shows
-        // up as one big step rather than as a gradual drift, which is what distinguishes
-        // it from the ordinary wander of a stationary link.
+        // A move is one big step. Oscillation is many equal ones.
+        //
+        // Comparing the largest step against that device's overall spread does not
+        // separate those: a link alternating between -40 and -85 has a spread of about 22
+        // and a step of 45 every single slice, so it clears any multiple of its own
+        // spread and gets reported as having moved, over and over. Comparing the largest
+        // step against the *typical* step does separate them - something that was moved
+        // has one outlier among near-zeroes, and something that swings has no outlier at
+        // all.
+        val deltas = mutableListOf<Double>()
         var shiftBucket: Int? = null
         var shift = 0.0
         val ordered = means.entries.toList()
         for (index in 1 until ordered.size) {
             val delta = ordered[index].value - ordered[index - 1].value
+            deltas.add(abs(delta))
             if (abs(delta) > abs(shift)) {
                 shift = delta
                 shiftBucket = ordered[index].key
             }
         }
 
-        val significant = abs(shift) >= MEANINGFUL_SHIFT_DB && abs(shift) > spread * 1.5
+        val typicalStep = deltas.sorted().let { sorted ->
+            when {
+                sorted.isEmpty() -> 0.0
+                sorted.size % 2 == 1 -> sorted[sorted.size / 2]
+                else -> (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2.0
+            }
+        // A floor, because a perfectly steady device has a typical step of zero and
+        // everything is infinitely larger than nothing.
+        }.coerceAtLeast(1.0)
+
+        val significant = abs(shift) >= MEANINGFUL_SHIFT_DB &&
+            abs(shift) >= typicalStep * STEP_STANDS_OUT_BY
 
         return Resident(
             address = address,
@@ -240,5 +259,13 @@ class PlaceProfile(
          * also has to be large relative to that particular device's own spread.
          */
         const val MEANINGFUL_SHIFT_DB = 8.0
+
+        /**
+         * How far the largest step has to stand above the typical one.
+         *
+         * Three is enough to separate one outlier among near-zeroes from a signal that
+         * steps by the same amount every slice, which is oscillation rather than movement.
+         */
+        const val STEP_STANDS_OUT_BY = 3.0
     }
 }
