@@ -4,6 +4,7 @@ t = json.load(open('tables.json'))
 
 BS = chr(92)      # backslash, kept out of literals so shell heredocs cannot mangle it
 DQ = chr(34)
+NL = chr(10)
 
 
 def q(s):
@@ -11,12 +12,22 @@ def q(s):
     return DQ + s + DQ
 
 
+def table(out, doc, name, entries, width=4):
+    for line in doc:
+        out.write('    ' + line + NL)
+    out.write('    val ' + name + ': Map<Int, String> = mapOf(' + NL)
+    fmt = '        0x%0' + str(width) + 'X to %s,' + NL
+    for k in sorted(entries):
+        out.write(fmt % (k, q(entries[k])))
+    out.write('    )' + NL + NL)
+
+
 out = io.StringIO()
 out.write('''package com.sigeye.core.ble
 
 // GENERATED FILE - do not edit by hand.
 // Source: Bluetooth SIG assigned numbers (appearance_values.yaml, member_uuids.yaml) and
-// the Nordic bluetooth-numbers-database (service_uuids.json).
+// the Nordic bluetooth-numbers-database (service_uuids.json, characteristic_uuids.json).
 // Regenerate with scratchpad/gen_ble_tables.py then scratchpad/emit_tables.py.
 
 /**
@@ -30,38 +41,59 @@ object AssignedNumbers {
 ''')
 
 cats = {int(k): v for k, v in t['cats'].items()}
-out.write('    /** GAP Appearance categories - the top ten bits of the appearance value. */\n')
-out.write('    val APPEARANCE_CATEGORIES: Map<Int, String> = mapOf(\n')
-for k in sorted(cats):
-    out.write('        0x%03X to %s,\n' % (k, q(cats[k])))
-out.write('    )\n\n')
+table(
+    out,
+    ['/** GAP Appearance categories - the top ten bits of the appearance value. */'],
+    'APPEARANCE_CATEGORIES',
+    cats,
+    width=3,
+)
 
 subs = {int(k): {int(a): b for a, b in v.items()} for k, v in t['subs'].items()}
 subs = {k: v for k, v in subs.items() if v}
-out.write('    /** Subcategories, keyed by category then by the low six bits. */\n')
-out.write('    val APPEARANCE_SUBCATEGORIES: Map<Int, Map<Int, String>> = mapOf(\n')
+out.write('    /** Subcategories, keyed by category then by the low six bits. */' + NL)
+out.write('    val APPEARANCE_SUBCATEGORIES: Map<Int, Map<Int, String>> = mapOf(' + NL)
 for k in sorted(subs):
     inner = ', '.join('%d to %s' % (a, q(subs[k][a])) for a in sorted(subs[k]))
-    out.write('        0x%03X to mapOf(%s),\n' % (k, inner))
-out.write('    )\n\n')
+    out.write('        0x%03X to mapOf(%s),%s' % (k, inner, NL))
+out.write('    )' + NL + NL)
 
 sig = {int(k): v for k, v in t['sig'].items()}
-out.write('    /** 16-bit services defined by the SIG: what the device can do. */\n')
-out.write('    val SIG_SERVICES: Map<Int, String> = mapOf(\n')
-for k in sorted(sig):
-    out.write('        0x%04X to %s,\n' % (k, q(sig[k])))
-out.write('    )\n\n')
+table(
+    out,
+    ['/** 16-bit services defined by the SIG: what the device can do. */'],
+    'SIG_SERVICES',
+    sig,
+)
 
 mem = {int(k): v for k, v in t['members'].items()}
-out.write('''    /**
-     * Member service UUIDs. These are allocated to one company, so seeing one names the
-     * maker even when the device advertises no manufacturer data at all.
-     */
-''')
-out.write('    val MEMBER_SERVICES: Map<Int, String> = mapOf(\n')
-for k in sorted(mem):
-    out.write('        0x%04X to %s,\n' % (k, q(mem[k])))
-out.write('    )\n}\n')
+table(
+    out,
+    [
+        '/**',
+        ' * Member service UUIDs. These are allocated to one company, so seeing one names',
+        ' * the maker even when the device advertises no manufacturer data at all.',
+        ' */',
+    ],
+    'MEMBER_SERVICES',
+    mem,
+)
+
+chars = {int(k): v for k, v in t['chars'].items()}
+table(
+    out,
+    [
+        '/**',
+        ' * 16-bit characteristics: the individual readable or writable values inside a',
+        ' * service. This is what turns a connection into a sentence - "it has a Battery',
+        ' * Service holding a Battery Level" - rather than a list of hex.',
+        ' */',
+    ],
+    'CHARACTERISTICS',
+    chars,
+)
+
+out.write('}' + NL)
 
 io.open('AssignedNumbers.kt', 'w', encoding='utf-8').write(out.getvalue())
-print('lines', out.getvalue().count('\n'))
+print('lines', out.getvalue().count(NL))

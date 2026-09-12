@@ -59,6 +59,7 @@ object Experiments {
     const val SPEED = "speed"
     const val FADING = "fading"
     const val DISCOVERY = "discovery"
+    const val EXPLORER = "explorer"
 
     val all: List<Experiment> = listOf(
 
@@ -512,6 +513,40 @@ object Experiments {
         ),
 
         // ----------------------------------------------------------- privacy
+        Experiment(
+            id = EXPLORER,
+            title = "Bluetooth Explorer",
+            blurb = "Ask a device what it has, and learn what the answers mean.",
+            teaches = "An advertisement is a device shouting into the room. A connection " +
+                "is a conversation, and devices will tell a stranger far more than most " +
+                "people expect - names, makers, model and serial numbers, firmware " +
+                "versions - with no pairing at all.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.READY,
+            needs = "Something you own, or have permission to poke at. This is the only " +
+                "experiment here that transmits.",
+            howTo = listOf(
+                "Pick a device from the list. It asks before connecting, because unlike " +
+                    "everything else in this app the connection is visible to the target.",
+                "Watch the commentary as it goes: connecting, discovering services, " +
+                    "reading values. Each line says what the word means.",
+                "Standard services and values are named from the Bluetooth registry. " +
+                    "Custom ones are flagged as custom, which is itself informative.",
+                "Try your own earbuds, a fitness band, a smart bulb and a tag - what each " +
+                    "hands over to a stranger varies enormously.",
+                "Most things that advertise will refuse the connection outright. Beacons " +
+                    "and tags broadcast one way and never accept callers.",
+            ),
+            reading = "Services are groups of related values. Device Information is the " +
+                "interesting one - maker, model, serial, firmware - and nothing verifies " +
+                "any of it. A serial number is worth noticing: unlike a randomised " +
+                "address it never changes, so a device that hands one out is identifiable " +
+                "for good.",
+            limits = "It only reads, never writes. Many values need a bonded pairing " +
+                "first and will simply refuse. A device that accepts the connection and " +
+                "then stops answering is normal, and the attempt gives up rather than " +
+                "hanging. Connecting is an active act and the other end can see it.",
+        ),
         Experiment(
             id = BEACONS,
             title = "Beacon Decoder",

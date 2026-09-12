@@ -19,6 +19,7 @@ import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.discovery.DiscoveryScreen
+import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
 import com.sigeye.experiments.faraday.FaradayScreen
 import com.sigeye.experiments.inspector.InspectorScreen
@@ -120,6 +121,9 @@ private fun SigEyeApp() {
 
             Experiments.DISCOVERY ->
                 DiscoveryScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.EXPLORER ->
+                ExplorerScreen(onBack = { route = null }, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = { route = null }, modifier = inset)
