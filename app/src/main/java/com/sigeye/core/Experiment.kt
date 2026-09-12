@@ -594,15 +594,6 @@ object Experiments {
                 "Moving the baseline invalidates every saved spot, so it clears them.",
         ),
         Experiment(
-            id = "pathloss",
-            title = "Path Loss Exponent",
-            blurb = "Walk away from a source and measure how fast signal falls off.",
-            teaches = "Free space gives about 2.0, a corridor less because it guides the " +
-                "wave, walls far more. One number that characterises an environment.",
-            category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
-        ),
-        Experiment(
             id = FADING,
             title = "Multipath Fading",
             blurb = "Stand still and watch the signal move anyway.",
@@ -695,15 +686,6 @@ object Experiments {
                 "a chipset, a driver and root. No app on a stock phone can capture them.",
         ),
         Experiment(
-            id = "bands",
-            title = "2.4 vs 5 GHz",
-            blurb = "Which band actually gets through your walls.",
-            teaches = "Same router, two bands, one wall. Higher frequencies are absorbed " +
-                "harder, and you can measure by how much.",
-            category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.PLANNED,
-        ),
-        Experiment(
             id = FARADAY,
             title = "Faraday Cage Test",
             blurb = "How many dB does a tin, a fridge or a crisp packet really block?",
@@ -782,15 +764,6 @@ object Experiments {
             title = "Dead Zone Heatmap",
             blurb = "Walk the building, find where the signal dies.",
             teaches = "Where the router should actually go, and how much one wall costs.",
-            category = Experiment.Category.MAPPING,
-            status = Experiment.Status.PLANNED,
-        ),
-        Experiment(
-            id = "channels",
-            title = "Channel Congestion",
-            blurb = "Which Wi-Fi channel is least crowded where you are.",
-            teaches = "Why only three of the 2.4 GHz channels are non-overlapping, and " +
-                "which one your router should be on.",
             category = Experiment.Category.MAPPING,
             status = Experiment.Status.PLANNED,
         ),
@@ -990,15 +963,6 @@ object Experiments {
                 "this. A plain advertisement carrying nothing distinctive cannot be " +
                 "matched on at all and the app says so rather than guessing. Nothing here " +
                 "is proof, which is exactly why the walk-away test exists.",
-        ),
-        Experiment(
-            id = "randomisation",
-            title = "MAC Randomisation",
-            blurb = "Which devices around you can be followed, and which cannot.",
-            teaches = "Measures how often addresses actually rotate, and lists the ones " +
-                "that never do - trackers, tags, cars, headsets.",
-            category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.PLANNED,
         ),
     )
 
