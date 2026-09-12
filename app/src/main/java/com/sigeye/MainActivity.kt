@@ -32,6 +32,7 @@ import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
+import com.sigeye.experiments.wifi.WifiScreen
 import com.sigeye.home.HomeScreen
 import com.sigeye.ui.SigEyeTheme
 import kotlinx.coroutines.Dispatchers
@@ -124,6 +125,9 @@ private fun SigEyeApp() {
 
             Experiments.EXPLORER ->
                 ExplorerScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.WIFI ->
+                WifiScreen(onBack = { route = null }, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = { route = null }, modifier = inset)

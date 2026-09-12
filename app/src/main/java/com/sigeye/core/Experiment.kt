@@ -60,6 +60,7 @@ object Experiments {
     const val FADING = "fading"
     const val DISCOVERY = "discovery"
     const val EXPLORER = "explorer"
+    const val WIFI = "wifi"
 
     val all: List<Experiment> = listOf(
 
@@ -378,6 +379,35 @@ object Experiments {
             limits = "One sweep cannot tell your body from the room, because a " +
                 "reflection makes a notch too. Only repeated sweeps can: yours " +
                 "turns with you, the room's stays put.",
+        ),
+        Experiment(
+            id = WIFI,
+            title = "Wi-Fi Survey",
+            blurb = "Every network around you, and what its address gives away.",
+            teaches = "An access point announces itself continuously, and the first three " +
+                "bytes of its address name whoever registered the block. Hidden networks " +
+                "are still perfectly visible - hiding the name hides nothing else.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.READY,
+            needs = "Wi-Fi switched on, or Wi-Fi scanning enabled in location settings.",
+            howTo = listOf(
+                "Open it and leave it. A scan is requested every ten seconds.",
+                "Turn off Wi-Fi scan throttling in developer options first, or Android " +
+                    "caps you at four scans every two minutes and the picture updates far " +
+                    "more slowly than it looks like it should.",
+                "Use the Flagged filter for prefixes associated with surveillance " +
+                    "hardware, but read the caveat on each - most of them are component " +
+                    "vendors rather than the company you are looking for.",
+                "Hidden and Open are the other two filters worth a look: a hidden network " +
+                    "is not concealed, only unnamed, and an open one is unencrypted.",
+            ),
+            reading = "Strong means the prefix is registered to the company itself. Weak " +
+                "means it is a component vendor whose modules are in a great many " +
+                "ordinary devices, and needs corroborating - is it fixed in place, is it " +
+                "outdoors, is it still there tomorrow.",
+            limits = "Access points only. The probe requests a phone sends out, naming " +
+                "networks it has joined before, are client frames and need monitor mode - " +
+                "a chipset, a driver and root. No app on a stock phone can capture them.",
         ),
         Experiment(
             id = "bands",

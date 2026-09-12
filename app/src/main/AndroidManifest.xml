@@ -19,6 +19,11 @@
          identity without phone state as well. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
+    <!-- Wi-Fi survey. Both are normal permissions; the results themselves are gated on
+         the location permission we already hold. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
     <!-- Alerts. This is a normal permission, granted at install, and without it
          Vibrator.vibrate() throws a SecurityException that costs nothing to ignore and
          silently does nothing - which is exactly what it did until someone noticed. -->

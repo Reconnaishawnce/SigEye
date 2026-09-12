@@ -82,6 +82,50 @@ object BeaconDecoder {
     ): Beacon? {
         // Manufacturer formats first: they carry the most identity.
         if (manufacturerData != null && companyId != null) {
+            // Tyre sensors go ahead of the generic decoders: they advertise under a
+            // company ID that is not theirs, so anything matching on company ID alone
+            // would claim them first and report a TomTom.
+            Tpms.decode(companyId, manufacturerData)?.let { reading ->
+                return Beacon(
+                    protocol = "BLE TPMS",
+                    summary = reading.tyreLabel + " - " + reading.summary(),
+                    fields = listOf(
+                        BeaconField("Tyre", reading.sensorNumber.toString()),
+                        BeaconField("Sensor address", reading.sensorAddress),
+                        BeaconField(
+                            "Pressure",
+                            String.format(
+                                java.util.Locale.US,
+                                "%.0f kPa / %.1f psi / %.2f bar",
+                                reading.kilopascals,
+                                reading.psi,
+                                reading.bar,
+                            ),
+                        ),
+                        BeaconField(
+                            "Temperature",
+                            String.format(
+                                java.util.Locale.US,
+                                "%.1f C / %.1f F",
+                                reading.celsius,
+                                reading.fahrenheit,
+                            ),
+                        ),
+                        BeaconField("Battery", reading.batteryPercent.toString() + "%"),
+                        BeaconField("Alarm", if (reading.alarm) "NO PRESSURE" else "ok"),
+                        BeaconField(
+                            "Raw",
+                            reading.rawPressure.toString() + " / " +
+                                reading.rawTemperature.toString(),
+                        ),
+                    ),
+                    note = "An aftermarket tyre sensor, broadcasting pressure and " +
+                        "temperature unencrypted to anyone in range. A set of four is a " +
+                        "fingerprint for one vehicle, and unlike a phone the address " +
+                        "never rotates. The byte layout is community-derived rather than " +
+                        "published, so the raw values are shown too.",
+                )
+            }
             iBeacon(companyId, manufacturerData)?.let { return it }
             altBeacon(companyId, manufacturerData)?.let { return it }
             if (companyId == APPLE) appleContinuity(manufacturerData)?.let { return it }
