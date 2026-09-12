@@ -42,7 +42,20 @@ import java.util.Locale
  */
 class ScanService : Service() {
 
-    enum class Mode { TRAIN_SPOTTER, WATCHLIST }
+    /**
+     * What the service can be asked to run.
+     *
+     * The last three are recordings rather than watchers: they accumulate into
+     * [Recordings], which the screens read rather than own, so closing a screen no longer
+     * ends the measurement it started.
+     */
+    enum class Mode(val label: String) {
+        TRAIN_SPOTTER("Train Spotter"),
+        WATCHLIST("Signal Watch"),
+        FORENSICS("Forensics"),
+        PLACE("Place Profiler"),
+        CONVOY("Journey"),
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var pump: Job? = null
@@ -64,6 +77,7 @@ class ScanService : Service() {
         // The service can outlive the activity that normally loads this.
         OuiRegistry.load(this)
         watchStore = WatchStore.get(this)
+        Recordings.init(this)
         createChannels()
         WatchEngine.createChannel(this)
     }
@@ -138,6 +152,10 @@ class ScanService : Service() {
                 watchStore.armed = true
                 watch = WatchEngine(this, watchStore) { hit -> notifyWatchHit(hit) }
             }
+
+            // The recordings are started by the screen that owns them, because only it
+            // knows the settings - slice length, leg name. The service just feeds them.
+            Mode.FORENSICS, Mode.PLACE, Mode.CONVOY -> Unit
         }
 
         BleScanHub.acquire(HUB_TAG)
@@ -158,6 +176,11 @@ class ScanService : Service() {
                 watchStore.armed = false
                 watch = null
             }
+
+            Mode.FORENSICS -> Recordings.forensics.stop(System.currentTimeMillis())
+            // Place and Convoy keep whatever they have: stopping the service should not
+            // throw away four hours of profile, and the screen decides what to do with it.
+            Mode.PLACE, Mode.CONVOY -> Unit
         }
         publishModes()
         if (modes.isEmpty()) {
@@ -195,12 +218,14 @@ class ScanService : Service() {
                 BleScanHub.adverts.collect { advert ->
                     trainSpotter?.onAdvert(advert)
                     watch?.onAdvert(advert)
+                    Recordings.onAdvert(advert, modes)
                 }
             }
         }
         if (ticker == null) {
             ticker = scope.launch {
                 var lastPrune = System.currentTimeMillis()
+                var lastNotification = 0L
                 while (isActive) {
                     delay(500)
                     val now = System.currentTimeMillis()
@@ -209,6 +234,13 @@ class ScanService : Service() {
                     if (now - lastPrune > 10 * 60_000L) {
                         watch?.prune(now)
                         lastPrune = now
+                    }
+                    // A recording's notification is the only view of it when the screen is
+                    // off, so it is kept current. Every five seconds, not every tick -
+                    // rewriting a notification twice a second is its own battery cost.
+                    if (recording() && now - lastNotification > 5_000L) {
+                        lastNotification = now
+                        updateOngoingNotification()
                     }
                 }
             }
@@ -259,13 +291,15 @@ class ScanService : Service() {
 
     private fun buildOngoingNotification(): Notification {
         val health = BleScanHub.health.value
-        val running = modes.joinToString(" + ") {
-            if (it == Mode.TRAIN_SPOTTER) "Train Spotter" else "Watchlist"
-        }.ifEmpty { "Starting" }
+        val running = modes.joinToString(" + ") { it.label }.ifEmpty { "Starting" }
 
+        // A recording's progress is the useful thing to see from the lock screen; the
+        // packet rate only matters when nothing is being recorded.
+        val progress = Recordings.summary(modes)
         val detail = when {
             health.error != null -> health.error
             health.starved -> "Signal starved, restarting the scan"
+            progress.isNotEmpty() -> progress.joinToString(" \u00B7 ")
             else -> String.format(Locale.US, "%.1f adverts/sec", health.advertsPerSecond)
         }
 
@@ -287,6 +321,10 @@ class ScanService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
+
+    /** True while something is accumulating rather than merely watching. */
+    private fun recording(): Boolean =
+        modes.any { it == Mode.FORENSICS || it == Mode.PLACE || it == Mode.CONVOY }
 
     private fun updateOngoingNotification() {
         runCatching {

@@ -22,10 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -38,21 +36,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.PlaceProfile
+import com.sigeye.core.Recordings
+import com.sigeye.core.ScanService
 import com.sigeye.core.analysis.PlaceReport
 import com.sigeye.core.analysis.Resident
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
-import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "place"
 private const val TICK_MS = 5_000L
@@ -94,31 +92,22 @@ private fun Live() {
     val notes by book.notes.collectAsStateWithLifecycle()
 
     var sliceMinutes by remember { mutableStateOf(10f) }
-    var running by remember { mutableStateOf(false) }
+    val activeModes by ScanService.activeModes.collectAsStateWithLifecycle()
+    val running = activeModes.contains(ScanService.Mode.PLACE)
     var report by remember { mutableStateOf(PlaceReport(emptyList(), emptyList(), 0, 0)) }
-    val profile = remember { PlaceProfile() }
+    // Held by the service, so a four-hour profile survives the screen being closed.
+    val profile = Recordings.place
     var startedAtMs by remember { mutableStateOf(0L) }
-
-    // The radio is held by this screen, so a sleeping display ends the measurement.
-    KeepScreenOn(running)
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
-        BleScanHub.acquire(HUB_TAG)
-        onDispose { BleScanHub.release(HUB_TAG) }
+        onDispose { }
     }
 
+    // Reattach: if a profile was already running when this screen opened, adopt its start.
     LaunchedEffect(running) {
-        if (!running) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            profile.observe(
-                address = advert.address,
-                rssi = advert.rssi,
-                atMs = advert.atMs,
-                label = notes[advert.address.uppercase(Locale.US)]?.nickname
-                    ?: advert.name?.takeIf { it.isNotBlank() }
-                    ?: advert.vendor,
-            )
+        if (running && startedAtMs == 0L) {
+            startedAtMs = System.currentTimeMillis() - profile.report().spanMs
         }
     }
 
@@ -183,15 +172,15 @@ private fun Live() {
                 profile.bucketMs = (sliceMinutes.roundToInt() * 60_000).toLong()
                 profile.start(startedAtMs)
                 report = profile.report(startedAtMs)
-                running = true
+                ScanService.start(context, ScanService.Mode.PLACE)
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Start recording") }
         Text(
-            "This screen has to stay open, so plug the phone in and leave it. Closing the " +
-                "app stops the radio.",
+            "This runs in the background, so you can close the app and put the phone " +
+                "down. Plug it in anyway - hours of scanning is hours of radio.",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.error,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
         return
@@ -317,7 +306,7 @@ private fun Live() {
 
     Spacer(Modifier.height(16.dp))
     OutlinedButton(
-        onClick = { running = false },
+        onClick = { ScanService.stop(context, ScanService.Mode.PLACE) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Stop recording") }
 }

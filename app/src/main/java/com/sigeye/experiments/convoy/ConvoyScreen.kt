@@ -23,10 +23,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,28 +38,28 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.JourneyStore
 import com.sigeye.core.Permissions
+import com.sigeye.core.Recordings
 import com.sigeye.core.SavedJourney
+import com.sigeye.core.ScanService
 import com.sigeye.core.SnapshotStore
 import com.sigeye.core.SweepExport
 import com.sigeye.core.analysis.ConvoyReport
-import com.sigeye.core.analysis.ConvoyTracker
 import com.sigeye.core.analysis.FollowConfidence
 import com.sigeye.core.analysis.Follower
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.DeviceActions
-import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
-import com.sigeye.ui.KeepScreenOn
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "convoy"
 private const val TICK_MS = 3_000L
@@ -105,7 +103,8 @@ private fun Live() {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val feedback = remember { Feedback(context) }
-    val tracker = remember { ConvoyTracker() }
+    // Service-owned: a journey is hours long and the screen will not survive it.
+    val tracker = Recordings.convoy
     val journeys = remember { JourneyStore.get(context) }
     val snapshotStore = remember { SnapshotStore.get(context) }
 
@@ -113,7 +112,8 @@ private fun Live() {
     val saved by journeys.journeys.collectAsStateWithLifecycle()
     val snapshots by snapshotStore.snapshots.collectAsStateWithLifecycle()
 
-    var recording by remember { mutableStateOf(false) }
+    val activeModes by ScanService.activeModes.collectAsStateWithLifecycle()
+    val recording = activeModes.contains(ScanService.Mode.CONVOY)
     var report by remember { mutableStateOf(ConvoyReport(emptyList(), emptyList(), 0)) }
     var naming by remember { mutableStateOf(false) }
     var alertStyle by remember { mutableStateOf(AlertStyle.BUZZ) }
@@ -129,7 +129,6 @@ private fun Live() {
         notes.filterValues { it.lists.contains(MINE_LIST) }.keys
     }
 
-    KeepScreenOn(recording)
 
     // A journey outlives the screen showing it, so the legs are read back on open and
     // written after every change. Losing an hour of walking to a locked phone made the
@@ -145,28 +144,9 @@ private fun Live() {
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
-        BleScanHub.acquire(HUB_TAG)
-        onDispose {
-            feedback.release()
-            BleScanHub.release(HUB_TAG)
-        }
+        onDispose { feedback.release() }
     }
 
-    LaunchedEffect(recording) {
-        if (!recording) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            tracker.observe(
-                address = advert.address,
-                rssi = advert.rssi,
-                atMs = advert.atMs,
-                label = notes[advert.address.uppercase(Locale.US)]?.nickname
-                    ?: advert.name?.takeIf { it.isNotBlank() }
-                    ?: advert.vendor,
-                vendor = advert.vendor,
-                isRandom = advert.isRandomAddress,
-            )
-        }
-    }
 
     LaunchedEffect(recording, mine) {
         while (true) {
@@ -265,7 +245,8 @@ private fun Live() {
                 Text(
                     if (recording) {
                         "Give it a few minutes so everything nearby has a chance to speak, " +
-                            "then stop before you move on."
+                            "then finish the leg before you move on. This keeps running " +
+                            "with the app closed."
                     } else {
                         "Travel somewhere genuinely different, then start the next leg."
                     },
@@ -278,8 +259,8 @@ private fun Live() {
         if (recording) {
             Button(
                 onClick = {
+                    ScanService.stop(context, ScanService.Mode.CONVOY)
                     tracker.closeLeg(System.currentTimeMillis())
-                    recording = false
                     report = tracker.report(mine = mine)
                     journeys.keepCurrent(tracker.export())
                 },
@@ -413,8 +394,8 @@ private fun Live() {
                         }
                         Row {
                             TextButton(onClick = {
+                                ScanService.stop(context, ScanService.Mode.CONVOY)
                                 tracker.restore(journey.legs)
-                                recording = false
                                 announced = emptySet()
                                 report = tracker.report(mine = mine)
                                 journeys.keepCurrent(tracker.export())
@@ -433,8 +414,8 @@ private fun Live() {
         Spacer(Modifier.height(16.dp))
         OutlinedButton(
             onClick = {
+                ScanService.stop(context, ScanService.Mode.CONVOY)
                 tracker.reset()
-                recording = false
                 announced = emptySet()
                 report = tracker.report(mine = mine)
                 journeys.clearCurrent()
@@ -509,7 +490,10 @@ private fun Live() {
                                         atMs = snapshot.takenAtMs,
                                         devices = snapshot.devices,
                                     )
-                                    recording = false
+                                    ScanService.stop(
+                                        context,
+                                        ScanService.Mode.CONVOY,
+                                    )
                                     report = tracker.report(mine = mine)
                                     journeys.keepCurrent(tracker.export())
                                     pickingSnapshot = false
@@ -566,7 +550,7 @@ private fun Live() {
                         label.ifBlank { "Leg ${tracker.legCount + 1}" },
                         System.currentTimeMillis(),
                     )
-                    recording = true
+                    ScanService.start(context, ScanService.Mode.CONVOY)
                     naming = false
                     journeys.keepCurrent(tracker.export())
                 }) { Text("Start") }

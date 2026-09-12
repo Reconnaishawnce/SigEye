@@ -26,10 +26,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,20 +43,19 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.ForensicStore
 import com.sigeye.core.Permissions
+import com.sigeye.core.Recordings
+import com.sigeye.core.ScanService
 import com.sigeye.core.SnapshotStore
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.Behaviour
 import com.sigeye.core.analysis.ForensicFilter
 import com.sigeye.core.analysis.ForensicHistory
-import com.sigeye.core.analysis.ForensicRecorder
 import com.sigeye.core.analysis.ForensicSort
 import com.sigeye.core.analysis.Provenance
 import com.sigeye.core.analysis.SavedSession
 import com.sigeye.core.analysis.SessionDiff
 import com.sigeye.core.analysis.Track
-import com.sigeye.core.analysis.TrackDetail
-import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchStore
@@ -66,7 +63,6 @@ import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
-import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -74,7 +70,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "forensics"
@@ -115,7 +110,9 @@ private fun Live() {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val notes by book.notes.collectAsStateWithLifecycle()
-    val recorder = remember { ForensicRecorder() }
+    // Owned by the service, not by this composition. Closing the screen no longer
+    // ends the recording, and reopening it reattaches to whatever is running.
+    val recorder = Recordings.forensics
     val store = remember { ForensicStore.get(context) }
     val snapshotStore = remember { SnapshotStore.get(context) }
     val watchStore = remember { WatchStore.get(context) }
@@ -124,7 +121,8 @@ private fun Live() {
     val snapshots by snapshotStore.snapshots.collectAsStateWithLifecycle()
     val watchRules by watchStore.rules.collectAsStateWithLifecycle()
 
-    var recording by remember { mutableStateOf(false) }
+    val activeModes by ScanService.activeModes.collectAsStateWithLifecycle()
+    val recording = activeModes.contains(ScanService.Mode.FORENSICS)
     var reviewing by remember { mutableStateOf(false) }
     var elapsedMs by remember { mutableStateOf(0L) }
     var devices by remember { mutableStateOf(0) }
@@ -144,42 +142,16 @@ private fun Live() {
     var onlyFamiliar by remember { mutableStateOf(false) }
     var onlyUnfamiliar by remember { mutableStateOf(false) }
 
-    // The measurement lives for as long as this screen does, so letting the display sleep
-    // would end the recording without saying so.
-    KeepScreenOn(recording)
-
-    DisposableEffect(Unit) {
-        BleScanHub.init(context)
-        BleScanHub.acquire(HUB_TAG)
-        onDispose { BleScanHub.release(HUB_TAG) }
+    // Reattach to a recording that was already running when this screen opened.
+    LaunchedEffect(recording) {
+        if (recording && startedAtMs == 0L) startedAtMs = System.currentTimeMillis()
     }
 
-    LaunchedEffect(recording) {
-        if (!recording) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            recorder.observe(
-                address = advert.address,
-                rssi = advert.rssi,
-                atMs = advert.atMs,
-                label = notes[advert.address.uppercase(Locale.US)]?.nickname
-                    ?: advert.name?.takeIf { it.isNotBlank() }
-                    ?: advert.vendor,
-                vendor = advert.vendor,
-                isRandom = advert.isRandomAddress,
-                detail = TrackDetail(
-                    companyId = advert.companyId,
-                    serviceUuids = advert.serviceUuids,
-                    appearance = advert.appearance,
-                    txPower = advert.txPower,
-                    beaconProtocol = BeaconDecoder.decode(advert)?.protocol,
-                    surveillanceNote = Vendors.surveillanceNote(
-                        advert.address,
-                        advert.companyId,
-                        advert.name,
-                    ),
-                ),
-            )
-        }
+    // No claim on the radio from here: the service holds it while recording, and this
+    // screen only ever reads what the recorder has already accumulated.
+    DisposableEffect(Unit) {
+        BleScanHub.init(context)
+        onDispose { }
     }
 
     LaunchedEffect(recording) {
@@ -225,12 +197,13 @@ private fun Live() {
                 elapsedMs = 0L
                 selected = null
                 exported = null
-                recording = true
+                ScanService.start(context, ScanService.Mode.FORENSICS)
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Start recording") }
         Text(
-            "The screen stays awake while recording, so plug in for anything long.",
+            "This keeps running with the screen off and the app closed - there is a " +
+                "notification while it does, with a Stop button on it.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
@@ -252,8 +225,8 @@ private fun Live() {
             ),
         ) {
             Text(
-                "Recording. Leave it running for as long as the thing you are after might " +
-                    "take to go past - three minutes for a street, longer for a car park.",
+                "Recording. This carries on with the screen off, so put the phone in a " +
+                    "pocket and walk. Three minutes for a street, longer for a car park.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.padding(14.dp),
@@ -262,8 +235,8 @@ private fun Live() {
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
+                ScanService.stop(context, ScanService.Mode.FORENSICS)
                 recorder.stop(System.currentTimeMillis())
-                recording = false
                 reviewing = true
             },
             modifier = Modifier.fillMaxWidth(),
