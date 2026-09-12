@@ -61,6 +61,7 @@ object Experiments {
     const val DISCOVERY = "discovery"
     const val EXPLORER = "explorer"
     const val WIFI = "wifi"
+    const val PLACE = "place"
 
     val all: List<Experiment> = listOf(
 
@@ -296,6 +297,36 @@ object Experiments {
                 "anywhere in the room. Jitter is the sensitive one.",
             limits = "It cannot tell you who, where, or how many - only that the room " +
                 "stopped being still. A fan, a door swinging or a cat will all trip it.",
+        ),
+        Experiment(
+            id = PLACE,
+            title = "Place Profiler",
+            blurb = "Leave the phone somewhere for hours and see the shape of the place.",
+            teaches = "Somewhere busy and somewhere quiet look identical in a snapshot and " +
+                "nothing alike over an afternoon. A car park is flat and full overnight; " +
+                "a corridor is spiky and empty. The shape is the fingerprint.",
+            category = Experiment.Category.SENSING,
+            status = Experiment.Status.READY,
+            needs = "A few hours, and a charger. The screen has to stay open.",
+            howTo = listOf(
+                "Choose a slice length. Ten minutes over four hours gives twenty-four " +
+                    "slices, which is enough shape without every slice being noise.",
+                "Start it, plug the phone in, and leave it somewhere it will not be moved.",
+                "Come back hours later. Under an hour tells you almost nothing, and the " +
+                    "screen says so rather than drawing a confident chart of noise.",
+                "Read the residents list for what lives there, and the movers list for " +
+                    "anything that normally sits still and stopped doing so.",
+            ),
+            reading = "Bars are devices present per slice; the marks underneath are how " +
+                "much arrived or left. A resident was around for several slices, a " +
+                "fixture for most of them. A fixture whose signal steps abruptly is the " +
+                "most interesting thing here - something that had been still was moved, " +
+                "or something large moved between it and the phone.",
+            limits = "The screen has to stay open, so this is not a background task. " +
+                "Randomised addresses make phones look like a stream of strangers rather " +
+                "than the same people staying, which inflates arrivals and departures - " +
+                "the fixtures are the trustworthy half. And a step in signal is not " +
+                "proof of movement, only of change.",
         ),
         Experiment(
             id = "rhythm",
