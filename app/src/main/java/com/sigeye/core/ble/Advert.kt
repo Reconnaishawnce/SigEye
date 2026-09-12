@@ -123,6 +123,15 @@ data class ScanHealth(
     val referenceRate: Double = 0.0,
     val restarts: Int = 0,
     val subscribers: Int = 0,
+    /**
+     * Who is currently holding the radio on.
+     *
+     * A count alone cannot be acted on: "2 subscribers" with one screen open means
+     * something leaked a claim, and the whole symptom of a leak is a battery that empties
+     * with the app apparently idle. Naming them makes it a thing somebody can see and
+     * report rather than a thing nobody notices for a month.
+     */
+    val claims: Set<String> = emptySet(),
     val error: String? = null,
 ) {
     /** Delivery has collapsed relative to what this phone managed a moment ago. */

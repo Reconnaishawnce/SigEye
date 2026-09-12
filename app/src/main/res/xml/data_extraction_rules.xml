@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Android 12+ form of the same decision, split into its two cases.
+
+  cloud-backup is the one that leaves the phone and the one the first-run warning is about.
+  device-transfer is phone-to-phone during setup, which never touches a server, so the same
+  preferences are fine there for the same reason they are fine on the phone already.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

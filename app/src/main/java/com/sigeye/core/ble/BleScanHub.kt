@@ -141,6 +141,14 @@ object BleScanHub {
     fun acquire(tag: String) {
         check(initialised) { "BleScanHub.init() must be called before acquire()" }
         val wasEmpty = claims.isEmpty()
+        // A tag acquired twice without a release is a leaked claim, and the symptom is a
+        // flat battery rather than a crash - the radio simply never goes off again. The
+        // claims are a set, so the second acquire is harmless in itself; what is not
+        // harmless is nobody noticing. Twenty screens acquire by string tag, so this is
+        // the one place that can tell.
+        if (tag in claims) {
+            Log.w(TAG, "Claim '$tag' acquired twice without a release - a screen leaked it.")
+        }
         claims.add(tag)
         publishHealth(_health.value.error)
         if (wasEmpty) {
@@ -362,6 +370,7 @@ object BleScanHub {
             referenceRate = referenceRate,
             restarts = restarts,
             subscribers = claims.size,
+            claims = claims.toSet(),
             error = error,
         )
     }

@@ -1020,12 +1020,43 @@ object Experiments {
     val featuredIds: List<String> = listOf(ROTATION, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
 
     /** Why each featured experiment earned the spot, in a few words. */
+    /**
+     * One line per experiment, for the favourites card.
+     *
+     * Written in the second person and aimed at somebody deciding whether to tap, which is
+     * a different job from [Experiment.blurb] - the blurb describes the experiment, this
+     * sells the next sixty seconds. Every ready experiment has one, because five good ones
+     * and twenty-three fallbacks was visible the moment anyone starred a sixth thing.
+     */
     val featuredReasons: Map<String, String> = mapOf(
         ROTATION to "Follow a phone across the address changes meant to stop you.",
         TRAIN_SPOTTER to "Count carriages going past from the signals inside them.",
         RADAR to "Everything around you, at the range it is at, live.",
         FORENSICS to "Record a place, then go through what was there afterwards.",
         DISCOVERY to "Learn what is normally here, then watch for what is not.",
+        ROTATION_LAB to "Split a room by manufacturer and time how often each one rotates.",
+        FOLLOWING to "Keep a name on a device after it changes its address.",
+        INSPECTOR to "Open up anything nearby and read what it is shouting.",
+        WATCHLIST to "Get told the moment something you care about turns up.",
+        CONVOY to "Record two places and find what was in both of them.",
+        VULNERABILITY to "Find out what the networks around you are admitting about themselves.",
+        EXPLORER to "Ask a device what it can do, and understand the answer.",
+        BEACONS to "Decode the beacon formats hiding in the noise around you.",
+        WIFI to "Every network in range, and what its name gives away.",
+        SPEED to "Clock a passing car from the shape of its signal.",
+        CROWD to "Put a number on how many people are around you.",
+        DWELL to "Tell the people passing through from the people who live here.",
+        MOTION to "Turn a radio path into a tripwire and watch someone cross it.",
+        PLACE to "Leave the phone somewhere for hours and read the shape of the day.",
+        DOPPLER to "Walk away counting steps and measure the number everyone else guesses.",
+        POLARISATION to "Turn the phone over and watch the signal die.",
+        CONGESTION to "See who is crowding the band and whether Bluetooth can get a word in.",
+        BANDS to "Measure exactly what your walls take out of 5 GHz.",
+        FADING to "Stand perfectly still and watch the signal move anyway.",
+        ABSORPTION to "Turn in a circle and find the shadow your own body casts.",
+        FARADAY to "Settle the argument about whether a crisp packet blocks anything.",
+        MICROWAVE to "Watch a microwave flatten the band your Wi-Fi is on.",
+        CELLS to "See how often your phone hands you to a different tower.",
     )
 
     fun byCategory(): List<Pair<Experiment.Category, List<Experiment>>> =

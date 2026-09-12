@@ -21,13 +21,36 @@ class FirstRun private constructor(context: Context) {
     private val _dismissed = MutableStateFlow(prefs.getBoolean(KEY_DISMISSED, false))
     val dismissed: StateFlow<Boolean> = _dismissed
 
+    private val _backupWarned = MutableStateFlow(prefs.getBoolean(KEY_BACKUP_WARNED, false))
+
+    /**
+     * Whether the backup disclosure has been shown.
+     *
+     * Separate from the welcome card, and shown after it. Two dialogs at once is one
+     * dialog too many, and this one is the more important of the pair - so it gets the
+     * user's attention on its own rather than as the second half of a greeting.
+     */
+    val backupWarned: StateFlow<Boolean> = _backupWarned
+
     fun dismiss() {
         _dismissed.value = true
         prefs.edit().putBoolean(KEY_DISMISSED, true).apply()
     }
 
+    fun markBackupWarned() {
+        _backupWarned.value = true
+        prefs.edit().putBoolean(KEY_BACKUP_WARNED, true).apply()
+    }
+
+    /** Lets the disclosure be reopened from a settings screen later. */
+    fun resetBackupWarning() {
+        _backupWarned.value = false
+        prefs.edit().putBoolean(KEY_BACKUP_WARNED, false).apply()
+    }
+
     companion object {
         private const val KEY_DISMISSED = "dismissed"
+        private const val KEY_BACKUP_WARNED = "backup_warned"
 
         @Volatile
         private var instance: FirstRun? = null

@@ -41,6 +41,7 @@ import com.sigeye.core.FirstRun
 import com.sigeye.core.Preflight
 import com.sigeye.core.ScanService
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.BackupWarning
 import java.util.Locale
 
 @Composable
@@ -50,7 +51,14 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
     val firstRun = remember { FirstRun.get(context) }
     val favouriteIds by store.ids.collectAsStateWithLifecycle()
     val welcomed by firstRun.dismissed.collectAsStateWithLifecycle()
+    val backupWarned by firstRun.backupWarned.collectAsStateWithLifecycle()
     var arranging by remember { mutableStateOf(false) }
+
+    // After the welcome card has been put away, not alongside it. Two dialogs at once is
+    // one dialog too many, and this is the one that must actually be read.
+    if (welcomed && !backupWarned) {
+        BackupWarning(onDismiss = { firstRun.markBackupWarned() })
+    }
 
     val favourites = remember(favouriteIds) {
         favouriteIds.mapNotNull { Experiments.byId(it) }
@@ -390,6 +398,16 @@ private fun RadioStatus() {
                     style = MaterialTheme.typography.labelSmall,
                     color = content,
                 )
+                // Who is holding the radio, named. The radio staying on with nothing open
+                // is a leaked claim, and a count alone cannot be acted on - the whole
+                // symptom is a battery that empties while the app looks idle.
+                if (scanning && health.claims.isNotEmpty()) {
+                    Text(
+                        "Held by " + health.claims.sorted().joinToString(", "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = 0.75f),
+                    )
+                }
             }
         }
     }

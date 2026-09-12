@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What Android's automatic backup takes, spelled out.
+
+  Backup is deliberately left on, and the app warns about it on first run rather than
+  deciding for the user. This file exists so that what goes is a written-down decision
+  instead of a default nobody looked at: everything here ends up in the user's Google
+  account, including the names they have given to other people's devices and the log of
+  which addresses were linked to which.
+
+  Recorded sessions and exported CSVs live in getExternalFilesDir and are excluded - those
+  are the bulk observations, and a backup is not where they belong.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+</full-backup-content>

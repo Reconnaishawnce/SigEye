@@ -41,14 +41,22 @@
 
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SigEye"
         tools:targetApi="34">
 
+        <!-- Handling these ourselves rather than letting Android recreate the activity.
+             Compose recomposes against the new configuration quite happily, whereas a
+             recreation throws away every remembered value - which meant that turning the
+             phone sideways during a sweep destroyed the sweep. Three experiments ask the
+             user to move the phone about while it records, so this was not theoretical. -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.SigEye">
