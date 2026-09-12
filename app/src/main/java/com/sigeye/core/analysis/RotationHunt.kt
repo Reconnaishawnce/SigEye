@@ -1,5 +1,7 @@
 package com.sigeye.core.analysis
 
+import com.sigeye.core.ble.AddressType
+import com.sigeye.core.ble.PayloadVariance
 import kotlin.math.abs
 
 /** A claimed rotation, with the reasoning behind it. */
@@ -46,11 +48,39 @@ data class HuntState(
     val currentRssi: Int? = null,
     val rotations: List<Rotation> = emptyList(),
     val learnProgress: Float = 0f,
+    /** Everything measured about the subject that is not the address itself. */
+    val traits: Traits = Traits(),
 ) {
     val addressesLinked: Int get() = rotations.size + if (tracking != null) 1 else 0
     val confirmedRotations: Int get() = rotations.count { it.confirmed }
     val disprovedRotations: Int get() = rotations.count { it.disproved }
 }
+
+/**
+ * Everything measurable about how a device advertises, rather than what it says.
+ *
+ * Gathered in one place because the point of the experiment is comparison: two devices
+ * side by side, or one device before and after a rotation. A single number - how often it
+ * advertises - was never going to carry that on its own.
+ */
+data class Traits(
+    val addressType: AddressType = AddressType.UNKNOWN,
+    val intervalMs: Long = 0,
+    val intervalSlots: Int = 0,
+    val intervalStability: String = "unknown",
+    val intervalJitter: Double = 0.0,
+    val rssiSpread: Double = 0.0,
+    val isLegacy: Boolean = true,
+    val isConnectable: Boolean = false,
+    val primaryPhy: Int = 1,
+    val secondaryPhy: Int = 0,
+    val advertisingSid: Int = 0xFF,
+    val payloadLength: Int = 0,
+    val payloadStaticBytes: Int = 0,
+    val payloadMask: String = "",
+    val payloadNote: String = "",
+    val payloadLeaksIdentity: Boolean = false,
+)
 
 /**
  * Following one device through its address changes.
@@ -82,6 +112,7 @@ class RotationHunt(
         val gaps: MutableList<Long> = mutableListOf(),
         val recent: ArrayDeque<Int> = ArrayDeque(),
         var bestRssi: Int = -127,
+        val payload: PayloadVariance = PayloadVariance(),
     ) {
         fun observe(rssi: Int, atMs: Long) {
             if (packets > 0) gaps.add(atMs - lastSeenMs)
@@ -94,17 +125,22 @@ class RotationHunt(
 
         val recentRssi: Double get() = if (recent.isEmpty()) -127.0 else recent.average()
 
-        fun identity(address: String) = Identity(
-            address = address,
-            shape = shape,
-            isRandom = isRandom,
-            firstSeenMs = firstSeenMs,
-            lastSeenMs = lastSeenMs,
-            packets = packets,
-            medianGapMs = Fingerprint.baseIntervalMs(gaps),
-            recentRssi = recentRssi,
-            bestRssi = bestRssi,
-        )
+        fun identity(address: String): Identity {
+            val base = Fingerprint.baseIntervalMs(gaps)
+            return Identity(
+                address = address,
+                shape = shape,
+                isRandom = isRandom,
+                firstSeenMs = firstSeenMs,
+                lastSeenMs = lastSeenMs,
+                packets = packets,
+                medianGapMs = base,
+                recentRssi = recentRssi,
+                bestRssi = bestRssi,
+                intervalJitter = Fingerprint.intervalJitter(gaps, base),
+                rssiSpread = Fingerprint.spread(recent.toList()),
+            )
+        }
     }
 
     private val everything = LinkedHashMap<String, Watched>()
@@ -139,11 +175,19 @@ class RotationHunt(
         clearWalk()
     }
 
-    fun observe(address: String, rssi: Int, atMs: Long, shape: AdvertShape, isRandom: Boolean) {
+    fun observe(
+        address: String,
+        rssi: Int,
+        atMs: Long,
+        shape: AdvertShape,
+        isRandom: Boolean,
+        manufacturerData: ByteArray? = null,
+    ) {
         val key = address.uppercase()
         val watched = everything.getOrPut(key) {
             Watched(shape, isRandom, atMs, atMs)
         }
+        watched.payload.observe(manufacturerData)
         // Shape is refreshed rather than fixed at first sight: a device does not put
         // everything in every packet, so the fullest picture builds up over a few.
         if (shape.distinctiveness > watched.shape.distinctiveness) watched.shape = shape
@@ -283,6 +327,27 @@ class RotationHunt(
             intervalMs = watched?.let { Fingerprint.baseIntervalMs(it.gaps) } ?: 0L,
             packets = watched?.packets ?: 0,
             currentRssi = watched?.recent?.lastOrNull(),
+            traits = watched?.let { entry ->
+                val identity = entry.identity(tracked ?: "")
+                Traits(
+                    addressType = AddressType.of(tracked ?: ""),
+                    intervalMs = identity.medianGapMs,
+                    intervalSlots = identity.intervalSlots,
+                    intervalStability = identity.intervalStability,
+                    intervalJitter = identity.intervalJitter,
+                    rssiSpread = identity.rssiSpread,
+                    isLegacy = entry.shape.isLegacy,
+                    isConnectable = entry.shape.isConnectable,
+                    primaryPhy = entry.shape.primaryPhy,
+                    secondaryPhy = entry.shape.secondaryPhy,
+                    advertisingSid = entry.shape.advertisingSid,
+                    payloadLength = entry.payload.length,
+                    payloadStaticBytes = entry.payload.staticBytes,
+                    payloadMask = entry.payload.mask(),
+                    payloadNote = entry.payload.describe(),
+                    payloadLeaksIdentity = entry.payload.leaksIdentity(),
+                )
+            } ?: Traits(),
             rotations = rotations.toList(),
             learnProgress = if (stage == HuntStage.LEARN) {
                 ((nowMs - learnStartedMs).toFloat() / learnMs).coerceIn(0f, 1f)

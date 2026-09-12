@@ -22,6 +22,18 @@ data class Advert(
     val txPower: Int? = null,
     /** GAP Appearance, when the device bothered to declare one. */
     val appearance: Int? = null,
+    /**
+     * Link-layer traits, all API 26 and none of them part of the payload.
+     *
+     * These are set by the controller and the advertising parameters rather than by the
+     * privacy scheme, which makes them worth as much as the payload shape for telling one
+     * device from another - and unlike the payload, nothing rotates them.
+     */
+    val isLegacy: Boolean = true,
+    val isConnectable: Boolean = false,
+    val primaryPhy: Int = 1,
+    val secondaryPhy: Int = 0,
+    val advertisingSid: Int = 0xFF,
 ) {
     val oui: String get() = Vendors.ouiOf(address)
 
@@ -32,6 +44,9 @@ data class Advert(
 
     /** What the device says it is, e.g. "Wearable audio - earbud". */
     val appearanceLabel: String? get() = Appearance.describe(appearance)
+
+    /** Which kind of address this is, which decides whether it can rotate at all. */
+    val addressType: AddressType get() = AddressType.of(address)
 
     /** Identity by address; the payload arrays would otherwise compare by reference. */
     override fun equals(other: Any?): Boolean =
@@ -66,6 +81,11 @@ data class Advert(
                     .orEmpty(),
                 txPower = record?.txPowerLevel?.takeIf { it != Int.MIN_VALUE },
                 appearance = Appearance.parse(record?.bytes),
+                isLegacy = result.isLegacy,
+                isConnectable = result.isConnectable,
+                primaryPhy = result.primaryPhy,
+                secondaryPhy = result.secondaryPhy,
+                advertisingSid = result.advertisingSid,
             )
         }
     }

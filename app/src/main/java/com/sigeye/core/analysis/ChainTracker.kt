@@ -101,17 +101,22 @@ class ChainTracker(
 
         val recentRssi: Double get() = if (recent.isEmpty()) -127.0 else recent.average()
 
-        fun identity(address: String) = Identity(
-            address = address,
-            shape = shape,
-            isRandom = isRandom,
-            firstSeenMs = firstSeenMs,
-            lastSeenMs = lastSeenMs,
-            packets = packets,
-            medianGapMs = Fingerprint.baseIntervalMs(gaps),
-            recentRssi = recentRssi,
-            bestRssi = recent.maxOrNull() ?: -127,
-        )
+        fun identity(address: String): Identity {
+            val base = Fingerprint.baseIntervalMs(gaps)
+            return Identity(
+                address = address,
+                shape = shape,
+                isRandom = isRandom,
+                firstSeenMs = firstSeenMs,
+                lastSeenMs = lastSeenMs,
+                packets = packets,
+                medianGapMs = base,
+                recentRssi = recentRssi,
+                bestRssi = recent.maxOrNull() ?: -127,
+                intervalJitter = Fingerprint.intervalJitter(gaps, base),
+                rssiSpread = Fingerprint.spread(recent.toList()),
+            )
+        }
     }
 
     private val live = LinkedHashMap<String, Live>()

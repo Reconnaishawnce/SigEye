@@ -24,6 +24,20 @@ data class AdvertShape(
     val manufacturerLength: Int = 0,
     val manufacturerPrefix: String? = null,
     val serviceDataKeys: List<String> = emptyList(),
+    /**
+     * Link-layer traits, which no privacy scheme touches.
+     *
+     * These come from the advertising parameters rather than the payload: whether the
+     * device uses the extended advertising introduced in Bluetooth 5, whether it will
+     * accept a connection, which physical layer it advertises on, and its advertising set
+     * id. A device cannot change any of them without changing how it advertises, which is
+     * a firmware decision rather than a privacy one.
+     */
+    val isLegacy: Boolean = true,
+    val isConnectable: Boolean = false,
+    val primaryPhy: Int = 1,
+    val secondaryPhy: Int = 0,
+    val advertisingSid: Int = 0xFF,
 ) {
     /** A stable string for two shapes to be compared by. */
     val key: String
@@ -36,6 +50,11 @@ data class AdvertShape(
             manufacturerLength.toString(),
             manufacturerPrefix ?: "-",
             serviceDataKeys.sorted().joinToString("|").ifEmpty { "-" },
+            if (isLegacy) "L" else "X",
+            if (isConnectable) "C" else "-",
+            primaryPhy.toString(),
+            secondaryPhy.toString(),
+            advertisingSid.toString(),
         ).joinToString("/")
 
     /**
@@ -52,6 +71,10 @@ data class AdvertShape(
             txPower,
             name?.takeIf { it.isNotBlank() },
             manufacturerPrefix,
+            // Extended advertising and a non-default advertising set are both unusual
+            // enough to be worth a point on their own.
+            if (!isLegacy) 1 else null,
+            if (advertisingSid != 0xFF) 1 else null,
         ).size + serviceUuids.size + serviceDataKeys.size
 
     val tooPlainToMatchOn: Boolean get() = distinctiveness < 2
@@ -88,7 +111,32 @@ data class Identity(
     val medianGapMs: Long,
     val recentRssi: Double,
     val bestRssi: Int,
-)
+    /** Spread of the gaps about the base interval, as a fraction of it. */
+    val intervalJitter: Double = 0.0,
+    /** Standard deviation of RSSI while the device was audible. */
+    val rssiSpread: Double = 0.0,
+) {
+    /**
+     * The advertising interval in the units the specification actually uses.
+     *
+     * Intervals are set as a whole number of 0.625 ms slots, so the raw estimate snaps to
+     * one. The common values are recognisable on sight - 32 slots is 20 ms, 160 is 100 ms,
+     * 244 is the 152.5 ms Apple uses, 1636 is the 1022.5 ms of a device trying to save
+     * power - and a researcher comparing two devices wants the slot count, not a number
+     * of milliseconds that happens to be close to it.
+     */
+    val intervalSlots: Int get() = if (medianGapMs <= 0) 0 else (medianGapMs / 0.625).toInt()
+
+    /** How tightly the device holds its interval. Under a tenth is metronomic. */
+    val intervalStability: String
+        get() = when {
+            medianGapMs <= 0 -> "unknown"
+            intervalJitter <= 0.05 -> "very tight"
+            intervalJitter <= 0.15 -> "tight"
+            intervalJitter <= 0.4 -> "loose"
+            else -> "irregular"
+        }
+}
 
 /**
  * Linking one address to the next one a device puts on.
@@ -244,6 +292,30 @@ object Fingerprint {
         if (usable.size < 4) return 0L
         val index = ((usable.size - 1) * 0.15).toInt().coerceIn(0, usable.lastIndex)
         return usable[index]
+    }
+
+    /**
+     * How loosely the gaps sit about the base interval, as a fraction of it.
+     *
+     * Only gaps close to one interval are counted. A missed packet doubles a gap, and
+     * including those would measure how well the scanner is keeping up rather than how
+     * steadily the device advertises - which is the opposite of the intent.
+     */
+    fun intervalJitter(gaps: List<Long>, baseMs: Long): Double {
+        if (baseMs <= 0) return 0.0
+        val singles = gaps.filter { it in (baseMs / 2)..(baseMs * 3 / 2) }
+        if (singles.size < 4) return 0.0
+        val mean = singles.average()
+        if (mean <= 0.0) return 0.0
+        val variance = singles.sumOf { (it - mean) * (it - mean) } / singles.size
+        return kotlin.math.sqrt(variance) / mean
+    }
+
+    /** Standard deviation of a run of readings. */
+    fun spread(values: List<Int>): Double {
+        if (values.size < 2) return 0.0
+        val mean = values.average()
+        return kotlin.math.sqrt(values.sumOf { (it - mean) * (it - mean) } / values.size)
     }
 
     private fun describeShape(shape: AdvertShape): String {

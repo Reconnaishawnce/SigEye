@@ -48,7 +48,9 @@ import com.sigeye.core.analysis.Identity
 import com.sigeye.core.analysis.LinkConfidence
 import com.sigeye.core.analysis.Rotation
 import com.sigeye.core.analysis.RotationHunt
+import com.sigeye.core.ble.AddressType
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.ble.Phy
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
@@ -141,6 +143,11 @@ private fun Live() {
                     ?.take(2)
                     ?.joinToString("") { "%02X".format(it) },
                 serviceDataKeys = advert.serviceData.keys.toList(),
+                isLegacy = advert.isLegacy,
+                isConnectable = advert.isConnectable,
+                primaryPhy = advert.primaryPhy,
+                secondaryPhy = advert.secondaryPhy,
+                advertisingSid = advert.advertisingSid,
             )
             hunt.observe(
                 address = advert.address,
@@ -148,6 +155,7 @@ private fun Live() {
                 atMs = advert.atMs,
                 shape = shape,
                 isRandom = advert.isRandomAddress,
+                manufacturerData = advert.manufacturerData,
             )
             chains.observe(
                 address = advert.address,
@@ -754,6 +762,7 @@ private fun RotationCard(rotation: Rotation) {
 
 @Composable
 private fun Fingerprint(state: HuntState) {
+    val traits = state.traits
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(
@@ -766,11 +775,76 @@ private fun Fingerprint(state: HuntState) {
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
-                Stat("Interval", "${state.intervalMs}", "ms")
+                Stat("Interval", "${traits.intervalSlots}", "slots")
                 Stat("Traits", "${state.shape.distinctiveness}", "distinctive")
                 Stat("Packets", "${state.packets}", "heard")
             }
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Address",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Line("Type", traits.addressType.label)
+            Text(
+                traits.addressType.rotates,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (traits.addressType == AddressType.RANDOM_STATIC) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Timing",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Line(
+                "Interval",
+                String.format(
+                    Locale.US,
+                    "%d ms  (%d \u00D7 0.625 ms)",
+                    traits.intervalMs,
+                    traits.intervalSlots,
+                ),
+            )
+            Line(
+                "Stability",
+                traits.intervalStability +
+                    String.format(Locale.US, "  (\u00B1%.1f%%)", traits.intervalJitter * 100),
+            )
+            Line(
+                "Signal spread",
+                String.format(Locale.US, "%.1f dB", traits.rssiSpread),
+            )
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Link layer",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Line("Advertising", if (traits.isLegacy) "legacy" else "extended (BT 5)")
+            Line("Connectable", if (traits.isConnectable) "yes" else "no")
+            Line(
+                "PHY",
+                Phy.label(traits.primaryPhy) +
+                    if (traits.secondaryPhy != 0) " / " + Phy.label(traits.secondaryPhy) else "",
+            )
+            if (traits.advertisingSid != 0xFF) {
+                Line("Advertising set", traits.advertisingSid.toString())
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Payload",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
             state.shape.name?.let { Line("Name", it) }
             state.shape.companyId?.let {
                 Line("Company", String.format(Locale.US, "0x%04X", it))
@@ -778,14 +852,32 @@ private fun Fingerprint(state: HuntState) {
             if (state.shape.serviceUuids.isNotEmpty()) {
                 Line("Services", "${state.shape.serviceUuids.size} advertised")
             }
-            if (state.shape.manufacturerLength > 0) {
-                Line(
-                    "Payload",
-                    "${state.shape.manufacturerLength} bytes" +
-                        (state.shape.manufacturerPrefix?.let { ", starts $it" } ?: ""),
+            state.shape.txPower?.let { Line("TX power", "$it dBm") }
+            if (traits.payloadLength > 0) {
+                Line("Bytes", "${traits.payloadLength}")
+                Line("Never change", "${traits.payloadStaticBytes}")
+                Text(
+                    traits.payloadMask,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            state.shape.txPower?.let { Line("TX power", "$it dBm") }
+            Text(
+                traits.payloadNote,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (traits.payloadLeaksIdentity) {
+                    FontWeight.SemiBold
+                } else {
+                    FontWeight.Normal
+                },
+                color = if (traits.payloadLeaksIdentity) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(top = 2.dp),
+            )
 
             Spacer(Modifier.height(8.dp))
             Text(
@@ -794,9 +886,10 @@ private fun Fingerprint(state: HuntState) {
                         "its structure would mean very little. Something with a name and " +
                         "a few services is a far better subject."
                 } else {
-                    "None of this changes when the address does - it is set by firmware " +
-                        "rather than by the privacy scheme, which is precisely why it can " +
-                        "be followed across a rotation."
+                    "Everything above the payload section is set by firmware and the " +
+                        "advertising parameters, not by the privacy scheme - which is " +
+                        "exactly why it survives a rotation. The mask shows which payload " +
+                        "bytes have ever changed: # never has, . has."
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

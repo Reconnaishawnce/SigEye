@@ -84,6 +84,14 @@ green CI run and a release on GitHub.
       separate, narrower layer and be explicit about which findings are configuration and
       which are a known-vulnerable build. Research real signature sources; do not invent
       CVE mappings.
+- [ ] **Persistent tracking on lists.** Let a watchlist rule, or a list in Device Inspector,
+      opt into following its devices across MAC rotation using the `Fingerprint` /
+      `ChainTracker` machinery. A list entry would keep a fingerprint alongside the address
+      and re-acquire the device when the address changes, so Signal Watch, Discovery and
+      Travelling Companions all stop losing their subject every fifteen minutes. Be careful
+      with the failure mode: a wrong re-acquisition silently transfers a name onto a
+      stranger's phone, which is worse than losing the device, so it should require the
+      strong rating and say when it has re-acquired.
 - [ ] **Primetime pass.** Home screen organisation, onboarding, export and share
       throughout, README and docs, full regression. Consider removing `continue-on-error`
       from the lint step — it hid a real Android 8 crash for weeks.
