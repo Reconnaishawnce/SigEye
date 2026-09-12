@@ -40,6 +40,11 @@ green CI run and a release on GitHub.
   `androidx.compose.runtime.getValue` and `setValue` are operator imports used implicitly
   by `by`, so they appear nowhere in the text and a naive pruner deletes them, breaking
   every delegated property in the file.
+- **Never write a backslash through a shell heredoc.** `\d` and `\.` arrive in the file as
+  single backslashes, which Kotlin rejects as unsupported escape sequences, and it has cost
+  a red build twice. Anything containing a backslash — regexes above all — goes in with the
+  Write or Edit tool. While you are there: `$` starts a template in a Kotlin string, so a
+  regex end-of-input anchor is spelled `\z`, not `$`.
 - Long-running recordings live in `core/Recordings.kt` and are driven by `ScanService`, not
   by the screen. A screen reads them and toggles a `ScanService.Mode`; it must not own a
   recorder, or the measurement dies with the composition.
