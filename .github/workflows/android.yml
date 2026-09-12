@@ -49,8 +49,10 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      # Not continue-on-error any more. It was, and it hid a real NoSuchMethodError on
+      # Android 8 for weeks: CellIdentity.mccString is API 28 while minSdk is 26, lint
+      # said so on every single run, and nobody reads a step that cannot fail.
       - name: Lint
-        continue-on-error: true
         run: ./gradlew lintDebug --no-daemon
 
       - name: Stage APK

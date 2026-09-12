@@ -116,6 +116,8 @@ green CI run and a release on GitHub.
         underneath. Up to three comparison devices on the same chart at once.
       - Treat it as a standalone app living inside this one: its own home, its own saved
         sessions, its own export.
-- [ ] **Primetime pass.** Home screen organisation, onboarding, export and share
-      throughout, README and docs, full regression. Consider removing `continue-on-error`
-      from the lint step — it hid a real Android 8 crash for weeks.
+- [x] **Primetime pass.** Home screen organisation (favourites: starred, ordered, seeded
+      once with the recommended set), a welcome card rather than a wizard, README rewritten
+      around what the app actually is now, and `continue-on-error` gone from the lint step.
+      Still to do afterwards: export and share on the screens that lack it, and a look at
+      `docs/EXPERIMENTS.md`, which still describes the app as a train spotter.

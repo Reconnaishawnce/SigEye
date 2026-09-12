@@ -37,6 +37,7 @@ import com.sigeye.core.CheckLevel
 import com.sigeye.core.Experiment
 import com.sigeye.core.Experiments
 import com.sigeye.core.FavouriteStore
+import com.sigeye.core.FirstRun
 import com.sigeye.core.Preflight
 import com.sigeye.core.ScanService
 import com.sigeye.core.ble.BleScanHub
@@ -46,7 +47,9 @@ import java.util.Locale
 fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val store = remember { FavouriteStore.get(context) }
+    val firstRun = remember { FirstRun.get(context) }
     val favouriteIds by store.ids.collectAsStateWithLifecycle()
+    val welcomed by firstRun.dismissed.collectAsStateWithLifecycle()
     var arranging by remember { mutableStateOf(false) }
 
     val favourites = remember(favouriteIds) {
@@ -77,6 +80,10 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(14.dp))
+        if (!welcomed) {
+            Welcome { firstRun.dismiss() }
+            Spacer(Modifier.height(10.dp))
+        }
         RadioStatus()
         Spacer(Modifier.height(10.dp))
         PreflightCard()
@@ -123,6 +130,59 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * What this is, in the time somebody will actually give it.
+ *
+ * Not a wizard. A sequence of full-screen pages before anyone is allowed to use the app is
+ * a tax on everyone who would have worked it out anyway, and is skipped by exactly the
+ * people it was written for. Three short paragraphs at the top of the list, dismissed for
+ * good with one tap.
+ */
+@Composable
+private fun Welcome(onDismiss: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = "Your phone is already listening",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Everything around you is broadcasting - earbuds, cars, tills, " +
+                    "doorbells, and every phone in the room. This turns that into " +
+                    "experiments you can run and check, rather than a list of addresses.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Start with a favourite below. Each one opens with what it needs, " +
+                    "how to run it, what the reading means, and where it lies to you - " +
+                    "tap the title for that. Nothing leaves the phone and nothing is " +
+                    "connected to unless you ask.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Scanning costs battery, so it happens only while an experiment is " +
+                    "open or a recording is running. The card below always says which.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onDismiss) { Text("Got it") }
+        }
     }
 }
 

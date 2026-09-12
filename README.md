@@ -2,115 +2,144 @@
 
 Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
 
-Every experiment is a self-contained module over one shared spine:
+Twenty-eight of them, from *how many dB does a crisp packet block* to *follow one phone
+through the address changes designed to stop you*. Everything runs on the phone. No
+network code, no accounts, no analytics, nothing leaves the device.
 
-```
-sampler  ->  aggregator  ->  live chart  ->  CSV  ->  share
-```
-
-`docs/EXPERIMENTS.md` holds the roadmap of twenty planned experiments and the three
-Android constraints that shape them.
-
-No network code. No accounts. No analytics. Everything stays on the phone.
+**Install:** [latest release](https://github.com/Reconnaishawnce/SigEye/releases/latest) —
+a plain public APK download, no login and no zip. See [INSTALL.md](INSTALL.md).
 
 ---
 
-## Experiment 1: Train Spotter
+## What is in it
 
-Counts **newly seen Bluetooth LE addresses** per time bin and tells you when they burst.
+Starred favourites sit at the top of the home screen and can be rearranged; everything
+else is grouped by what it is for. `app/src/main/java/com/sigeye/core/Experiment.kt` is
+the authoritative list — the table below is a snapshot of it.
 
-Built to answer one question: *is a train going past my apartment right now?* A passenger
-train is a hundred phones, earbuds and fitness trackers moving through your radio horizon in
-under a minute. That shows up as a sharp spike in previously-unseen BLE addresses.
+### Tools — see and name what is around you
 
-## How it decides something is a train
+| | |
+|---|---|
+| **Device Inspector** | Everything broadcasting around you, decoded. |
+| **Discovery** | Learn what is normally here, then watch for what is not. |
+| **Proximity Radar** | Everything around you, arranged by how close it sounds. |
+| **Signal Watch** | Alerts when something you care about comes into range. |
+| **Forensics** | Record everything, then work out afterwards what mattered. |
+| **Persistent Tracking** | Keep a device's name attached to it after it changes address. |
 
-1. Scan BLE continuously, unfiltered, in a foreground service.
-2. An address counts as **new** only if it has not been seen in the last 10 minutes.
-3. New-device events are bucketed into 5-second bins.
-4. A **rolling baseline** is the median of the last 60 non-spiking bins (~5 minutes).
-5. A bin **spikes** when it is both at least 3x the baseline and at least 4 devices.
-6. A spike fires a heads-up notification, rate-limited to one per 2 minutes.
+### Counting and sensing — who and what is moving past
 
-Why a baseline instead of a fixed threshold: modern phones rotate their BLE address roughly
-every 15 minutes, so even a stationary neighbour mints a steady drip of "new" addresses.
-That drip *is* the baseline. A train is a sharp multiple of it. A fixed threshold would need
-retuning for every location and time of day; a baseline retunes itself.
+| | |
+|---|---|
+| **Train Spotter** | Counts new Bluetooth devices nearby and flags the bursts. |
+| **Speed Estimator** | How fast was that, from the shape of the signal. |
+| **Crowd Counter** | Roughly how many people are around you. |
+| **Dwell Time** | Who is passing through, and who lives here. |
+| **RF Motion Detector** | Notices someone crossing a radio path. |
+| **Place Profiler** | Leave the phone somewhere for hours and see the shape of the place. |
 
-A two-minute warm-up after Start keeps the first few bins from alerting against an empty
-baseline.
+### RF physics — how radio actually behaves in your rooms
+
+| | |
+|---|---|
+| **Doppler Walk** | Walk away counting your steps, and measure the number everything guesses. |
+| **Rotational Polarisation** | Roll the phone over and watch the signal die. |
+| **Channel Congestion** | Who is using the 2.4 GHz band, and whether Bluetooth has room to shout. |
+| **Wall Penetration** | Measure how much more the building takes from 5 GHz than from 2.4. |
+| **Multipath Fading** | Stand still and watch the signal move anyway. |
+| **Body Absorption** | Turn slowly in a circle and find your own shadow. |
+| **Faraday Cage Test** | How many dB does a tin, a fridge or a crisp packet really block? |
+| **Microwave Interference** | Watch an oven trample the 2.4 GHz band. |
+
+### What is being broadcast
+
+| | |
+|---|---|
+| **Defeating Randomisation** | Follow one phone through its address changes, and check whether it worked. |
+| **Rotation Lab** | A whole room's address privacy, grouped by maker and measured by clock. |
+| **Exposure Scan** | Insecure and over-sharing things in range, from what they broadcast. |
+| **Wi-Fi Survey** | Every network around you, and what its address gives away. |
+| **Bluetooth Explorer** | Ask a device what it has, and learn what the answers mean. |
+| **Beacon Decoder** | Reads the beacon formats hiding in the noise. |
+| **Travelling Companions** | Record here, then there, then somewhere else. What appears in all of it? |
+
+### Mapping
+
+| | |
+|---|---|
+| **Cell Handovers** | How often your phone changes tower. |
+
+---
+
+## The house style
+
+Two rules shape almost every screen.
+
+**Be honest about limits.** Every experiment carries a `limits` field, and most carry a
+diagnostics panel saying what the thing is actually seeing and why it might be showing
+nothing. An empty screen with no explanation is treated as a bug. Where a measurement
+cannot be made — Android never reports which advertising channel a packet arrived on, a
+phone cannot measure airtime, a resolvable address cannot be attributed to a vendor — the
+screen says so rather than producing a confident wrong answer.
+
+**Refuse rather than guess.** Where an inference would put a name on a stranger's device,
+the threshold is deliberately obstructive: strongest confidence only, a refusal when two
+candidates match equally well, and every automatic decision logged and reversible.
+
+## Architecture
+
+```
+BleScanHub / WifiScanHub   one radio, refcounted, shared by every screen
+core/analysis/*            pure Kotlin, no Android imports, unit tested
+core/ScanService           long recordings that survive the screen going off
+experiments/<name>/        one Compose screen each
+ui/                        shared components: charts, radar, diagnostics, permissions
+```
+
+Anything non-trivial is a pure class in `core/` with JUnit tests — currently around 580 of
+them. A screen with logic buried in it cannot be tested and will not be trusted.
+
+Registry data (OUIs, company IDs, service and characteristic UUIDs) is generated by script
+into `VendorData.kt` and `assets/oui.bin`, never hand-typed.
 
 ## Building
 
-Requires nothing but a JDK 17 and this repo:
+JDK 17 and this repo:
 
 ```
 ./gradlew assembleDebug
 ```
 
-The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
+CI runs the unit tests, builds the APK and publishes it to the releases page on every push
+to `main`.
 
-CI builds the same APK on every push to `main` and publishes it as a release asset:
+## Permissions, and why
 
-**https://github.com/Reconnaishawnce/SigEye/releases/latest**
-
-That is a plain public download link, so it works from a phone browser with no login and
-no zip. The Actions tab also keeps a 90-day artifact, but artifacts are zipped and need an
-authenticated desktop session, which makes them awkward on mobile.
-
-## CSV log
-
-Every closed bin is appended to app-specific external storage, one file per day:
-
-```
-/sdcard/Android/data/com.sigeye/files/sigeye-YYYY-MM-DD.csv
-```
-
-Columns: `timestamp,epoch_ms,new_count,active_unique,baseline,spike,label`
-
-`label` is `TRAIN` for bins where you pressed the **Train now** button. Press it when you
-actually hear a train go by; after a few days you can check the `spike` column against the
-`TRAIN` column and tune the threshold against real ground truth instead of guessing.
-
-Pull it with:
-
-```
-adb pull /sdcard/Android/data/com.sigeye/files/ ./sigeye-logs
-```
-
-Or use the in-app **Export CSV** button, which shares every log file.
-
-## Settings
-
-| Setting | Default | What it does |
-|---|---|---|
-| Bin length | 5 s | Width of one chart bar / one CSV row |
-| New-device window | 10 min | How long before an address counts as new again |
-| Signal floor | -85 dBm | Ignore advertisements weaker than this |
-| Chart history | 30 min | How far back the chart reaches |
-| Burst threshold | 3.0x | Multiple of baseline that counts as a burst |
-| Minimum burst size | 4 | Never alert below this, however quiet it is |
-| Alert cooldown | 120 s | One train, one buzz |
-
-If trains get missed, lower the burst threshold or raise the signal floor toward -70 dBm so
-distant clutter stops padding the baseline. If it cries wolf, raise the threshold.
-
-## Permissions
-
-- `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` - Android 12+ scanning
-- `BLUETOOTH` / `BLUETOOTH_ADMIN` - Android 11 and below
-- `ACCESS_FINE_LOCATION` - required for unfiltered scan results on every supported API level
-- `FOREGROUND_SERVICE_LOCATION` - to keep scanning with the screen off
-- `POST_NOTIFICATIONS` - the ongoing scan and the burst alerts
+| Permission | Why |
+|---|---|
+| `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` | Scanning on Android 12+ |
+| `BLUETOOTH` / `BLUETOOTH_ADMIN` | Android 11 and below |
+| `ACCESS_FINE_LOCATION` | Android returns no scan results without it, on any version |
+| `FOREGROUND_SERVICE_LOCATION` | Long recordings with the screen off |
+| `POST_NOTIFICATIONS` | Ongoing recordings and alerts |
+| `ACTIVITY_RECOGNITION` | The step counter, for Doppler Walk only |
+| `VIBRATE` | Alerts |
 
 `BLUETOOTH_SCAN` is declared **without** `neverForLocation`. That flag is an assertion that
 the app will not derive location from scan results; dropping it is what lets the same code
 path work unchanged on API 26-30, where location permission is mandatory regardless.
 
+Each experiment asks only for what it needs, at the point it needs it. A user who only
+wants the Wi-Fi channel analyser is never asked for Bluetooth.
+
 ## Known limits
 
-- Android throttles BLE scans. A watchdog restarts the scan if results stop arriving for 90
-  seconds, and refreshes it every 25 minutes regardless.
-- Aggressive OEM battery managers (Samsung, Xiaomi, OnePlus) may kill the foreground service
-  anyway. Exempt SigEye from battery optimisation if the log has gaps.
-- Bin counts are wall-clock, not monotonic. A manual clock change mid-run will distort one bin.
+- Android throttles Wi-Fi scans hard by default. Developer options can turn that off, and
+  the preflight check on the home screen says when it is biting.
+- Aggressive OEM battery managers may kill a foreground service anyway. Exempt SigEye from
+  battery optimisation if a long recording has gaps.
+- Original-equipment tyre pressure sensors transmit at 315/433 MHz. No phone has a receiver
+  for that, and no amount of software will change it — that needs an SDR.
+- `docs/ROADMAP.md` carries what is still to come, and `docs/EXPERIMENTS.md` the
+  constraints that shape all of it.
