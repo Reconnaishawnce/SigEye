@@ -56,8 +56,8 @@ import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import com.sigeye.ui.RadarTarget
-import com.sigeye.ui.SignalRadar
+import com.sigeye.ui.radar.RadarPanel
+import com.sigeye.ui.radar.RadarTarget
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -118,6 +118,7 @@ private fun Live(dwell: Boolean) {
 
     val health by BleScanHub.health.collectAsStateWithLifecycle()
     val notes by book.notes.collectAsStateWithLifecycle()
+    var selectedBlip by remember { mutableStateOf<String?>(null) }
 
     var snapshot by remember { mutableStateOf<PopulationSnapshot?>(null) }
     var rssiFloor by remember { mutableStateOf(-85f) }
@@ -222,19 +223,36 @@ private fun Live(dwell: Boolean) {
 
     if (!dwell) {
         Spacer(Modifier.height(12.dp))
+        val now = System.currentTimeMillis()
         val present = snap.devices
-            .filter { it.isPresent(System.currentTimeMillis(), tracker.config) }
-            .map { RadarTarget(it.address, it.lastRssi) }
-        SignalRadar(targets = present)
-        Text(
-            "Rings are signal strength, strongest at the centre. Direction is not shown " +
-                "because one antenna cannot know it - the angle is only there to keep " +
-                "each device in its own spot.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
+            .filter { it.isPresent(now, tracker.config) }
+            .map { device ->
+                RadarTarget(
+                    address = device.address,
+                    label = notes[device.address.uppercase(Locale.US)]?.nickname
+                        ?: device.fallbackName,
+                    smoothedRssi = device.lastRssi.toDouble(),
+                )
+            }
+        RadarPanel(
+            targets = present,
+            selected = selectedBlip,
+            onSelect = { selectedBlip = it },
+            footnote = "Rings are signal strength, strongest at the centre. Direction is " +
+                "not shown because one antenna cannot know it - the angle is only there " +
+                "to keep each device in its own spot.",
+        ) { target ->
+            val device = snap.devices.firstOrNull { it.address == target.address }
+            Text(
+                if (device == null) {
+                    "No longer being tracked."
+                } else {
+                    "Seen " + device.sightings + " times, first heard " +
+                        ((now - device.firstSeenMs) / 60_000L) + " minutes ago."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 
     Spacer(Modifier.height(16.dp))

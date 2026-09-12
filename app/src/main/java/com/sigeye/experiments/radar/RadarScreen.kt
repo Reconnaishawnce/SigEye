@@ -50,7 +50,7 @@ import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import com.sigeye.ui.radar.RadarScene
+import com.sigeye.ui.radar.RadarPanel
 import com.sigeye.ui.radar.RadarTarget
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -142,8 +142,6 @@ private fun Live(onLocate: (String) -> Unit) {
     var selected by remember { mutableStateOf<String?>(null) }
     var showList by remember { mutableStateOf(false) }
     var showNewList by remember { mutableStateOf(false) }
-    var outerDbm by remember { mutableStateOf(-100f) }
-    val innerDbm = -35f
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -226,34 +224,19 @@ private fun Live(onLocate: (String) -> Unit) {
     }
 
     Spacer(Modifier.height(10.dp))
-    RadarScene(
+    RadarPanel(
         targets = targets,
-        outerDbm = outerDbm,
-        innerDbm = innerDbm,
-        selectedAddress = selected,
+        selected = selected,
         onSelect = { selected = it },
-        onZoom = { zoom ->
-            // Pinching changes the dB span rather than magnifying pixels: zooming in
-            // should give more resolution near you, not bigger dots.
-            outerDbm = (outerDbm + (zoom - 1f) * 60f).coerceIn(-100f, -55f)
-        },
-    )
-
-    Text(
-        "${targets.size} in range · outer ring ${outerDbm.roundToInt()} dBm · " +
-            String.format(Locale.US, "%.0f/s", health.advertsPerSecond),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Text(
-        "Pinch to zoom. Tap a blip to select it. Angle is not direction - one antenna " +
-            "cannot measure a bearing, so only distance from the centre means anything.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        // This screen draws its own, fuller card below.
+        showSelectionCard = false,
+        footnote = String.format(
+            Locale.US,
+            "%.0f packets a second. Pinch or use the buttons to zoom, tap a blip to " +
+                "select it. Angle is not direction - one antenna cannot measure a " +
+                "bearing, so only distance from the centre means anything.",
+            health.advertsPerSecond,
+        ),
     )
 
     Spacer(Modifier.height(8.dp))

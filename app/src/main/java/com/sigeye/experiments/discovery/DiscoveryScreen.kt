@@ -57,8 +57,8 @@ import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import com.sigeye.ui.RadarTarget
-import com.sigeye.ui.SignalRadar
+import com.sigeye.ui.radar.RadarPanel
+import com.sigeye.ui.radar.RadarTarget
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -127,6 +127,7 @@ private fun Live() {
     var showRadar by remember { mutableStateOf(true) }
     var targets by remember { mutableStateOf<List<RadarTarget>>(emptyList()) }
     var seeding by remember { mutableStateOf(false) }
+    var selectedBlip by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -171,9 +172,9 @@ private fun Live() {
             targets = engine.inRange(now).map { sighting ->
                 RadarTarget(
                     address = sighting.address,
-                    rssi = sighting.rssi,
-                    highlight = sighting.address in newAddresses,
-                    dim = sighting.address !in newAddresses,
+                    label = notes[sighting.address]?.nickname ?: sighting.label(),
+                    smoothedRssi = sighting.rssi.toDouble(),
+                    flagged = sighting.address in newAddresses,
                 )
             }
 
@@ -209,6 +210,9 @@ private fun Live() {
             hideRandom = hideRandom,
             onHideRandom = { hideRandom = it },
             onSeed = { seeding = true },
+            selectedBlip = selectedBlip,
+            onSelectBlip = { selectedBlip = it },
+            arrivalsForDetail = arrivals,
             progress = progress,
             baselineSeconds = baselineSeconds,
             onBaselineSeconds = { baselineSeconds = it },
@@ -356,6 +360,9 @@ private fun WatchTab(
     hideRandom: Boolean,
     onHideRandom: (Boolean) -> Unit,
     onSeed: () -> Unit,
+    selectedBlip: String?,
+    onSelectBlip: (String?) -> Unit,
+    arrivalsForDetail: List<Arrival>,
     progress: Float,
     baselineSeconds: Float,
     onBaselineSeconds: (Float) -> Unit,
@@ -471,17 +478,35 @@ private fun WatchTab(
 
         DiscoveryStage.WATCHING -> {
             if (showRadar) {
-                SignalRadar(targets = targets, modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Distance from the centre is signal strength, strongest in the " +
-                        "middle. The angle is decorative - one antenna cannot tell you a " +
-                        "bearing, and pretending otherwise would be the most misleading " +
-                        "thing this app could do. Dim dots were here before the baseline " +
-                        "closed; bright ones arrived after it.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                RadarPanel(
+                    targets = targets,
+                    selected = selectedBlip,
+                    onSelect = onSelectBlip,
+                    footnote = "Radius is signal strength, strongest in the middle. The " +
+                        "angle is decorative - one antenna cannot tell you a bearing. " +
+                        "Devices already here when the baseline closed are dimmed; " +
+                        "arrivals are marked.",
+                ) { target ->
+                    val arrival = arrivalsForDetail.firstOrNull {
+                        it.sighting.address == target.address
+                    }
+                    Text(
+                        if (arrival == null) {
+                            "Part of the baseline - it was here before watching started."
+                        } else {
+                            "Arrived after the baseline closed. " + arrival.trend.label +
+                                "."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    arrival?.possibleRotationOf?.let {
+                        Text(
+                            "Possibly $it under a new random address.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
             }
 

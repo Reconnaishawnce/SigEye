@@ -96,6 +96,15 @@ fun RadarScene(
     onSelect: (String?) -> Unit,
     onZoom: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * How much bigger to draw the blips.
+     *
+     * This used to stay at one on purpose - zooming widened the near field rather than
+     * magnifying anything, on the grounds that bigger dots carry no more information. In
+     * use that reads as the zoom having done nothing, so the dots now grow with it. The
+     * information is still in the radius; the size is feedback.
+     */
+    blipScale: Float = 1f,
 ) {
     val blips = remember { mutableStateMapOf<String, Blip>() }
     var frameMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -221,6 +230,7 @@ fun RadarScene(
                 }
 
                 drawBlip(
+                    scale = blipScale.coerceIn(1f, 2.6f),
                     blip = blip,
                     centre = centre,
                     maxRadius = maxRadius,
@@ -283,6 +293,7 @@ private fun DrawScope.drawBlip(
     selected: Boolean,
     colour: Color,
     measurer: TextMeasurer,
+    scale: Float,
 ) {
     val position = positionOf(blip, centre, maxRadius)
     val radians = (blip.angleDegrees - 90f) * PI.toFloat() / 180f
@@ -292,12 +303,12 @@ private fun DrawScope.drawBlip(
         val progress = ((nowMs - leaving).toFloat() / LEAVE_MS).coerceIn(0f, 1f)
         drawCircle(
             color = colour.copy(alpha = (1f - progress) * 0.8f),
-            radius = 5f,
+            radius = 5f * scale,
             center = position,
         )
         drawCircle(
             color = colour.copy(alpha = (1f - progress) * 0.4f),
-            radius = 6f + progress * 22f,
+            radius = (6f + progress * 22f) * scale,
             center = position,
             style = Stroke(width = 1.5f),
         )
@@ -321,7 +332,7 @@ private fun DrawScope.drawBlip(
         val eased = 1f - (1f - progress) * (1f - progress)
         drawCircle(
             color = colour.copy(alpha = (1f - eased) * 0.7f),
-            radius = 5f + eased * 30f,
+            radius = (5f + eased * 30f) * scale,
             center = position,
             style = Stroke(width = 2f),
         )
@@ -337,15 +348,19 @@ private fun DrawScope.drawBlip(
 
     drawCircle(
         color = colour.copy(alpha = 0.16f + glow * 0.42f),
-        radius = 10f + glow * 8f,
+        radius = (10f + glow * 8f) * scale,
         center = position,
     )
-    drawCircle(color = colour, radius = if (selected) 6.5f else 4.5f, center = position)
+    drawCircle(
+        color = colour,
+        radius = (if (selected) 6.5f else 4.5f) * scale,
+        center = position,
+    )
 
     if (selected) {
         drawCircle(
             color = colour,
-            radius = 15f,
+            radius = 15f * scale,
             center = position,
             style = Stroke(width = 2f),
         )
