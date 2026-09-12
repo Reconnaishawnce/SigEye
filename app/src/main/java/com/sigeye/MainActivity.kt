@@ -22,6 +22,7 @@ import com.sigeye.experiments.discovery.DiscoveryScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
 import com.sigeye.experiments.faraday.FaradayScreen
+import com.sigeye.experiments.forensics.ForensicsScreen
 import com.sigeye.experiments.inspector.InspectorScreen
 import com.sigeye.experiments.locate.LocateScreen
 import com.sigeye.experiments.microwave.MicrowaveScreen
@@ -132,6 +133,9 @@ private fun SigEyeApp() {
 
             Experiments.PLACE ->
                 PlaceScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.FORENSICS ->
+                ForensicsScreen(onBack = { route = null }, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = { route = null }, modifier = inset)

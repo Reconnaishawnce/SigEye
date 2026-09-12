@@ -49,6 +49,7 @@ import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -121,6 +122,9 @@ private fun Live() {
     var alertStyle by remember { mutableStateOf(AlertStyle.BUZZ) }
     var passes by remember { mutableStateOf<List<PassResult>>(emptyList()) }
     var stats by remember { mutableStateOf(WatcherStats()) }
+
+    // The radio is held by this screen, so a sleeping display ends the measurement.
+    KeepScreenOn(watching)
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)

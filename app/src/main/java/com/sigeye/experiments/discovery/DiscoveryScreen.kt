@@ -55,6 +55,7 @@ import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.radar.RadarPanel
@@ -128,6 +129,9 @@ private fun Live() {
     var targets by remember { mutableStateOf<List<RadarTarget>>(emptyList()) }
     var seeding by remember { mutableStateOf(false) }
     var selectedBlip by remember { mutableStateOf<String?>(null) }
+
+    // The radio is held by this screen, so a sleeping display ends the measurement.
+    KeepScreenOn(stage != DiscoveryStage.IDLE)
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)

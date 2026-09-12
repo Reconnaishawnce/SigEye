@@ -45,6 +45,7 @@ import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -97,6 +98,9 @@ private fun Live() {
     var report by remember { mutableStateOf(PlaceReport(emptyList(), emptyList(), 0, 0)) }
     val profile = remember { PlaceProfile() }
     var startedAtMs by remember { mutableStateOf(0L) }
+
+    // The radio is held by this screen, so a sleeping display ends the measurement.
+    KeepScreenOn(running)
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)

@@ -63,6 +63,7 @@ import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchStore
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -194,6 +195,9 @@ private fun Live() {
     val candidateTable = remember { LinkedHashMap<String, Candidate>() }
     var pickerPaused by remember { mutableStateOf(false) }
     var frozenCandidates by remember { mutableStateOf<List<Candidate>>(emptyList()) }
+
+    // The radio is held by this screen, so a sleeping display ends the measurement.
+    KeepScreenOn(running)
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)

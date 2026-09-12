@@ -62,6 +62,7 @@ object Experiments {
     const val EXPLORER = "explorer"
     const val WIFI = "wifi"
     const val PLACE = "place"
+    const val FORENSICS = "forensics"
 
     val all: List<Experiment> = listOf(
 
@@ -244,6 +245,36 @@ object Experiments {
             limits = "It counts devices, not people. Laptops, televisions and " +
                 "printers belong to nobody, and one person can carry three " +
                 "advertisers.",
+        ),
+        Experiment(
+            id = FORENSICS,
+            title = "Forensics",
+            blurb = "Record everything, then work out afterwards what mattered.",
+            teaches = "Two hundred devices go past in three minutes and the one you care " +
+                "about is indistinguishable in the moment. Recording first and filtering " +
+                "afterwards turns an impossible live problem into an easy review.",
+            category = Experiment.Category.TOOLS,
+            status = Experiment.Status.READY,
+            needs = "Somewhere with traffic, and a few minutes.",
+            howTo = listOf(
+                "Start recording and leave it for as long as the thing you are after " +
+                    "might take to appear - three minutes for a street.",
+                "Stop, then subtract. Hide unchanged removes everything that sat there " +
+                    "doing nothing, which is usually most of it.",
+                "Hide known removes anything you have nicknamed or filed, so what is left " +
+                    "is what you have never named.",
+                "Went past only keeps the things that rose to a peak and fell away again " +
+                    "- the shape of a vehicle rather than a shop.",
+                "Tap a row for the full detail: vendor, swing, when it was audible, and " +
+                    "where its peak fell within its own visit.",
+            ),
+            reading = "The bar on each row is the whole recording; the filled part is " +
+                "when that device was audible and the line inside it is its signal. " +
+                "Something that arrived halfway through and swelled in the middle is a " +
+                "pass. Something flat from edge to edge is furniture.",
+            limits = "Randomised addresses mean one phone driving past can appear as two " +
+                "or three separate devices. The recording lives in memory and is lost " +
+                "when you leave the screen unless you export it first.",
         ),
         Experiment(
             id = DWELL,
