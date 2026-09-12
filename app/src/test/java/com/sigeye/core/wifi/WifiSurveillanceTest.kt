@@ -119,6 +119,15 @@ class AccessPointTest {
     }
 
     @Test
+    fun `WPA2 is recognised in both spellings Android uses`() {
+        // The bug this encodes: checking for "WPA" before "WPA2" reported every modern
+        // network as the twenty-year-old version of the protocol.
+        assertEquals("WPA2", ap(capabilities = "[WPA2-PSK-CCMP][ESS]").security)
+        assertEquals("WPA2", ap(capabilities = "[RSN-PSK-CCMP][ESS]").security)
+        assertEquals("WPA2", ap(capabilities = "[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]").security)
+    }
+
+    @Test
     fun `a hidden network is flagged rather than shown as blank`() {
         assertTrue(ap(ssid = null).hidden)
         assertTrue(ap(ssid = "").hidden)

@@ -49,10 +49,18 @@ data class AccessPoint(
         get() = !capabilities.contains("WPA") && !capabilities.contains("WEP") &&
             !capabilities.contains("RSN")
 
+    /**
+     * Security from the capability string.
+     *
+     * Android spells the same thing two ways depending on version and driver - WPA2 turns
+     * up as both "[WPA2-PSK-CCMP]" and "[RSN-PSK-CCMP]" - so both have to be checked
+     * before the bare "WPA" test, which otherwise swallows "WPA2" and reports every
+     * modern network as the twenty-year-old version of the protocol.
+     */
     val security: String
         get() = when {
             capabilities.contains("SAE") -> "WPA3"
-            capabilities.contains("RSN") -> "WPA2"
+            capabilities.contains("WPA2") || capabilities.contains("RSN") -> "WPA2"
             capabilities.contains("WPA") -> "WPA"
             capabilities.contains("WEP") -> "WEP"
             else -> "Open"
