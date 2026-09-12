@@ -2,6 +2,27 @@ package com.sigeye.core.analysis
 
 import java.util.Locale
 
+/** One device as it was in a saved leg. */
+data class JourneyDevice(
+    val address: String,
+    val label: String,
+    val vendor: String? = null,
+    val isRandom: Boolean = false,
+    val packets: Int = 0,
+    val firstSeenMs: Long = 0,
+    val lastSeenMs: Long = 0,
+    val bestRssi: Int = -127,
+)
+
+/** A leg, with everything it heard, as written to disk. */
+data class JourneyLeg(
+    val index: Int,
+    val label: String,
+    val startedAtMs: Long,
+    val endedAtMs: Long,
+    val devices: List<JourneyDevice>,
+)
+
 /** One place, or one stretch of a journey. */
 data class Leg(
     val index: Int,
@@ -225,6 +246,104 @@ class ConvoyTracker {
     fun reset() {
         legs.clear()
         current = null
+    }
+
+    /**
+     * The whole journey in a form that can be written to disk and read back.
+     *
+     * A journey is hours long and the screen holding it can be closed at a traffic light,
+     * so keeping it only in memory made the experiment unusable for the thing it exists
+     * to do.
+     */
+    fun export(): List<JourneyLeg> = legs.map { leg ->
+        JourneyLeg(
+            index = leg.index,
+            label = leg.label,
+            startedAtMs = leg.startedAtMs,
+            endedAtMs = leg.endedAtMs,
+            devices = leg.seen.map { (address, presence) ->
+                JourneyDevice(
+                    address = address,
+                    label = leg.labels[address] ?: address,
+                    vendor = leg.vendors[address],
+                    isRandom = leg.randoms[address] == true,
+                    packets = presence.packets,
+                    firstSeenMs = presence.firstSeenMs,
+                    lastSeenMs = presence.lastSeenMs,
+                    bestRssi = presence.bestRssi,
+                )
+            },
+        )
+    }
+
+    /** Restores a journey. Any leg that was open is restored closed. */
+    fun restore(journey: List<JourneyLeg>) {
+        legs.clear()
+        current = null
+        journey.sortedBy { it.index }.forEach { saved ->
+            val builder = LegBuilder(legs.size, saved.label, saved.startedAtMs, saved.endedAtMs)
+            saved.devices.forEach { device ->
+                val key = device.address.uppercase(Locale.US)
+                builder.seen[key] = LegPresence(
+                    legIndex = builder.index,
+                    packets = device.packets,
+                    firstSeenMs = device.firstSeenMs,
+                    lastSeenMs = device.lastSeenMs,
+                    bestRssi = device.bestRssi,
+                )
+                builder.labels[key] = device.label
+                builder.vendors[key] = device.vendor
+                builder.randoms[key] = device.isRandom
+            }
+            legs.add(builder)
+        }
+    }
+
+    /**
+     * Adds a leg from somewhere recorded earlier by something else.
+     *
+     * A snapshot taken at home last week is a perfectly good first leg, and much better
+     * than one recorded five minutes ago in the same street - the whole difficulty with
+     * this experiment is getting real separation between legs.
+     */
+    fun addLegFromSnapshot(label: String, atMs: Long, devices: List<Sighting>) {
+        current?.let { it.endedAtMs = atMs }
+        current = null
+        val builder = LegBuilder(legs.size, label, atMs, atMs)
+        devices.forEach { sighting ->
+            val key = sighting.address.uppercase(Locale.US)
+            builder.seen[key] = LegPresence(
+                legIndex = builder.index,
+                packets = sighting.sightings,
+                firstSeenMs = sighting.firstSeenMs.takeIf { it > 0 } ?: atMs,
+                lastSeenMs = sighting.lastSeenMs.takeIf { it > 0 } ?: atMs,
+                bestRssi = sighting.bestRssi,
+            )
+            builder.labels[key] = sighting.label()
+            builder.vendors[key] = sighting.vendor
+            builder.randoms[key] = sighting.isRandom
+        }
+        legs.add(builder)
+    }
+
+    /** Every device in every leg, for export. */
+    fun csv(): String = buildString {
+        append("# SigEye journey
+")
+        append("leg,leg_label,address,label,packets,best_rssi_dbm,random
+")
+        legs.forEach { leg ->
+            leg.seen.forEach { (address, presence) ->
+                append(leg.index).append(',')
+                    .append(leg.label.replace(',', ' ')).append(',')
+                    .append(address).append(',')
+                    .append((leg.labels[address] ?: address).replace(',', ' ')).append(',')
+                    .append(presence.packets).append(',')
+                    .append(presence.bestRssi).append(',')
+                    .append(leg.randoms[address] == true).append('
+')
+            }
+        }
     }
 
     fun observe(

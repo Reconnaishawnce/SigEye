@@ -38,13 +38,19 @@ import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
+import com.sigeye.core.JourneyStore
 import com.sigeye.core.Permissions
+import com.sigeye.core.SavedJourney
+import com.sigeye.core.SnapshotStore
+import com.sigeye.core.SweepExport
 import com.sigeye.core.analysis.ConvoyReport
 import com.sigeye.core.analysis.ConvoyTracker
 import com.sigeye.core.analysis.FollowConfidence
 import com.sigeye.core.analysis.Follower
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.AlertPicker
+import com.sigeye.ui.DeviceActions
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
@@ -52,6 +58,9 @@ import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 private const val HUB_TAG = "convoy"
@@ -97,8 +106,12 @@ private fun Live() {
     val book = remember { DeviceBook.get(context) }
     val feedback = remember { Feedback(context) }
     val tracker = remember { ConvoyTracker() }
+    val journeys = remember { JourneyStore.get(context) }
+    val snapshotStore = remember { SnapshotStore.get(context) }
 
     val notes by book.notes.collectAsStateWithLifecycle()
+    val saved by journeys.journeys.collectAsStateWithLifecycle()
+    val snapshots by snapshotStore.snapshots.collectAsStateWithLifecycle()
 
     var recording by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf(ConvoyReport(emptyList(), emptyList(), 0)) }
@@ -106,12 +119,29 @@ private fun Live() {
     var alertStyle by remember { mutableStateOf(AlertStyle.BUZZ) }
     var announced by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expanded by remember { mutableStateOf<String?>(null) }
+    var savingJourney by remember { mutableStateOf(false) }
+    var pickingSnapshot by remember { mutableStateOf(false) }
+    var newListFor by remember { mutableStateOf<String?>(null) }
+    var exported by remember { mutableStateOf<String?>(null) }
+    var restored by remember { mutableStateOf(false) }
 
     val mine = remember(notes) {
         notes.filterValues { it.lists.contains(MINE_LIST) }.keys
     }
 
     KeepScreenOn(recording)
+
+    // A journey outlives the screen showing it, so the legs are read back on open and
+    // written after every change. Losing an hour of walking to a locked phone made the
+    // experiment useless for the only thing it is for.
+    LaunchedEffect(Unit) {
+        if (!restored) {
+            val previous = journeys.loadCurrent()
+            if (previous.isNotEmpty()) tracker.restore(previous)
+            restored = true
+            report = tracker.report(mine = mine)
+        }
+    }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -251,6 +281,7 @@ private fun Live() {
                     tracker.closeLeg(System.currentTimeMillis())
                     recording = false
                     report = tracker.report(mine = mine)
+                    journeys.keepCurrent(tracker.export())
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Finish this leg") }
@@ -310,7 +341,93 @@ private fun Live() {
                     book.createList(MINE_LIST)
                     book.toggleList(follower.address, MINE_LIST)
                 },
+                onRequestNewList = { newListFor = follower.address },
             )
+        }
+
+        if (snapshots.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { pickingSnapshot = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Add a leg from a saved place") }
+            Text(
+                "A snapshot taken at home last week is a better first leg than one " +
+                    "recorded five minutes ago in this street - the difficulty with this " +
+                    "experiment is getting real separation between legs, and a snapshot " +
+                    "from another day has it for free.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (tracker.legCount >= 2) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { savingJourney = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Save this journey") }
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = {
+                    val directory = File(context.getExternalFilesDir(null), "journeys")
+                    directory.mkdirs()
+                    val file = File(directory, "journey-${System.currentTimeMillis()}.csv")
+                    runCatching { file.writeText(tracker.csv()) }
+                    exported = file.name
+                    SweepExport.share(context, file)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Export this journey") }
+            exported?.let {
+                Text(
+                    "Wrote $it - every device in every leg.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (saved.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Text("Saved journeys", style = MaterialTheme.typography.labelLarge)
+            saved.take(6).forEach { journey ->
+                Card(
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(journey.label, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                SimpleDateFormat("d MMM HH:mm", Locale.US)
+                                    .format(Date(journey.savedAtMs)) +
+                                    " \u00B7 ${journey.legCount} legs, " +
+                                    "${journey.deviceCount} devices",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Row {
+                            TextButton(onClick = {
+                                tracker.restore(journey.legs)
+                                recording = false
+                                announced = emptySet()
+                                report = tracker.report(mine = mine)
+                                journeys.keepCurrent(tracker.export())
+                            }) {
+                                Text("Open", style = MaterialTheme.typography.labelSmall)
+                            }
+                            TextButton(onClick = { journeys.delete(journey) }) {
+                                Text("Delete", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -320,9 +437,103 @@ private fun Live() {
                 recording = false
                 announced = emptySet()
                 report = tracker.report(mine = mine)
+                journeys.clearCurrent()
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Start a new journey") }
+    }
+
+    if (savingJourney) {
+        var label by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { savingJourney = false },
+            title = { Text("Name this journey") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = label,
+                        onValueChange = { label = it },
+                        label = { Text("What was this trip?") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Keeps every leg and everything heard in it, so it can be reopened " +
+                            "or exported later.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    journeys.save(
+                        SavedJourney(
+                            label = label.ifBlank { "Unnamed journey" },
+                            savedAtMs = System.currentTimeMillis(),
+                            legs = tracker.export(),
+                        ),
+                    )
+                    savingJourney = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { savingJourney = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (pickingSnapshot) {
+        AlertDialog(
+            onDismissRequest = { pickingSnapshot = false },
+            title = { Text("Use a saved place as a leg") },
+            text = {
+                Column {
+                    Text(
+                        "Everything in the snapshot counts as having been heard in that " +
+                            "leg. Its timestamps come from when the snapshot was taken, " +
+                            "which is what gives the journey its separation.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    snapshots.take(8).forEach { snapshot ->
+                        Text(
+                            snapshot.label + "  (" + snapshot.size + " devices)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    tracker.addLegFromSnapshot(
+                                        label = snapshot.label,
+                                        atMs = snapshot.takenAtMs,
+                                        devices = snapshot.devices,
+                                    )
+                                    recording = false
+                                    report = tracker.report(mine = mine)
+                                    journeys.keepCurrent(tracker.export())
+                                    pickingSnapshot = false
+                                }
+                                .padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { pickingSnapshot = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    newListFor?.let { address ->
+        NewListDialog(
+            onCreate = {
+                book.createList(it)
+                book.toggleList(address, it)
+            },
+            onDismiss = { newListFor = null },
+        )
     }
 
     if (naming) {
@@ -357,6 +568,7 @@ private fun Live() {
                     )
                     recording = true
                     naming = false
+                    journeys.keepCurrent(tracker.export())
                 }) { Text("Start") }
             },
             dismissButton = {
@@ -373,6 +585,7 @@ private fun FollowerCard(
     expanded: Boolean,
     onToggle: () -> Unit,
     onMine: () -> Unit,
+    onRequestNewList: () -> Unit,
 ) {
     val strong = follower.confidence == FollowConfidence.STRONG
     Card(
@@ -458,6 +671,13 @@ private fun FollowerCard(
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
+                Spacer(Modifier.height(6.dp))
+                DeviceActions(
+                    address = follower.address,
+                    displayName = follower.label,
+                    isRandomAddress = follower.isRandom,
+                    onRequestNewList = onRequestNewList,
+                )
             } else {
                 Text(
                     "Tap for why",
