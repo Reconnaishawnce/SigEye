@@ -40,7 +40,6 @@ import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.AdvertShape
 import com.sigeye.core.analysis.Chain
 import com.sigeye.core.analysis.ChainTracker
 import com.sigeye.core.analysis.HuntStage
@@ -52,6 +51,7 @@ import com.sigeye.core.analysis.RotationHunt
 import com.sigeye.core.ble.AddressType
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.Phy
+import com.sigeye.core.ble.shape
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchStore
 import com.sigeye.ui.AlertPicker
@@ -144,23 +144,7 @@ private fun Live() {
 
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
-            val shape = AdvertShape(
-                companyId = advert.companyId,
-                serviceUuids = advert.serviceUuids,
-                appearance = advert.appearance,
-                txPower = advert.txPower,
-                name = advert.name?.takeIf { it.isNotBlank() },
-                manufacturerLength = advert.manufacturerData?.size ?: 0,
-                manufacturerPrefix = advert.manufacturerData
-                    ?.take(2)
-                    ?.joinToString("") { "%02X".format(it) },
-                serviceDataKeys = advert.serviceData.keys.toList(),
-                isLegacy = advert.isLegacy,
-                isConnectable = advert.isConnectable,
-                primaryPhy = advert.primaryPhy,
-                secondaryPhy = advert.secondaryPhy,
-                advertisingSid = advert.advertisingSid,
-            )
+            val shape = advert.shape()
             hunt.observe(
                 address = advert.address,
                 rssi = advert.rssi,

@@ -79,46 +79,15 @@ class ChainTracker(
     private val minimumConfidence: LinkConfidence = LinkConfidence.LIKELY,
 ) {
 
+    /** [LiveAddress] plus the two facts only a chain cares about. */
     private class Live(
-        var shape: AdvertShape,
-        val isRandom: Boolean,
-        val firstSeenMs: Long,
-        var lastSeenMs: Long,
-        var packets: Int = 0,
-        val gaps: MutableList<Long> = mutableListOf(),
-        var lastRssi: Int = -127,
-        val recent: ArrayDeque<Int> = ArrayDeque(),
+        shape: AdvertShape,
+        isRandom: Boolean,
+        firstSeenMs: Long,
+        lastSeenMs: Long,
         var chainId: Int? = null,
         var closed: Boolean = false,
-    ) {
-        fun observe(rssi: Int, atMs: Long) {
-            if (packets > 0) gaps.add(atMs - lastSeenMs)
-            lastSeenMs = atMs
-            packets++
-            lastRssi = rssi
-            recent.addLast(rssi)
-            while (recent.size > 20) recent.removeFirst()
-        }
-
-        val recentRssi: Double get() = if (recent.isEmpty()) -127.0 else recent.average()
-
-        fun identity(address: String): Identity {
-            val base = Fingerprint.baseIntervalMs(gaps)
-            return Identity(
-                address = address,
-                shape = shape,
-                isRandom = isRandom,
-                firstSeenMs = firstSeenMs,
-                lastSeenMs = lastSeenMs,
-                packets = packets,
-                medianGapMs = base,
-                recentRssi = recentRssi,
-                bestRssi = recent.maxOrNull() ?: -127,
-                intervalJitter = Fingerprint.intervalJitter(gaps, base),
-                rssiSpread = Fingerprint.spread(recent.toList()),
-            )
-        }
-    }
+    ) : LiveAddress(shape, isRandom, firstSeenMs, lastSeenMs)
 
     private val live = LinkedHashMap<String, Live>()
     private val chains = LinkedHashMap<Int, MutableList<ChainLink>>()

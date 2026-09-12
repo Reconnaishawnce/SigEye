@@ -2,6 +2,7 @@ package com.sigeye.core.ble
 
 import android.bluetooth.le.ScanResult
 import com.sigeye.core.Vendors
+import com.sigeye.core.analysis.AdvertShape
 
 /**
  * One decoded BLE advertisement, shared by every experiment.
@@ -90,6 +91,29 @@ data class Advert(
         }
     }
 }
+
+/**
+ * The fingerprintable shape of this advertisement, with everything that rotates removed.
+ *
+ * Lived in two screens as a copied block until following needed a third. The mapping is a
+ * fact about the wire format rather than about any one experiment, so it belongs beside
+ * the packet it maps.
+ */
+fun Advert.shape(): AdvertShape = AdvertShape(
+    companyId = companyId,
+    serviceUuids = serviceUuids,
+    appearance = appearance,
+    txPower = txPower,
+    name = name?.takeIf { it.isNotBlank() },
+    manufacturerLength = manufacturerData?.size ?: 0,
+    manufacturerPrefix = manufacturerData?.take(2)?.joinToString("") { "%02X".format(it) },
+    serviceDataKeys = serviceData.keys.toList(),
+    isLegacy = isLegacy,
+    isConnectable = isConnectable,
+    primaryPhy = primaryPhy,
+    secondaryPhy = secondaryPhy,
+    advertisingSid = advertisingSid,
+)
 
 /** What the radio is currently managing to deliver. */
 data class ScanHealth(

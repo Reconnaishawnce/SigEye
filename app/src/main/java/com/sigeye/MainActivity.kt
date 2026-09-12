@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.sigeye.core.Experiments
 import com.sigeye.core.OuiRegistry
+import com.sigeye.core.Recordings
 import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
@@ -31,6 +32,7 @@ import com.sigeye.experiments.doppler.DopplerScreen
 import com.sigeye.experiments.polarisation.PolarisationScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
+import com.sigeye.experiments.following.FollowingScreen
 import com.sigeye.experiments.faraday.FaradayScreen
 import com.sigeye.experiments.forensics.ForensicsScreen
 import com.sigeye.experiments.inspector.InspectorScreen
@@ -57,6 +59,10 @@ class MainActivity : ComponentActivity() {
         // A megabyte off disk, so not on the main thread. Everything that asks for a vendor
         // before it lands falls back to the curated table rather than waiting.
         lifecycleScope.launch(Dispatchers.IO) { OuiRegistry.load(applicationContext) }
+        // Starts the follower, which is a passenger on whatever scanning happens rather
+        // than a scan of its own - so it has to exist before the first screen opens the
+        // radio, or the rotation that screen was there to watch goes unnoticed.
+        Recordings.init(applicationContext)
         setContent { SigEyeTheme { SigEyeApp() } }
     }
 }
@@ -174,6 +180,9 @@ private fun SigEyeApp() {
 
             Experiments.VULNERABILITY ->
                 VulnerabilityScreen(onBack = goBack, modifier = inset)
+
+            Experiments.FOLLOWING ->
+                FollowingScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = goBack, modifier = inset)

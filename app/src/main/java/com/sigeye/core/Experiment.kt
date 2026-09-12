@@ -70,10 +70,48 @@ object Experiments {
     const val CONGESTION = "congestion"
     const val BANDS = "bands"
     const val VULNERABILITY = "vulnerability"
+    const val FOLLOWING = "following"
 
     val all: List<Experiment> = listOf(
 
         // ------------------------------------------------------------- tools
+        Experiment(
+            id = FOLLOWING,
+            title = "Persistent Tracking",
+            blurb = "Keep a device's name attached to it after it changes address.",
+            teaches = "A nickname is stored against an address, and a phone changes its " +
+                "address every quarter of an hour - so the device you named comes back a " +
+                "stranger. This follows it across, and refuses loudly whenever it cannot " +
+                "be certain.",
+            category = Experiment.Category.TOOLS,
+            status = Experiment.Status.READY,
+            needs = "At least one named device on a list, made in Device Inspector. " +
+                "Something has to be scanning: this is a passenger, never a scan of its " +
+                "own.",
+            howTo = listOf(
+                "Name a device in Device Inspector and put it on a list.",
+                "Turn that list on here. Only devices on a followed list are touched.",
+                "Leave something scanning. This screen holds the radio while it is open; " +
+                    "for an afternoon, start a Forensics or Journey recording instead.",
+                "Watch the log. Every move is recorded with the evidence behind it, and " +
+                    "every move can be undone.",
+                "Check its work. Walk the device out of range and see whether the name " +
+                    "goes with it - that is ground truth, and it beats any confidence " +
+                    "score.",
+            ),
+            reading = "The move is made on the same four signals Defeating Randomisation " +
+                "shows: the advertisement's structure, the advertising interval, the " +
+                "signal not jumping across the swap, and the swap's timing. Only the " +
+                "strongest rating is acted on, and a device that matches two candidates " +
+                "equally well is left alone rather than assigned to the better of them.",
+            limits = "Getting this wrong is worse than getting nothing: a name on the " +
+                "wrong phone becomes a fact that Signal Watch, Discovery, Forensics and " +
+                "Travelling Companions all repeat, and nothing later corrects it. So it " +
+                "refuses on plain advertisements, on ambiguity, on anything already " +
+                "broadcasting before the swap, and on a device gone more than ten " +
+                "minutes. It follows nothing while the app is idle, because it never " +
+                "starts a scan.",
+        ),
         Experiment(
             id = INSPECTOR,
             title = "Device Inspector",

@@ -86,6 +86,27 @@ class DeviceBook private constructor(context: Context) {
         }
     }
 
+    /**
+     * Carries a device's name and lists over to the address it has just put on.
+     *
+     * Used by [Follower] when a followed device rotates. Refuses when the destination
+     * already has a note of its own: overwriting one would mean two devices had been
+     * confused for each other, and the quiet loss of whatever the user had written about
+     * the second one is exactly the kind of damage following must never do.
+     *
+     * @return true if the note moved.
+     */
+    fun move(fromAddress: String, toAddress: String): Boolean {
+        val from = fromAddress.uppercase()
+        val to = toAddress.uppercase()
+        if (from == to) return false
+        val note = _notes.value[from] ?: return false
+        if (_notes.value[to] != null) return false
+        _notes.value = _notes.value - from + (to to note.copy(address = to))
+        saveNotes()
+        return true
+    }
+
     fun clearNote(address: String) {
         val key = address.uppercase()
         _notes.value = _notes.value - key

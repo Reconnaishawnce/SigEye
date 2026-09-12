@@ -7,6 +7,14 @@ import com.sigeye.core.analysis.PlaceProfile
 import com.sigeye.core.analysis.TrackDetail
 import com.sigeye.core.ble.Advert
 import com.sigeye.core.ble.BeaconDecoder
+import com.sigeye.core.ble.BleScanHub
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -31,8 +39,47 @@ object Recordings {
 
     private var book: DeviceBook? = null
 
+    private var _follower: Follower? = null
+
+    /**
+     * Keeps names attached to devices that rotate their address.
+     *
+     * Unlike the recordings above it is never started or stopped: it listens to whatever
+     * scanning is already happening, does nothing at all while no list has opted in, and
+     * is read by a screen that shows what it has done.
+     */
+    val follower: Follower? get() = _follower
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var pump: Job? = null
+
     fun init(context: Context) {
-        if (book == null) book = DeviceBook.get(context.applicationContext)
+        val application = context.applicationContext
+        if (book == null) book = DeviceBook.get(application)
+        if (_follower == null) {
+            _follower = Follower(DeviceBook.get(application), FollowStore.get(application))
+        }
+        startFollowing()
+    }
+
+    /**
+     * A passenger on whatever is already scanning.
+     *
+     * The collector holds no claim on the radio, so subscribing for the life of the
+     * process costs nothing: with nothing else scanning, no advertisements arrive and the
+     * ticker finds nothing to do.
+     */
+    private fun startFollowing() {
+        if (pump != null) return
+        pump = scope.launch {
+            launch {
+                BleScanHub.adverts.collect { advert -> _follower?.onAdvert(advert) }
+            }
+            while (isActive) {
+                delay(5_000)
+                _follower?.tick(System.currentTimeMillis())
+            }
+        }
     }
 
     private fun labelFor(advert: Advert): String? =
