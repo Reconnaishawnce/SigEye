@@ -55,6 +55,7 @@ import com.sigeye.core.analysis.Trend
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.Diagnostic
+import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.KeepScreenOn
@@ -475,15 +476,18 @@ private fun WatchTab(
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                     Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { progress },
+                    // The baseline is the part of this experiment where nothing appears
+                    // to happen, which is exactly where a thin bar reads as a hang.
+                    CountdownRing(
+                        elapsedMs = (progress * baselineSeconds * 1000f).toLong(),
+                        totalMs = (baselineSeconds * 1000f).toLong(),
+                        label = "$baselineSize devices filed so far",
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "$baselineSize devices filed so far. Stay put - anything that " +
-                            "wanders through now becomes furniture and will not be " +
-                            "reported later.",
+                        "Stay put - anything that wanders through now becomes furniture " +
+                            "and will not be reported later.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )

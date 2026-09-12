@@ -68,21 +68,6 @@ private val ROLL_AXES = listOf("0°", "45°", "90°", "135°")
 
 private enum class Stage { PICK, ROLL, RESULT }
 
-private data class Candidate(
-    val address: String,
-    val name: String?,
-    val vendor: String?,
-    val rssi: Int,
-    val lastSeenMs: Long,
-    val sightings: Int,
-    val firstSeenMs: Long,
-) {
-    val rate: Double
-        get() = sightings * 1000.0 / (lastSeenMs - firstSeenMs).coerceAtLeast(1L)
-
-    fun label(nickname: String?): String =
-        nickname ?: name?.takeIf { it.isNotBlank() } ?: vendor ?: address
-}
 
 @Composable
 fun PolarisationScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -122,7 +107,6 @@ private fun Live() {
     val rollSensor = remember { RollSensor(context) }
     val sweep = remember { PolarSweep(sectorCount = BINS, minSamplesPerSector = 3) }
 
-    val notes by book.notes.collectAsStateWithLifecycle()
     val roll by rollSensor.roll.collectAsStateWithLifecycle()
 
     var stage by remember { mutableStateOf(Stage.PICK) }
@@ -132,9 +116,6 @@ private fun Live() {
     var result by remember { mutableStateOf<PolarisationResult?>(null) }
     var recorded by remember { mutableStateOf(0) }
     var droppedFlat by remember { mutableStateOf(0) }
-
-    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
-    var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
 
     KeepScreenOn(stage == Stage.ROLL)
 
@@ -149,37 +130,6 @@ private fun Live() {
         onDispose {
             rollSensor.stop()
             BleScanHub.release(HUB_TAG)
-        }
-    }
-
-    LaunchedEffect(stage) {
-        if (stage != Stage.PICK) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            synchronized(candidateTable) {
-                val existing = candidateTable[advert.address]
-                candidateTable[advert.address] = Candidate(
-                    address = advert.address,
-                    name = advert.name?.takeIf { it.isNotBlank() } ?: existing?.name,
-                    vendor = existing?.vendor
-                        ?: Vendors.byAddress(advert.address)
-                        ?: advert.companyId?.let { Vendors.byCompanyId(it) },
-                    rssi = advert.rssi,
-                    lastSeenMs = advert.atMs,
-                    sightings = (existing?.sightings ?: 0) + 1,
-                    firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
-                )
-            }
-        }
-    }
-
-    LaunchedEffect(stage) {
-        while (stage == Stage.PICK) {
-            delay(800)
-            val now = System.currentTimeMillis()
-            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
-                .filter { now - it.lastSeenMs < 12_000 && it.sightings >= 3 }
-                .sortedByDescending { it.rate }
-                .take(20)
         }
     }
 
@@ -212,14 +162,10 @@ private fun Live() {
 
     when (stage) {
         Stage.PICK -> Pick(
-            candidates = frozen,
             rollAvailable = rollSensor.available,
-            nicknameOf = { notes[it.uppercase(Locale.US)]?.nickname },
             onPick = { candidate ->
                 target = candidate.address
-                targetLabel = candidate.label(
-                    notes[candidate.address.uppercase(Locale.US)]?.nickname,
-                )
+                targetLabel = candidate.label(book.nicknameOf(candidate.address))
                 sweep.reset()
                 recorded = 0
                 droppedFlat = 0
@@ -273,10 +219,8 @@ private fun Live() {
 
 @Composable
 private fun Pick(
-    candidates: List<Candidate>,
     rollAvailable: Boolean,
-    nicknameOf: (String) -> String?,
-    onPick: (Candidate) -> Unit,
+    onPick: (Source) -> Unit,
 ) {
     Card(
         Modifier.fillMaxWidth(),
@@ -332,68 +276,14 @@ private fun Pick(
     }
 
     Spacer(Modifier.height(12.dp))
-    if (candidates.isEmpty()) {
-        Text(
-            "Listening for something chatty...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-
-    Text("Pick something to roll against", style = MaterialTheme.typography.labelLarge)
-    Text(
-        "A few metres away with a clear path works best. Too close and reflections fill " +
-            "the null in; the rate on the right matters more than the strength.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    SourcePicker(
+        onPick = onPick,
+        heading = "Pick something to roll against",
+        hint = "A few metres away with a clear path works best. Too close and reflections " +
+            "fill the null in; the rate on the right matters more than the strength.",
+        order = SourceOrder.RATE,
+        wantsRate = 2.0,
     )
-    Spacer(Modifier.height(6.dp))
-
-    candidates.forEach { candidate ->
-        Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-                .clickable { onPick(candidate) },
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.padding(end = 8.dp)) {
-                    Text(
-                        candidate.label(nicknameOf(candidate.address)),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        candidate.address,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        String.format(Locale.US, "%.1f/s", candidate.rate),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (candidate.rate >= 2.0) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    Text(
-                        "${candidate.rssi} dBm",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
 }
 
 // -------------------------------------------------------------------------- stage two

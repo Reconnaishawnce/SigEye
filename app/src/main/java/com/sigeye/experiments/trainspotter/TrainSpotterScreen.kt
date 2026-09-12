@@ -45,6 +45,7 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
+import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.Sparkline
 import java.io.File
 import java.text.SimpleDateFormat
@@ -155,6 +156,18 @@ private fun Monitor() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // Straight under the number rather than below three sections of prose. The count
+        // and the shape of the last half hour are one picture, and separating them meant
+        // that the thing worth pointing a camera at was never on screen at once.
+        Spacer(Modifier.height(12.dp))
+        Sparkline(bins = state.bins, baseline = state.baseline)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Last " + state.config.historyMinutes + " min. Dashed line is the usual " +
+                "rate; red dots are bursts.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
     // Bins grouped into passes. A train takes longer than one bin, so the raw spike count
@@ -225,17 +238,6 @@ private fun Monitor() {
         }
     }
 
-    Spacer(Modifier.height(16.dp))
-    Sparkline(bins = state.bins, baseline = state.baseline)
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = "Last " + state.config.historyMinutes + " min. Dashed line is the usual rate; " +
-            "red dots are bursts.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth(),
-    )
 
     Spacer(Modifier.height(16.dp))
     Row(
@@ -349,26 +351,17 @@ private fun ArmingCard(state: ScanUiState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { state.armingProgress },
+            // A draining ring rather than a progress bar: this is a minute of nothing
+            // happening, and the one thing moving on the screen should be worth looking at
+            // from across a room.
+            val totalSeconds = state.config.armedAfterBins * state.config.binSeconds
+            CountdownRing(
+                elapsedMs = (totalSeconds - state.secondsUntilArmed).coerceAtLeast(0) * 1000L,
+                totalMs = totalSeconds * 1000L,
+                label = "until alerts arm",
+                caption = state.activeUnique.toString() + " devices logged so far",
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Alerts arm in " + clock(state.secondsUntilArmed),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = state.activeUnique.toString() + " devices logged",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }

@@ -54,6 +54,9 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.Source
+import com.sigeye.ui.SourceOrder
+import com.sigeye.ui.SourcePicker
 import com.sigeye.ui.Section
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -65,17 +68,6 @@ private const val TICK_MS = 500L
 
 private enum class Stage { PICK, WALK, RESULT }
 
-private data class Candidate(
-    val address: String,
-    val name: String?,
-    val vendor: String?,
-    val rssi: Int,
-    val lastSeenMs: Long,
-    val sightings: Int,
-) {
-    fun label(nickname: String?): String =
-        nickname ?: name?.takeIf { it.isNotBlank() } ?: vendor ?: address
-}
 
 @Composable
 fun DopplerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -114,7 +106,6 @@ private fun Live() {
     val book = remember { DeviceBook.get(context) }
     val stepSensor = remember { StepSensor(context) }
 
-    val notes by book.notes.collectAsStateWithLifecycle()
     val stepCount by stepSensor.steps.collectAsStateWithLifecycle()
 
     var stage by remember { mutableStateOf(Stage.PICK) }
@@ -123,9 +114,7 @@ private fun Live() {
     var stride by remember { mutableStateOf(0.70f) }
     var manualMetres by remember { mutableStateOf(10f) }
 
-    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
     val walk = remember { mutableListOf<WalkSample>() }
-    var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
     var metresSoFar by remember { mutableStateOf(0.0) }
     var samples by remember { mutableStateOf(0) }
@@ -144,34 +133,6 @@ private fun Live() {
         onDispose {
             stepSensor.stop()
             BleScanHub.release(HUB_TAG)
-        }
-    }
-
-    LaunchedEffect(stage) {
-        if (stage != Stage.PICK) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            synchronized(candidateTable) {
-                val existing = candidateTable[advert.address]
-                candidateTable[advert.address] = Candidate(
-                    address = advert.address,
-                    name = advert.name?.takeIf { it.isNotBlank() } ?: existing?.name,
-                    vendor = advert.vendor ?: existing?.vendor,
-                    rssi = advert.rssi,
-                    lastSeenMs = advert.atMs,
-                    sightings = (existing?.sightings ?: 0) + 1,
-                )
-            }
-        }
-    }
-
-    LaunchedEffect(stage) {
-        while (stage == Stage.PICK) {
-            delay(800)
-            val now = System.currentTimeMillis()
-            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
-                .filter { now - it.lastSeenMs < 12_000 && it.sightings >= 3 }
-                .sortedByDescending { it.rssi }
-                .take(20)
         }
     }
 
@@ -204,17 +165,13 @@ private fun Live() {
 
     when (stage) {
         Stage.PICK -> Pick(
-            candidates = frozen,
             hasStepCounter = stepSensor.available,
             stepNote = stepCount.note,
             stride = stride,
             onStride = { stride = it },
-            nicknameOf = { notes[it.uppercase(Locale.US)]?.nickname },
             onPick = { candidate ->
                 target = candidate.address
-                targetLabel = candidate.label(
-                    notes[candidate.address.uppercase(Locale.US)]?.nickname,
-                )
+                targetLabel = candidate.label(book.nicknameOf(candidate.address))
                 synchronized(walk) { walk.clear() }
                 samples = 0
                 result = null
@@ -265,13 +222,11 @@ private fun Live() {
 
 @Composable
 private fun Pick(
-    candidates: List<Candidate>,
     hasStepCounter: Boolean,
     stepNote: String?,
     stride: Float,
     onStride: (Float) -> Unit,
-    nicknameOf: (String) -> String?,
-    onPick: (Candidate) -> Unit,
+    onPick: (Source) -> Unit,
 ) {
     Card(
         Modifier.fillMaxWidth(),
@@ -338,52 +293,15 @@ private fun Pick(
         Spacer(Modifier.height(12.dp))
     }
 
-    if (candidates.isEmpty()) {
-        Text(
-            "Listening...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-
-    Text("Pick something to walk away from", style = MaterialTheme.typography.labelLarge)
-    Text(
-        "It has to stay put, so choose something fixed - a beacon, a speaker, a television " +
-            "- and leave it where it is.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    SourcePicker(
+        onPick = onPick,
+        heading = "Pick something to walk away from",
+        hint = "It has to stay put, so choose something fixed - a beacon, a speaker, a " +
+            "television - and leave it where it is.",
+        order = SourceOrder.SIGNAL,
+        warnOnRandom = true,
+        wantsRate = 1.0,
     )
-    Spacer(Modifier.height(6.dp))
-
-    candidates.forEach { candidate ->
-        Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-                .clickable { onPick(candidate) },
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.padding(end = 8.dp)) {
-                    Text(
-                        candidate.label(nicknameOf(candidate.address)),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        candidate.address,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text("${candidate.rssi}", style = MaterialTheme.typography.labelMedium)
-            }
-        }
-    }
 }
 
 // -------------------------------------------------------------------------- stage two
