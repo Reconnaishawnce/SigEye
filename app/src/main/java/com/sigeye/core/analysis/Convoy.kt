@@ -328,10 +328,8 @@ class ConvoyTracker {
 
     /** Every device in every leg, for export. */
     fun csv(): String = buildString {
-        append("# SigEye journey
-")
-        append("leg,leg_label,address,label,packets,best_rssi_dbm,random
-")
+        appendLine("# SigEye journey")
+        appendLine("leg,leg_label,address,label,packets,best_rssi_dbm,random")
         legs.forEach { leg ->
             leg.seen.forEach { (address, presence) ->
                 append(leg.index).append(',')
@@ -340,8 +338,8 @@ class ConvoyTracker {
                     .append((leg.labels[address] ?: address).replace(',', ' ')).append(',')
                     .append(presence.packets).append(',')
                     .append(presence.bestRssi).append(',')
-                    .append(leg.randoms[address] == true).append('
-')
+                    .append(leg.randoms[address] == true)
+                appendLine()
             }
         }
     }
