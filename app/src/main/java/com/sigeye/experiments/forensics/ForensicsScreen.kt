@@ -43,15 +43,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
-import com.sigeye.core.Permissions
 import com.sigeye.core.ForensicStore
+import com.sigeye.core.Permissions
 import com.sigeye.core.SnapshotStore
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.Behaviour
 import com.sigeye.core.analysis.ForensicFilter
-import com.sigeye.core.analysis.ForensicRecorder
 import com.sigeye.core.analysis.ForensicHistory
+import com.sigeye.core.analysis.ForensicRecorder
 import com.sigeye.core.analysis.ForensicSort
 import com.sigeye.core.analysis.Provenance
 import com.sigeye.core.analysis.SavedSession
@@ -64,21 +64,18 @@ import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchStore
 import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.Diagnostic
-import com.sigeye.experiments.watchlist.MatchKind
-import com.sigeye.experiments.watchlist.WatchStore
-import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.KeepScreenOn
-import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.NewListDialog
+import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "forensics"
 private const val TICK_MS = 1_000L
