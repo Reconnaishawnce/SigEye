@@ -32,6 +32,7 @@ import com.sigeye.experiments.place.PlaceScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
+import com.sigeye.experiments.rotation.RotationScreen
 import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
@@ -140,6 +141,9 @@ private fun SigEyeApp() {
 
             Experiments.CONVOY ->
                 ConvoyScreen(onBack = { route = null }, modifier = inset)
+
+            Experiments.ROTATION ->
+                RotationScreen(onBack = { route = null }, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = { route = null }, modifier = inset)

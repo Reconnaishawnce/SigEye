@@ -64,6 +64,7 @@ object Experiments {
     const val PLACE = "place"
     const val FORENSICS = "forensics"
     const val CONVOY = "convoy"
+    const val ROTATION = "rotation"
 
     val all: List<Experiment> = listOf(
 
@@ -693,6 +694,41 @@ object Experiments {
             limits = "Most devices advertise nothing structured, so an empty list is " +
                 "normal in a quiet place. An unrecognised format falls back to " +
                 "naming the vendor.",
+        ),
+        Experiment(
+            id = ROTATION,
+            title = "Defeating Randomisation",
+            blurb = "Follow one phone through its address changes, and check whether it worked.",
+            teaches = "An address changes every quarter of an hour, but the shape of the " +
+                "advertisement and the rate it is sent at do not - those are set by " +
+                "firmware, which the privacy scheme never touches. That is the gap, and " +
+                "this is how wide it actually is.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.READY,
+            needs = "Your own phone, and somewhere you can carry it out of range and back.",
+            howTo = listOf(
+                "Pick your own phone from the list. A randomised address is the point - a " +
+                    "fixed one has nothing to defeat.",
+                "Wait while its fingerprint is learned: how often it advertises, and what " +
+                    "shape the advertisement is.",
+                "Run a walk-away test. Carry it out of the room and watch the signal " +
+                    "collapse - that proves the app is watching the right thing before " +
+                    "anything clever is attempted.",
+                "Leave it alone and wait for the address to change. Many phones only " +
+                    "rotate with the screen off, so put it down and be patient.",
+                "When it rotates, the app names the replacement and says exactly why. " +
+                    "Then walk away again - if the new address fades too, the link held.",
+            ),
+            reading = "Four signals, none conclusive alone: the advertisement structure, " +
+                "the advertising interval, signal continuity across the swap, and the " +
+                "handover timing. The confidence is a sum of those. The walk-away test is " +
+                "the only part that is not inference, and a link it disproves is the most " +
+                "useful thing the experiment can produce.",
+            limits = "iOS is the hardest case, because it rotates the payload alongside " +
+                "the address on the same schedule - which is the correct way to implement " +
+                "this. A plain advertisement carrying nothing distinctive cannot be " +
+                "matched on at all and the app says so rather than guessing. Nothing here " +
+                "is proof, which is exactly why the walk-away test exists.",
         ),
         Experiment(
             id = "randomisation",
