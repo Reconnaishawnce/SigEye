@@ -37,6 +37,40 @@ enum class Behaviour(val label: String, val meaning: String) {
     ),
 }
 
+/** Everything the advertisement carried, kept for the review rather than the moment. */
+data class TrackDetail(
+    val companyId: Int? = null,
+    val serviceUuids: List<String> = emptyList(),
+    val appearance: Int? = null,
+    val txPower: Int? = null,
+    val beaconProtocol: String? = null,
+    val surveillanceNote: String? = null,
+)
+
+/** How evenly spaced a device's packets are, which says a lot about what it is. */
+enum class Cadence(val label: String, val meaning: String) {
+    METRONOMIC(
+        "Metronomic",
+        "Packets arrive at almost exactly even intervals. That is a beacon, a tag or a " +
+            "sensor - something whose only job is to advertise.",
+    ),
+    REGULAR(
+        "Regular",
+        "Evenly spaced with some slop. Typical of fitted equipment and accessories.",
+    ),
+    BURSTY(
+        "Bursty",
+        "Clumps of packets with gaps between them. Phones and anything that changes its " +
+            "advertising rate depending on what the user is doing.",
+    ),
+    SPORADIC(
+        "Sporadic",
+        "No pattern worth the name. Usually something at the edge of range, where the " +
+            "gaps are missed packets rather than silence.",
+    ),
+    UNKNOWN("Not enough packets", "Too few readings to say anything about timing."),
+}
+
 data class Track(
     val address: String,
     val label: String,
@@ -45,6 +79,7 @@ data class Track(
     val pings: List<Ping>,
     val recordingStartMs: Long,
     val recordingEndMs: Long,
+    val detail: TrackDetail = TrackDetail(),
 ) {
     val packets: Int get() = pings.size
     val firstSeenMs: Long get() = pings.firstOrNull()?.atMs ?: recordingStartMs
@@ -120,6 +155,53 @@ data class Track(
 
     val peakAtMs: Long get() = pings.maxByOrNull { it.rssi }?.atMs ?: firstSeenMs
 
+    /** Gaps between consecutive packets, in arrival order. */
+    val gapsMs: List<Long>
+        get() = pings.zipWithNext { a, b -> b.atMs - a.atMs }.filter { it > 0 }
+
+    val medianGapMs: Long
+        get() {
+            val sorted = gapsMs.sorted()
+            if (sorted.isEmpty()) return 0L
+            return if (sorted.size % 2 == 1) {
+                sorted[sorted.size / 2]
+            } else {
+                (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
+            }
+        }
+
+    /**
+     * How irregular the spacing is, as a fraction of the typical gap.
+     *
+     * Median absolute deviation rather than standard deviation, because one missed packet
+     * doubles a gap and a mean-based measure would call every real device sporadic.
+     */
+    val gapJitter: Double
+        get() {
+            val gaps = gapsMs
+            if (gaps.size < 3) return 0.0
+            val median = medianGapMs.toDouble()
+            if (median <= 0.0) return 0.0
+            val deviations = gaps.map { abs(it - median) }.sorted()
+            val mad = deviations[deviations.size / 2].toDouble()
+            return mad / median
+        }
+
+    val cadence: Cadence
+        get() = when {
+            gapsMs.size < 5 -> Cadence.UNKNOWN
+            gapJitter <= 0.10 -> Cadence.METRONOMIC
+            gapJitter <= 0.35 -> Cadence.REGULAR
+            gapJitter <= 1.2 -> Cadence.BURSTY
+            else -> Cadence.SPORADIC
+        }
+
+    val packetsPerSecond: Double
+        get() {
+            val span = (lastSeenMs - firstSeenMs) / 1000.0
+            return if (span <= 0.0) 0.0 else packets / span
+        }
+
     fun summary(): String = String.format(
         Locale.US,
         "%d packets, %d to %d dBm, %.0fs",
@@ -189,6 +271,7 @@ class ForensicRecorder(
         var label: String,
         var vendor: String?,
         var isRandom: Boolean,
+        var detail: TrackDetail = TrackDetail(),
         val pings: MutableList<Ping> = mutableListOf(),
         var dropped: Int = 0,
     )
@@ -221,6 +304,7 @@ class ForensicRecorder(
         label: String? = null,
         vendor: String? = null,
         isRandom: Boolean = false,
+        detail: TrackDetail? = null,
     ) {
         if (!recording || atMs < startedAtMs) return
         val key = address.uppercase(Locale.US)
@@ -228,6 +312,18 @@ class ForensicRecorder(
         label?.takeIf { it.isNotBlank() }?.let { builder.label = it }
         vendor?.let { builder.vendor = it }
         builder.isRandom = isRandom
+        // Merged rather than replaced: a device does not put everything in every packet,
+        // so the fullest picture is the union of what it sent across the recording.
+        detail?.let { fresh ->
+            builder.detail = TrackDetail(
+                companyId = fresh.companyId ?: builder.detail.companyId,
+                serviceUuids = (builder.detail.serviceUuids + fresh.serviceUuids).distinct(),
+                appearance = fresh.appearance ?: builder.detail.appearance,
+                txPower = fresh.txPower ?: builder.detail.txPower,
+                beaconProtocol = fresh.beaconProtocol ?: builder.detail.beaconProtocol,
+                surveillanceNote = fresh.surveillanceNote ?: builder.detail.surveillanceNote,
+            )
+        }
 
         if (builder.pings.size >= maxPingsPerDevice) {
             // Thin rather than stop: drop every other stored reading and carry on, so a
@@ -251,6 +347,7 @@ class ForensicRecorder(
             pings = builder.pings.toList(),
             recordingStartMs = startedAtMs,
             recordingEndMs = lastAtMs,
+            detail = builder.detail,
         )
     }
 

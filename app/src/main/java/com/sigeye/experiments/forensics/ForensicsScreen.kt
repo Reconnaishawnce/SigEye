@@ -13,13 +13,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,21 +44,39 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.ForensicStore
+import com.sigeye.core.SnapshotStore
 import com.sigeye.core.SweepExport
+import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.Behaviour
 import com.sigeye.core.analysis.ForensicFilter
 import com.sigeye.core.analysis.ForensicRecorder
+import com.sigeye.core.analysis.ForensicHistory
 import com.sigeye.core.analysis.ForensicSort
+import com.sigeye.core.analysis.Provenance
+import com.sigeye.core.analysis.SavedSession
+import com.sigeye.core.analysis.SessionDiff
 import com.sigeye.core.analysis.Track
+import com.sigeye.core.analysis.TrackDetail
+import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.experiments.watchlist.MatchKind
+import com.sigeye.experiments.watchlist.WatchStore
+import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.Diagnostic
+import com.sigeye.experiments.watchlist.MatchKind
+import com.sigeye.experiments.watchlist.WatchStore
+import com.sigeye.ui.DeviceActions
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -98,6 +119,13 @@ private fun Live() {
     val book = remember { DeviceBook.get(context) }
     val notes by book.notes.collectAsStateWithLifecycle()
     val recorder = remember { ForensicRecorder() }
+    val store = remember { ForensicStore.get(context) }
+    val snapshotStore = remember { SnapshotStore.get(context) }
+    val watchStore = remember { WatchStore.get(context) }
+
+    val saved by store.sessions.collectAsStateWithLifecycle()
+    val snapshots by snapshotStore.snapshots.collectAsStateWithLifecycle()
+    val watchRules by watchStore.rules.collectAsStateWithLifecycle()
 
     var recording by remember { mutableStateOf(false) }
     var reviewing by remember { mutableStateOf(false) }
@@ -113,6 +141,11 @@ private fun Live() {
     var sort by remember { mutableStateOf(ForensicSort.ARRIVAL) }
     var selected by remember { mutableStateOf<String?>(null) }
     var exported by remember { mutableStateOf<String?>(null) }
+    var naming by remember { mutableStateOf(false) }
+    var comparingTo by remember { mutableStateOf<SavedSession?>(null) }
+    var newListFor by remember { mutableStateOf<String?>(null) }
+    var onlyFamiliar by remember { mutableStateOf(false) }
+    var onlyUnfamiliar by remember { mutableStateOf(false) }
 
     // The measurement lives for as long as this screen does, so letting the display sleep
     // would end the recording without saying so.
@@ -136,6 +169,18 @@ private fun Live() {
                     ?: advert.vendor,
                 vendor = advert.vendor,
                 isRandom = advert.isRandomAddress,
+                detail = TrackDetail(
+                    companyId = advert.companyId,
+                    serviceUuids = advert.serviceUuids,
+                    appearance = advert.appearance,
+                    txPower = advert.txPower,
+                    beaconProtocol = BeaconDecoder.decode(advert)?.protocol,
+                    surveillanceNote = Vendors.surveillanceNote(
+                        advert.address,
+                        advert.companyId,
+                        advert.name,
+                    ),
+                ),
             )
         }
     }
@@ -232,14 +277,46 @@ private fun Live() {
     // ------------------------------------------------------------------ review
 
     val knownAddresses = remember(notes) { notes.keys }
+    val watchedAddresses = remember(watchRules) {
+        watchRules.filter { it.kind == MatchKind.ADDRESS }
+            .map { it.value.uppercase(Locale.US) }
+            .toSet()
+    }
     val filter = ForensicFilter(
         hideFurniture = hideFurniture,
         hideKnown = hideKnown,
         passesOnly = passesOnly,
         fixedOnly = fixedOnly,
     )
+
+    // Provenance for everything in the recording, worked out once rather than per row -
+    // a busy street is hundreds of devices against dozens of saved recordings.
+    val tracks = recorder.tracks()
+    val provenances = remember(tracks.size, saved, snapshots, notes, watchRules) {
+        tracks.associate { track ->
+            val note = notes[track.address]
+            track.address to ForensicHistory.provenance(
+                address = track.address,
+                sessions = saved,
+                snapshots = snapshots,
+                nickname = note?.nickname,
+                lists = note?.lists.orEmpty(),
+                watched = watchedAddresses.contains(track.address),
+            )
+        }
+    }
+
     val shown = recorder.review(filter, sort, knownAddresses)
+        .filter { track ->
+            val familiar = provenances[track.address]?.familiar == true
+            when {
+                onlyFamiliar -> familiar
+                onlyUnfamiliar -> !familiar
+                else -> true
+            }
+        }
     val census = recorder.census()
+    val familiarCount = provenances.values.count { it.familiar }
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Stat("Recorded", formatSpan(recorder.spanMs), "of radio")
@@ -273,6 +350,24 @@ private fun Live() {
             label = { Text("Fixed address", style = MaterialTheme.typography.labelSmall) },
         )
     }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(
+            selected = onlyUnfamiliar,
+            onClick = {
+                onlyUnfamiliar = !onlyUnfamiliar
+                if (onlyUnfamiliar) onlyFamiliar = false
+            },
+            label = { Text("Never seen before", style = MaterialTheme.typography.labelSmall) },
+        )
+        FilterChip(
+            selected = onlyFamiliar,
+            onClick = {
+                onlyFamiliar = !onlyFamiliar
+                if (onlyFamiliar) onlyUnfamiliar = false
+            },
+            label = { Text("Met before", style = MaterialTheme.typography.labelSmall) },
+        )
+    }
     Text(
         when {
             passesOnly -> "Only things that rose to a peak and fell away again. That is " +
@@ -282,6 +377,11 @@ private fun Live() {
                 "is what you have never named."
             hideFurniture -> "Anything present the whole time without its signal changing " +
                 "is hidden. Usually most of the recording."
+            onlyUnfamiliar -> "Only devices this app has never recorded, snapshotted or " +
+                "had a name for. On familiar ground that is the interesting half; on a " +
+                "street it is nearly everything."
+            onlyFamiliar -> "Only devices with a history - seen in an earlier recording " +
+                "or snapshot, named, listed or watched."
             else -> "Everything heard. Start subtracting."
         },
         style = MaterialTheme.typography.labelSmall,
@@ -314,7 +414,8 @@ private fun Live() {
             )
         },
         footnote = "A pass is the most specific thing that can be said about a device, so " +
-            "it is tested first. Anything unremarkable falls through to unchanged.",
+            "it is tested first. Anything unremarkable falls through to unchanged. " +
+            "$familiarCount of ${tracks.size} devices here have a history in this app.",
     )
 
     if (shown.isEmpty()) {
@@ -330,10 +431,12 @@ private fun Live() {
         Spacer(Modifier.height(8.dp))
         TrackCard(
             track = track,
+            provenance = provenances[track.address],
             expanded = selected == track.address,
             onToggle = {
                 selected = if (selected == track.address) null else track.address
             },
+            onRequestNewList = { newListFor = track.address },
         )
     }
     if (shown.size > 60) {
@@ -343,6 +446,68 @@ private fun Live() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
+    }
+
+    comparingTo?.let { previous ->
+        Spacer(Modifier.height(12.dp))
+        ComparisonCard(ForensicHistory.diff(previous, tracks))
+    }
+
+    Spacer(Modifier.height(14.dp))
+    Text("Keep and compare", style = MaterialTheme.typography.labelLarge)
+    Text(
+        "Saving keeps a summary of every device, so the next recording can ask what has " +
+            "changed. The readings themselves are what the export is for.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(6.dp))
+    OutlinedButton(onClick = { naming = true }, modifier = Modifier.fillMaxWidth()) {
+        Text("Save this recording")
+    }
+
+    if (saved.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Compare against",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        saved.take(8).forEach { session ->
+            val chosen = comparingTo?.recordedAtMs == session.recordedAtMs
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+                    .clickable { comparingTo = if (chosen) null else session },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (chosen) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                ),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text(session.label, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            SimpleDateFormat("d MMM HH:mm", Locale.US)
+                                .format(Date(session.recordedAtMs)) +
+                                " \u00B7 ${session.size} devices",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { store.delete(session) }) {
+                        Text("Delete", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
     }
 
     Spacer(Modifier.height(16.dp))
@@ -370,10 +535,123 @@ private fun Live() {
         onClick = { reviewing = false },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Record something else") }
+
+    if (naming) {
+        var label by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { naming = false },
+            title = { Text("Name this recording") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = label,
+                        onValueChange = { label = it },
+                        label = { Text("Where was this?") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Every device in this recording becomes part of its history, so a " +
+                            "later one can tell you which of them you had met before.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.save(
+                        ForensicHistory.save(
+                            label = label.ifBlank { "Unnamed" },
+                            atMs = System.currentTimeMillis(),
+                            spanMs = recorder.spanMs,
+                            tracks = tracks,
+                        ),
+                    )
+                    naming = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { naming = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    newListFor?.let { address ->
+        NewListDialog(
+            onCreate = {
+                book.createList(it)
+                book.toggleList(address, it)
+            },
+            onDismiss = { newListFor = null },
+        )
+    }
+}
+
+/** New, gone and unchanged between this recording and a saved one. */
+@Composable
+private fun ComparisonCard(diff: SessionDiff) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "Against \"" + diff.before.label + "\"",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                diff.summary(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            DiffSection("New since then", diff.onlyAfter.map { it.label to it.address })
+            DiffSection("Gone since then", diff.onlyBefore.map { it.label to it.address })
+            DiffSection("In both", diff.inBoth.map { it.label to it.address })
+        }
+    }
 }
 
 @Composable
-private fun TrackCard(track: Track, expanded: Boolean, onToggle: () -> Unit) {
+private fun DiffSection(title: String, rows: List<Pair<String, String>>) {
+    if (rows.isEmpty()) return
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "$title (${rows.size})",
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+    )
+    rows.take(15).forEach { (label, address) ->
+        Row(
+            Modifier.fillMaxWidth().padding(top = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(label, style = MaterialTheme.typography.bodySmall)
+            Text(
+                address,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    if (rows.size > 15) {
+        Text(
+            "and ${rows.size - 15} more",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun TrackCard(
+    track: Track,
+    provenance: Provenance?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onRequestNewList: () -> Unit,
+) {
     val notable = track.behaviour == Behaviour.PASSED
     Card(
         Modifier.fillMaxWidth().clickable { onToggle() },
@@ -427,6 +705,18 @@ private fun TrackCard(track: Track, expanded: Boolean, onToggle: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            provenance?.let {
+                Text(
+                    it.headline(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (it.familiar) FontWeight.SemiBold else FontWeight.Normal,
+                    color = when {
+                        it.watched -> MaterialTheme.colorScheme.error
+                        it.familiar -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
 
             if (expanded) {
                 Spacer(Modifier.height(8.dp))
@@ -457,6 +747,60 @@ private fun TrackCard(track: Track, expanded: Boolean, onToggle: () -> Unit) {
                         "%.0f%% through its own visit",
                         track.peakFraction * 100,
                     ),
+                )
+                Detail("Rate", String.format(Locale.US, "%.1f/s", track.packetsPerSecond))
+                Detail("Typical gap", "${track.medianGapMs} ms")
+                Detail("Cadence", track.cadence.label)
+                track.detail.companyId?.let {
+                    Detail("Company ID", Vendors.companyIdHex(it) +
+                        (Vendors.byCompanyId(it)?.let { name -> "  $name" } ?: ""))
+                }
+                track.detail.beaconProtocol?.let { Detail("Format", it) }
+                track.detail.txPower?.let { Detail("TX power", "$it dBm") }
+                if (track.detail.serviceUuids.isNotEmpty()) {
+                    Detail("Services", "${track.detail.serviceUuids.size} advertised")
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    track.cadence.meaning,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                track.detail.surveillanceNote?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+
+                provenance?.encounters?.takeIf { it.isNotEmpty() }?.let { encounters ->
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Where this has been seen before",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    encounters.take(8).forEach { encounter ->
+                        Text(
+                            SimpleDateFormat("d MMM HH:mm", Locale.US)
+                                .format(Date(encounter.atMs)) +
+                                "  ·  " + encounter.where + "  ·  " + encounter.detail,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                DeviceActions(
+                    address = track.address,
+                    displayName = track.label,
+                    isRandomAddress = track.isRandom,
+                    onRequestNewList = onRequestNewList,
                 )
             } else {
                 Text(
