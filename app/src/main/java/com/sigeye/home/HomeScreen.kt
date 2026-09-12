@@ -72,6 +72,8 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         PreflightCard()
         Spacer(Modifier.height(14.dp))
 
+        Featured(onOpen)
+
         Experiments.byCategory().forEach { (category, experiments) ->
             Text(
                 text = category.label,
@@ -104,6 +106,71 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(32.dp))
     }
+}
+
+/**
+ * The front door.
+ *
+ * A categorised list of twenty-three experiments is a good library and a bad first
+ * impression: everything is equally weighted, so nothing is. These five produce a result
+ * quickly and are the ones worth showing someone else, and they are deliberately drawn in
+ * a different shape from the list below so it reads as a recommendation rather than as
+ * another category that happens to be at the top.
+ */
+@Composable
+private fun Featured(onOpen: (String) -> Unit) {
+    val featured = Experiments.featured()
+    if (featured.isEmpty()) return
+
+    Text(
+        text = "Featured",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+    )
+    Text(
+        text = "Start here. Each of these gives you something in about a minute.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(10.dp))
+
+    featured.forEach { experiment ->
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpen(experiment.id) },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = experiment.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = Experiments.featuredReasons[experiment.id] ?: experiment.blurb,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                Text(
+                    text = "›",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    Spacer(Modifier.height(16.dp))
 }
 
 /**

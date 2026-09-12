@@ -70,7 +70,7 @@ green CI run and a release on GitHub.
       compass) and chart RSSI against roll angle. Antenna polarisation typically gives
       10-20 dB between aligned and crossed. Reuse the `PolarSweep` spine; the gyroscope
       avoids every calibration problem the compass has.
-- [ ] **Channel Congestion.** BLE advertises on channels 37/38/39, which sit in the gaps
+- [x] **Channel Congestion.** BLE advertises on channels 37/38/39, which sit in the gaps
       between Wi-Fi 1/6/11. Infer per-channel health from arrival gaps and cross-reference
       the Wi-Fi survey's channel occupancy. Explains *why* a link is bad.
 - [ ] **2.4 versus 5 GHz penetration.** Using `WifiScanHub`, compare how the same access
@@ -92,6 +92,25 @@ green CI run and a release on GitHub.
       with the failure mode: a wrong re-acquisition silently transfers a name onto a
       stranger's phone, which is worse than losing the device, so it should require the
       strong rating and say when it has re-acquired.
+- [ ] **Defeating Randomisation, the masterclass.** The single best thing in the app and
+      not yet close to what it could be. Wanted, in the user's words, as "a masterclass in
+      tracking phones beyond MAC rotations":
+      - Vendor cohorts as a first-class view. Show every Apple device, every Google device,
+        every Samsung device as groups rather than as a flat list, from the company ID and
+        the advertisement shape. Rotation behaviour is a vendor trait, so grouping by
+        vendor is grouping by behaviour.
+      - Measure the rotation period rather than assuming it. The spec makes the resolvable
+        private address timeout configurable from 1 second to an hour with a 900 second
+        default, so fifteen minutes is a convention, not a law - and it is a timer from
+        when the address was last set, not a wall clock. That means both the interval *and*
+        its phase are per-device and quasi-stable, and the phase is an identifier in its own
+        right until the device reboots or Bluetooth is toggled. Measure both, show the
+        histogram, and say which devices deviate.
+      - Graphs. RSSI of the departing address and the arriving one on the same time axis,
+        with the handover marked, plus advertising interval and payload-variance traces
+        underneath. Up to three comparison devices on the same chart at once.
+      - Treat it as a standalone app living inside this one: its own home, its own saved
+        sessions, its own export.
 - [ ] **Primetime pass.** Home screen organisation, onboarding, export and share
       throughout, README and docs, full regression. Consider removing `continue-on-error`
       from the lint step — it hid a real Android 8 crash for weeks.

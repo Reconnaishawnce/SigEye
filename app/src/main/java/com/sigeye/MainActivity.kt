@@ -24,6 +24,7 @@ import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.convoy.ConvoyScreen
 import com.sigeye.experiments.discovery.DiscoveryScreen
+import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.doppler.DopplerScreen
 import com.sigeye.experiments.polarisation.PolarisationScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
@@ -162,6 +163,9 @@ private fun SigEyeApp() {
 
             Experiments.POLARISATION ->
                 PolarisationScreen(onBack = goBack, modifier = inset)
+
+            Experiments.CONGESTION ->
+                CongestionScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = goBack, modifier = inset)

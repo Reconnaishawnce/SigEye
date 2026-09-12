@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
+import com.sigeye.core.analysis.Spectrum
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -19,7 +20,24 @@ data class AccessPoint(
     val frequencyMhz: Int,
     val capabilities: String,
     val seenAtMs: Long,
+    /**
+     * How much spectrum this access point actually occupies.
+     *
+     * Twenty by default, because that is both the commonest case and the safest guess -
+     * assuming forty where it is really twenty doubles the interference an analysis
+     * attributes to it.
+     */
+    val channelWidthMhz: Int = 20,
+    /**
+     * Centre of the whole occupied block, which is not the primary channel once an access
+     * point is wider than twenty megahertz. Zero when the driver did not say.
+     */
+    val centreFreqMhz: Int = 0,
 ) {
+    /** Where this access point's power is actually centred. */
+    val occupiedCentreMhz: Int
+        get() = if (channelWidthMhz > 20 && centreFreqMhz > 0) centreFreqMhz else frequencyMhz
+
     /** Hidden networks return an empty name, which is itself worth showing. */
     val hidden: Boolean get() = ssid.isNullOrBlank()
 
@@ -192,6 +210,8 @@ object WifiScanHub {
                 frequencyMhz = result.frequency,
                 capabilities = result.capabilities.orEmpty(),
                 seenAtMs = now,
+                channelWidthMhz = Spectrum.widthFromAndroid(result.channelWidth),
+                centreFreqMhz = result.centerFreq0,
             )
         }
 

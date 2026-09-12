@@ -67,6 +67,7 @@ object Experiments {
     const val ROTATION = "rotation"
     const val DOPPLER = "doppler"
     const val POLARISATION = "polarisation"
+    const val CONGESTION = "congestion"
 
     val all: List<Experiment> = listOf(
 
@@ -478,6 +479,42 @@ object Experiments {
                 "circularly polarised and simply have no null to find.",
         ),
         Experiment(
+            id = CONGESTION,
+            title = "Channel Congestion",
+            blurb = "Who is using the 2.4 GHz band, and whether Bluetooth has room to shout.",
+            teaches = "Bluetooth advertises on three fixed frequencies chosen to dodge " +
+                "Wi-Fi 1, 6 and 11. An access point parked anywhere else lands on them, " +
+                "and the packets stop arriving. This shows both halves at once.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.READY,
+            needs = "Wi-Fi switched on - being connected is not required, being enabled " +
+                "is. Scan throttling off helps the chart keep up.",
+            howTo = listOf(
+                "Open it and wait for the first Wi-Fi scan. The chart is drawn against " +
+                    "frequency rather than channel number, so the overlaps are visible.",
+                "Find the three tertiary markers. Those are Bluetooth advertising " +
+                    "channels 37, 38 and 39 - dashed when clear, solid when something is " +
+                    "sitting on them.",
+                "Look at what is arriving underneath. Each device's own advertising " +
+                    "interval says how often it transmits; the percentage is how much of " +
+                    "that reached the phone.",
+                "Walk to a different part of the building and watch both halves move " +
+                    "together. A router on channel 3 in the next room is visible in the " +
+                    "chart and audible in the percentages.",
+            ),
+            reading = "Bars are summed neighbour power on each 20 MHz channel, added as " +
+                "power rather than as decibels - two equal signals are 3 dB together, not " +
+                "twice the number. Shaded lanes are the non-overlapping 1, 6 and 11. A " +
+                "reception figure well under half means packets are being lost; compared " +
+                "against the best link in view, it rules out the phone itself.",
+            limits = "A phone cannot measure airtime, only who is present and how loud, " +
+                "so a single loud access point with no traffic reads as congestion. " +
+                "Android never says which advertising channel a packet arrived on, so " +
+                "reception is measured per device rather than per channel. Bluetooth " +
+                "Classic, microwaves, video senders and cordless phones are all in this " +
+                "band and none of them appear in a Wi-Fi scan.",
+        ),
+        Experiment(
             id = "pathloss",
             title = "Path Loss Exponent",
             blurb = "Walk away from a source and measure how fast signal falls off.",
@@ -814,6 +851,31 @@ object Experiments {
     )
 
     fun byId(id: String): Experiment? = all.firstOrNull { it.id == id }
+
+    /**
+     * The handful worth opening first.
+     *
+     * Twenty-three experiments across five categories is a good library and a bad front
+     * door - someone arriving for the first time has no way to tell which of them is the
+     * one that will make them care. These five are the ones that produce a result in under
+     * a minute and that a person would show someone else, so they get to jump the
+     * categories. They still appear in their own section below, because a shortcut that
+     * removes things from where they belong is a maze.
+     */
+    val featuredIds: List<String> = listOf(ROTATION, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
+
+    /** Why each featured experiment earned the spot, in a few words. */
+    val featuredReasons: Map<String, String> = mapOf(
+        ROTATION to "Follow a phone across the address changes meant to stop you.",
+        TRAIN_SPOTTER to "Count carriages going past from the signals inside them.",
+        RADAR to "Everything around you, at the range it is at, live.",
+        FORENSICS to "Record a place, then go through what was there afterwards.",
+        DISCOVERY to "Learn what is normally here, then watch for what is not.",
+    )
+
+    fun featured(): List<Experiment> =
+        featuredIds.mapNotNull { id -> byId(id) }
+            .filter { it.status == Experiment.Status.READY }
 
     fun byCategory(): List<Pair<Experiment.Category, List<Experiment>>> =
         Experiment.Category.entries
