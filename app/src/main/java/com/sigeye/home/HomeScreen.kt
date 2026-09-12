@@ -156,7 +156,7 @@ private fun RadioStatus() {
                 )
                 Text(
                     when {
-                        background -> activeModes.joinToString(", ") { modeLabel(it) } +
+                        background -> activeModes.joinToString(", ") { it.label } +
                             " will keep scanning after you leave the app, and will keep " +
                             "using battery, until you stop it from its own screen."
                         scanning -> String.format(
@@ -172,11 +172,6 @@ private fun RadioStatus() {
             }
         }
     }
-}
-
-private fun modeLabel(mode: ScanService.Mode): String = when (mode) {
-    ScanService.Mode.TRAIN_SPOTTER -> "Train Spotter"
-    ScanService.Mode.WATCHLIST -> "Signal Watch"
 }
 
 private val dotOn = Color(0xFF35C759)
