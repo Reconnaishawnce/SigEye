@@ -57,11 +57,13 @@ import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
+import com.sigeye.ui.RadarTarget
+import com.sigeye.ui.SignalRadar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "discovery"
 private const val TICK_MS = 700L
@@ -120,6 +122,11 @@ private fun Live() {
     var announced by remember { mutableStateOf<Set<String>>(emptySet()) }
     var naming by remember { mutableStateOf(false) }
     var comparing by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var hideRotations by remember { mutableStateOf(true) }
+    var hideRandom by remember { mutableStateOf(false) }
+    var showRadar by remember { mutableStateOf(true) }
+    var targets by remember { mutableStateOf<List<RadarTarget>>(emptyList()) }
+    var seeding by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -152,14 +159,27 @@ private fun Live() {
             progress = engine.baselineProgress(now)
             baselineSize = engine.baselineSize
             totalSeen = engine.everything().size
-            val current = engine.arrivals()
+            val current = engine.arrivals(
+                hideSuspectedRotations = hideRotations,
+                hideRandomAddresses = hideRandom,
+            )
             arrivals = current
+
+            // Known devices dimmed, arrivals bright. On a street the known set is most of
+            // the display and none of the point.
+            val newAddresses = current.map { it.sighting.address }.toSet()
+            targets = engine.inRange(now).map { sighting ->
+                RadarTarget(
+                    address = sighting.address,
+                    rssi = sighting.rssi,
+                    highlight = sighting.address in newAddresses,
+                    dim = sighting.address !in newAddresses,
+                )
+            }
 
             // One alert per newcomer, not one per packet. A suspected rotation stays
             // silent - it is almost certainly a phone that was already here.
-            val fresh = current.filter {
-                it.sighting.address !in announced && it.possibleRotationOf == null
-            }
+            val fresh = current.filter { it.sighting.address !in announced }
             if (fresh.isNotEmpty()) {
                 announced = announced + fresh.map { it.sighting.address }
                 feedback.alert(alertStyle, urgent = fresh.any { it.approaching })
@@ -181,6 +201,14 @@ private fun Live() {
     when (tab) {
         Tab.WATCH -> WatchTab(
             stage = stage,
+            targets = targets,
+            showRadar = showRadar,
+            onToggleRadar = { showRadar = !showRadar },
+            hideRotations = hideRotations,
+            onHideRotations = { hideRotations = it },
+            hideRandom = hideRandom,
+            onHideRandom = { hideRandom = it },
+            onSeed = { seeding = true },
             progress = progress,
             baselineSeconds = baselineSeconds,
             onBaselineSeconds = { baselineSeconds = it },
@@ -225,6 +253,61 @@ private fun Live() {
         )
     }
 
+    if (seeding) {
+        AlertDialog(
+            onDismissRequest = { seeding = false },
+            title = { Text("Start from a saved place") },
+            text = {
+                Column {
+                    Text(
+                        "Everything in the chosen snapshot counts as already known, so " +
+                            "anything not in it shows up straight away - no baseline to " +
+                            "wait through.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Seed your own home and walk into a hotel room, and everything " +
+                            "there is new by definition. Seed last week's scan of your " +
+                            "own house and only what has appeared since will surface.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    if (saved.isEmpty()) {
+                        Text(
+                            "No snapshots saved yet.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    saved.take(8).forEach { snapshot ->
+                        Text(
+                            snapshot.label + "  (" + snapshot.size + " devices)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    engine.seedBaseline(
+                                        snapshot.devices.map { it.address },
+                                        System.currentTimeMillis(),
+                                    )
+                                    announced = emptySet()
+                                    arrivals = emptyList()
+                                    stage = DiscoveryStage.WATCHING
+                                    seeding = false
+                                }
+                                .padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { seeding = false }) { Text("Cancel") }
+            },
+        )
+    }
+
     if (naming) {
         var label by remember { mutableStateOf("") }
         AlertDialog(
@@ -265,6 +348,14 @@ private fun Live() {
 @Composable
 private fun WatchTab(
     stage: DiscoveryStage,
+    targets: List<RadarTarget>,
+    showRadar: Boolean,
+    onToggleRadar: () -> Unit,
+    hideRotations: Boolean,
+    onHideRotations: (Boolean) -> Unit,
+    hideRandom: Boolean,
+    onHideRandom: (Boolean) -> Unit,
+    onSeed: () -> Unit,
     progress: Float,
     baselineSeconds: Float,
     onBaselineSeconds: (Float) -> Unit,
@@ -341,6 +432,10 @@ private fun WatchTab(
             Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
                 Text("Start baseline")
             }
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(onClick = onSeed, modifier = Modifier.fillMaxWidth()) {
+                Text("Or start from a saved place")
+            }
         }
 
         DiscoveryStage.BASELINE -> {
@@ -375,11 +470,68 @@ private fun WatchTab(
         }
 
         DiscoveryStage.WATCHING -> {
+            if (showRadar) {
+                SignalRadar(targets = targets, modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Distance from the centre is signal strength, strongest in the " +
+                        "middle. The angle is decorative - one antenna cannot tell you a " +
+                        "bearing, and pretending otherwise would be the most misleading " +
+                        "thing this app could do. Dim dots were here before the baseline " +
+                        "closed; bright ones arrived after it.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Stat("Known", "$baselineSize", "filed as normal")
                 Stat("New", "${arrivals.size}", "since baseline")
                 Stat("Closing", "${arrivals.count { it.approaching }}", "getting nearer")
             }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FilterChip(
+                    selected = showRadar,
+                    onClick = onToggleRadar,
+                    label = { Text("Radar", style = MaterialTheme.typography.labelSmall) },
+                )
+                FilterChip(
+                    selected = hideRotations,
+                    onClick = { onHideRotations(!hideRotations) },
+                    label = {
+                        Text("Hide rotations", style = MaterialTheme.typography.labelSmall)
+                    },
+                )
+                FilterChip(
+                    selected = hideRandom,
+                    onClick = { onHideRandom(!hideRandom) },
+                    label = {
+                        Text("Fixed only", style = MaterialTheme.typography.labelSmall)
+                    },
+                )
+            }
+            Text(
+                when {
+                    hideRandom -> "Only devices with fixed addresses. That means fitted " +
+                        "equipment - cameras, beacons, cars, anything installed - and " +
+                        "excludes phones almost entirely, since they randomise. The right " +
+                        "setting for sweeping a room, the wrong one for watching a street."
+                    hideRotations -> "Arrivals that look like a device already here " +
+                        "changing its random address are hidden. Conservative: it can hide " +
+                        "a real arrival that happens to resemble one."
+                    else -> "Everything new is shown, rotations included. Expect the list " +
+                        "to be mostly phones changing address every fifteen minutes."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
 
             Spacer(Modifier.height(12.dp))
             if (arrivals.isEmpty()) {
@@ -438,6 +590,10 @@ private fun WatchTab(
             Spacer(Modifier.height(6.dp))
             OutlinedButton(onClick = onSnapshot, modifier = Modifier.fillMaxWidth()) {
                 Text("Save a snapshot of this place")
+            }
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(onClick = onSeed, modifier = Modifier.fillMaxWidth()) {
+                Text("Use a saved place as the baseline")
             }
             Spacer(Modifier.height(6.dp))
             OutlinedButton(onClick = onStart, modifier = Modifier.fillMaxWidth()) {

@@ -90,6 +90,27 @@ class DiscoveryEngine(
         arrived.clear()
     }
 
+    /**
+     * Starts from a baseline recorded somewhere else, rather than learning one here.
+     *
+     * The sweep-for-bugs use: take the baseline at home while you trust the place, then
+     * seed it into a session somewhere else - a hotel room, a rental, an office - and
+     * anything already there is new by definition, without waiting thirty seconds first.
+     * It also works the other way round: seed last week's scan of your own house and only
+     * what has appeared since will surface.
+     */
+    fun seedBaseline(addresses: Collection<String>, nowMs: Long) {
+        known.clear()
+        seen.clear()
+        estimators.clear()
+        arrived.clear()
+        known.addAll(addresses.map { it.uppercase() })
+        startedAtMs = nowMs
+        stage = DiscoveryStage.WATCHING
+    }
+
+    fun isKnown(address: String): Boolean = known.contains(address.uppercase())
+
     /** Forgets one arrival, for dismissing something you have identified. */
     fun ignore(address: String) {
         known.add(address.uppercase())
@@ -160,10 +181,29 @@ class DiscoveryEngine(
         }
     }
 
-    /** Arrivals, closest first - the one walking towards you is the one you want on top. */
-    fun arrivals(): List<Arrival> = arrived.values.sortedWith(
-        compareByDescending<Arrival> { it.approaching }.thenByDescending { it.sighting.rssi },
-    )
+    /**
+     * Arrivals, closest first - the one walking towards you is the one you want on top.
+     *
+     * The two filters exist because on a street the list is mostly phones rotating their
+     * addresses, and a list that is mostly noise is a list nobody reads. Hiding suspected
+     * rotations is the conservative one; hiding randomised addresses altogether is blunt,
+     * and leaves only devices with fixed addresses - which is to say fitted equipment
+     * rather than people walking past.
+     */
+    fun arrivals(
+        hideSuspectedRotations: Boolean = false,
+        hideRandomAddresses: Boolean = false,
+    ): List<Arrival> = arrived.values
+        .filter { !(hideSuspectedRotations && it.possibleRotationOf != null) }
+        .filter { !(hideRandomAddresses && it.sighting.isRandom) }
+        .sortedWith(
+            compareByDescending<Arrival> { it.approaching }
+                .thenByDescending { it.sighting.rssi },
+        )
+
+    /** Everything heard recently, for plotting. Known and new are kept apart. */
+    fun inRange(nowMs: Long, withinMs: Long = 20_000L): List<Sighting> =
+        seen.values.filter { nowMs - it.lastSeenMs <= withinMs }
 
     /** Everything heard this session, baseline included. */
     fun everything(): List<Sighting> = seen.values.toList()

@@ -238,4 +238,108 @@ class DiscoveryEngineTest {
         assertEquals(0, engine.baselineSize)
         assertEquals(DiscoveryStage.BASELINE, engine.stage)
     }
+
+    // ------------------------------------------------- seeding and filtering
+
+    @Test
+    fun `a seeded baseline needs no learning period at all`() {
+        val engine = engine()
+        engine.seedBaseline(listOf("FRIDGE", "TV"), 0L)
+
+        assertEquals(DiscoveryStage.WATCHING, engine.stage)
+        assertEquals(2, engine.baselineSize)
+        assertTrue(engine.isKnown("fridge"))
+
+        engine.chatter("FRIDGE", 1_000L, 3_000L)
+        engine.chatter("BUG", 1_000L, 3_000L)
+        engine.tick(3_000L)
+
+        assertEquals(1, engine.arrivalCount)
+        assertEquals("BUG", engine.arrivals().first().sighting.address)
+    }
+
+    @Test
+    fun `seeding replaces whatever went before rather than adding to it`() {
+        val engine = engine(baselineMs = 1_000L)
+        engine.start(0L)
+        engine.chatter("OLD", 0L, 900L)
+        engine.tick(1_000L)
+        assertEquals(1, engine.baselineSize)
+
+        engine.seedBaseline(listOf("A", "B", "C"), 5_000L)
+        assertEquals(3, engine.baselineSize)
+        assertTrue(!engine.isKnown("OLD"))
+    }
+
+    @Test
+    fun `hiding rotations removes only the suspected ones`() {
+        val engine = engine(baselineMs = 5_000L)
+        engine.start(0L)
+        engine.chatter("OLD", 0L, 4_000L, rssi = -58, isRandom = true)
+        engine.tick(5_000L)
+
+        // One that looks like OLD having rotated, and one that plainly does not.
+        engine.chatter("ROTATED", 20_000L, 22_000L, rssi = -59, isRandom = true)
+        engine.chatter("STRANGER", 20_000L, 22_000L, rssi = -40, isRandom = false)
+        engine.tick(22_000L)
+
+        assertEquals(2, engine.arrivals().size)
+        val filtered = engine.arrivals(hideSuspectedRotations = true)
+        assertEquals(1, filtered.size)
+        assertEquals("STRANGER", filtered.first().sighting.address)
+    }
+
+    @Test
+    fun `fixed-only leaves the installed equipment and drops the passers-by`() {
+        val engine = engine(baselineMs = 1_000L)
+        engine.start(0L)
+        engine.tick(1_000L)
+        engine.chatter("CAMERA", 2_000L, 4_000L, isRandom = false)
+        engine.chatter("PHONE", 2_000L, 4_000L, isRandom = true)
+        engine.tick(4_000L)
+
+        val fixed = engine.arrivals(hideRandomAddresses = true)
+        assertEquals(1, fixed.size)
+        assertEquals("CAMERA", fixed.first().sighting.address)
+    }
+
+    @Test
+    fun `both filters together are the room-sweep setting`() {
+        val engine = engine(baselineMs = 1_000L)
+        engine.start(0L)
+        engine.tick(1_000L)
+        engine.chatter("CAMERA", 2_000L, 4_000L, isRandom = false)
+        engine.chatter("PHONE", 2_000L, 4_000L, isRandom = true)
+        engine.tick(4_000L)
+
+        val swept = engine.arrivals(
+            hideSuspectedRotations = true,
+            hideRandomAddresses = true,
+        )
+        assertEquals(listOf("CAMERA"), swept.map { it.sighting.address })
+    }
+
+    // --------------------------------------------------------- what to plot
+
+    @Test
+    fun `in-range covers the baseline as well as the arrivals`() {
+        val engine = engine(baselineMs = 1_000L)
+        engine.start(0L)
+        engine.chatter("KNOWN", 0L, 900L)
+        engine.tick(1_000L)
+        engine.chatter("KNOWN", 2_000L, 3_000L)
+        engine.chatter("NEW", 2_000L, 3_000L)
+
+        val plotted = engine.inRange(3_000L).map { it.address }.toSet()
+        assertEquals(setOf("KNOWN", "NEW"), plotted)
+    }
+
+    @Test
+    fun `something long gone is not plotted as though it were still there`() {
+        val engine = engine(baselineMs = 1_000L)
+        engine.start(0L)
+        engine.chatter("GONE", 0L, 900L)
+        engine.tick(1_000L)
+        assertTrue(engine.inRange(120_000L, withinMs = 20_000L).isEmpty())
+    }
 }

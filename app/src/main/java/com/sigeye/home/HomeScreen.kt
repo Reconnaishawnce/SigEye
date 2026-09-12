@@ -2,6 +2,7 @@ package com.sigeye.home
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,16 +20,23 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.CheckLevel
 import com.sigeye.core.Experiment
 import com.sigeye.core.Experiments
+import com.sigeye.core.Preflight
 import com.sigeye.core.ScanService
 import com.sigeye.core.ble.BleScanHub
 import java.util.Locale
@@ -60,6 +68,8 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(14.dp))
         RadioStatus()
+        Spacer(Modifier.height(10.dp))
+        PreflightCard()
         Spacer(Modifier.height(14.dp))
 
         Experiments.byCategory().forEach { (category, experiments) ->
@@ -171,6 +181,118 @@ private fun modeLabel(mode: ScanService.Mode): String = when (mode) {
 
 private val dotOn = Color(0xFF35C759)
 private val dotOff = Color(0xFF8A8A8E)
+
+/**
+ * Everything that has to be switched on, checked before anything starts.
+ *
+ * Scanning fails in several different ways that all look identical from inside an
+ * experiment - an empty list - and most of them are a setting rather than a bug. The worst
+ * offender is location services: Android returns no Bluetooth results at all with it off,
+ * silently, which surprises everyone who meets it.
+ */
+@Composable
+private fun PreflightCard() {
+    val context = LocalContext.current
+    var attempt by remember { mutableStateOf(0) }
+    val checks = remember(attempt) { Preflight.run(context) }
+    val failing = checks.filter { !it.passing }
+    val blocking = Preflight.blockingCount(checks)
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                blocking > 0 -> MaterialTheme.colorScheme.errorContainer
+                failing.isNotEmpty() -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when {
+                            blocking > 0 -> "$blocking thing${if (blocking == 1) "" else "s"} " +
+                                "will stop this working"
+                            failing.isNotEmpty() -> "${failing.size} optional " +
+                                "thing${if (failing.size == 1) "" else "s"} to look at"
+                            else -> "Everything needed is switched on"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (!expanded && blocking > 0) {
+                        Text(
+                            failing.first { it.blocking }.title,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+                Text(
+                    if (expanded) "Hide  ▴" else "Check  ▾",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+
+            if (expanded) {
+                checks.forEach { check ->
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (check.passing) "✓" else "✗",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (check.passing) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        Text(
+                            check.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Text(
+                        check.why,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(start = 22.dp),
+                    )
+                    if (!check.passing || check.level == CheckLevel.OPTIONAL) {
+                        check.fix?.let { fix ->
+                            Text(
+                                fix,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(start = 22.dp, top = 2.dp),
+                            )
+                        }
+                        Preflight.intentFor(context, check)?.let { intent ->
+                            TextButton(
+                                onClick = { runCatching { context.startActivity(intent) } },
+                                modifier = Modifier.padding(start = 14.dp),
+                            ) {
+                                Text("Open settings", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = { attempt++ }) {
+                    Text("Check again", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ExperimentCard(experiment: Experiment, onClick: () -> Unit) {

@@ -30,7 +30,20 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** One thing to plot. Direction is unknowable from one antenna, so only strength is real. */
-data class RadarTarget(val address: String, val rssi: Int)
+data class RadarTarget(
+    val address: String,
+    val rssi: Int,
+    /**
+     * Draw this one as worth looking at.
+     *
+     * Discovery uses it to separate the handful of things that arrived after the baseline
+     * from the forty that were always there - on a busy street the second group is most of
+     * the display and none of the point.
+     */
+    val highlight: Boolean = false,
+    /** Drawn faintly: present, accounted for, and not what you are looking for. */
+    val dim: Boolean = false,
+)
 
 private data class Blip(
     val address: String,
@@ -39,6 +52,8 @@ private data class Blip(
     var rssi: Int,
     val appearedAtMs: Long,
     var leavingSinceMs: Long? = null,
+    var highlight: Boolean = false,
+    var dim: Boolean = false,
 )
 
 private const val APPEAR_MS = 1100L
@@ -65,6 +80,7 @@ fun SignalRadar(
     modifier: Modifier = Modifier,
     ringColor: Color = Color(0xFF2E7D57),
     blipColor: Color = Color(0xFF7FE3A3),
+    highlightColor: Color = Color(0xFFFF6B57),
 ) {
     val blips = remember { mutableStateMapOf<String, Blip>() }
     var frameMs by remember { mutableLongStateOf(0L) }
@@ -84,12 +100,16 @@ fun SignalRadar(
 
         present.forEach { (address, target) ->
             val existing = blips[address]
+            existing?.highlight = target.highlight
+            existing?.dim = target.dim
             if (existing == null) {
                 blips[address] = Blip(
                     address = address,
                     angleDegrees = angleFor(address),
                     rssi = target.rssi,
                     appearedAtMs = now,
+                    highlight = target.highlight,
+                    dim = target.dim,
                 )
             } else {
                 existing.rssi = target.rssi
@@ -137,7 +157,18 @@ fun SignalRadar(
             drawSweep(centre, maxRadius, frameMs, ringColor)
 
             blips.values.forEach { blip ->
-                drawBlip(blip, centre, maxRadius, frameMs, blipColor)
+                drawBlip(
+                    blip = blip,
+                    centre = centre,
+                    maxRadius = maxRadius,
+                    nowMs = frameMs,
+                    color = when {
+                        blip.highlight -> highlightColor
+                        blip.dim -> blipColor.copy(alpha = 0.3f)
+                        else -> blipColor
+                    },
+                    emphasis = if (blip.highlight) 1.7f else if (blip.dim) 0.6f else 1f,
+                )
             }
         }
     }
@@ -171,6 +202,7 @@ private fun DrawScope.drawBlip(
     maxRadius: Float,
     nowMs: Long,
     color: Color,
+    emphasis: Float = 1f,
 ) {
     val radius = maxRadius * radiusFraction(blip.rssi)
     val radians = blip.angleDegrees * PI.toFloat() / 180f
@@ -221,10 +253,15 @@ private fun DrawScope.drawBlip(
         return
     }
 
-    // Settled: a gentle breath so the display never looks frozen.
+    // Settled: a gentle breath so the display never looks frozen. A highlighted blip
+    // breathes wider, which is the only way to pick one dot out of forty at a glance.
     val breath = 0.5f + 0.5f * sin((nowMs % 2600L) / 2600f * 2f * PI.toFloat())
-    drawCircle(color = color.copy(alpha = 0.22f), radius = 8f + breath * 2f, center = position)
-    drawCircle(color = color, radius = 4f, center = position)
+    drawCircle(
+        color = color.copy(alpha = 0.22f),
+        radius = (8f + breath * 2f) * emphasis,
+        center = position,
+    )
+    drawCircle(color = color, radius = 4f * emphasis, center = position)
 }
 
 /**
