@@ -4,8 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,11 +39,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.ScanService
+import com.sigeye.core.analysis.TrainLog
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Sparkline
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -150,6 +153,56 @@ private fun Monitor() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+
+    // Bins grouped into passes. A train takes longer than one bin, so the raw spike count
+    // has never had much to do with the number of things that actually went by.
+    val log = remember { TrainLog() }
+    val passes = remember(state.bins) {
+        log.reset()
+        state.bins.forEach { log.add(it) }
+        log.passes()
+    }
+
+    Spacer(Modifier.height(16.dp))
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (log.inProgress) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                if (log.inProgress) "Something is going past now" else "Passes",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(log.summary(), style = MaterialTheme.typography.bodySmall)
+            if (passes.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                passes.takeLast(6).reversed().forEach { pass ->
+                    Text(
+                        SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(pass.startMs)) +
+                            "  ·  " + pass.describe(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "A pass is a run of consecutive bursts, so one train counts once however " +
+                    "many bins it spans. A brief dip in the middle is tolerated - a gap " +
+                    "between carriages should not become two trains.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 
     Spacer(Modifier.height(16.dp))

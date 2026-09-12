@@ -38,7 +38,10 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
+import com.sigeye.core.SweepExport
 import com.sigeye.core.analysis.AdvertShape
+import com.sigeye.core.analysis.Chain
+import com.sigeye.core.analysis.ChainTracker
 import com.sigeye.core.analysis.HuntStage
 import com.sigeye.core.analysis.HuntState
 import com.sigeye.core.analysis.Identity
@@ -54,6 +57,7 @@ import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
+import java.io.File
 import java.util.Locale
 
 private const val HUB_TAG = "rotation"
@@ -95,6 +99,9 @@ private fun Live() {
     val book = remember { DeviceBook.get(context) }
     val feedback = remember { Feedback(context) }
     val hunt = remember { RotationHunt() }
+    // The room-wide pass runs the whole time, whether or not one device is being
+    // followed - it costs nothing extra, since the packets are already arriving.
+    val chains = remember { ChainTracker() }
 
     val notes by book.notes.collectAsStateWithLifecycle()
 
@@ -103,6 +110,12 @@ private fun Live() {
     var alertStyle by remember { mutableStateOf(AlertStyle.BOTH) }
     var announced by remember { mutableStateOf(0) }
     var walkNote by remember { mutableStateOf<String?>(null) }
+    var roomChains by remember { mutableStateOf<List<Chain>>(emptyList()) }
+    var unlinked by remember { mutableStateOf(0) }
+    var fixed by remember { mutableStateOf(0) }
+    var showRoom by remember { mutableStateOf(true) }
+    var expandedChain by remember { mutableStateOf<Int?>(null) }
+    var exported by remember { mutableStateOf<String?>(null) }
 
     KeepScreenOn(state.stage != HuntStage.PICK)
 
@@ -117,22 +130,30 @@ private fun Live() {
 
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
+            val shape = AdvertShape(
+                companyId = advert.companyId,
+                serviceUuids = advert.serviceUuids,
+                appearance = advert.appearance,
+                txPower = advert.txPower,
+                name = advert.name?.takeIf { it.isNotBlank() },
+                manufacturerLength = advert.manufacturerData?.size ?: 0,
+                manufacturerPrefix = advert.manufacturerData
+                    ?.take(2)
+                    ?.joinToString("") { "%02X".format(it) },
+                serviceDataKeys = advert.serviceData.keys.toList(),
+            )
             hunt.observe(
                 address = advert.address,
                 rssi = advert.rssi,
                 atMs = advert.atMs,
-                shape = AdvertShape(
-                    companyId = advert.companyId,
-                    serviceUuids = advert.serviceUuids,
-                    appearance = advert.appearance,
-                    txPower = advert.txPower,
-                    name = advert.name?.takeIf { it.isNotBlank() },
-                    manufacturerLength = advert.manufacturerData?.size ?: 0,
-                    manufacturerPrefix = advert.manufacturerData
-                        ?.take(2)
-                        ?.joinToString("") { "%02X".format(it) },
-                    serviceDataKeys = advert.serviceData.keys.toList(),
-                ),
+                shape = shape,
+                isRandom = advert.isRandomAddress,
+            )
+            chains.observe(
+                address = advert.address,
+                rssi = advert.rssi,
+                atMs = advert.atMs,
+                shape = shape,
                 isRandom = advert.isRandomAddress,
             )
         }
@@ -143,8 +164,12 @@ private fun Live() {
             delay(TICK_MS)
             val now = System.currentTimeMillis()
             hunt.tick(now)
+            chains.tick(now)
             state = hunt.state(now)
             candidates = hunt.candidates(now)
+            roomChains = chains.chains { notes[it.uppercase(Locale.US)]?.nickname }
+            unlinked = chains.unlinked(now)
+            fixed = chains.fixedCount(now)
             if (state.rotations.size > announced) {
                 announced = state.rotations.size
                 feedback.alert(alertStyle, urgent = true)
@@ -193,6 +218,201 @@ private fun Live() {
                 state = hunt.state(System.currentTimeMillis())
             },
         )
+    }
+
+    Spacer(Modifier.height(20.dp))
+    TheRoom(
+        chains = roomChains,
+        unlinked = unlinked,
+        fixed = fixed,
+        expanded = expandedChain,
+        shown = showRoom,
+        exported = exported,
+        onToggleShown = { showRoom = !showRoom },
+        onExpand = { expandedChain = if (expandedChain == it) null else it },
+        onExport = {
+            val directory = File(context.getExternalFilesDir(null), "rotations")
+            directory.mkdirs()
+            val file = File(directory, "chains-${System.currentTimeMillis()}.csv")
+            runCatching { file.writeText(chains.csv()) }
+            exported = file.name
+            SweepExport.share(context, file)
+        },
+    )
+}
+
+/**
+ * Every rotation the app thinks it has spotted, without anyone having picked a subject.
+ *
+ * The focused hunt above can be proved by walking away with the device. This cannot -
+ * there is no way to test a claim about a stranger's phone - so it is presented as an
+ * argument rather than a finding, and the denominators are shown next to it. Three chains
+ * against forty unlinked addresses is the honest picture of most rooms, and hiding that
+ * would make the three look far more impressive than they are.
+ */
+@Composable
+private fun TheRoom(
+    chains: List<Chain>,
+    unlinked: Int,
+    fixed: Int,
+    expanded: Int?,
+    shown: Boolean,
+    exported: String?,
+    onToggleShown: () -> Unit,
+    onExpand: (Int) -> Unit,
+    onExport: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onToggleShown() },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "The rest of the room",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            if (shown) "Hide  \u25B4" else "Show  \u25BE",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (!shown) return
+
+    Spacer(Modifier.height(8.dp))
+    DiagnosticsPanel(
+        title = "Rotations found without picking anything",
+        verdict = if (chains.isEmpty() && unlinked > 4) {
+            "Nothing has been linked yet. That is the usual outcome: matching needs a " +
+                "device to be distinctive and to rotate while you are watching, and most " +
+                "are neither."
+        } else {
+            null
+        },
+        initiallyExpanded = true,
+        diagnostics = listOf(
+            Diagnostic("Chains", "${chains.size}", "devices followed"),
+            Diagnostic("Rotations", "${chains.sumOf { it.rotations }}", "links made"),
+            Diagnostic("Unlinked", "$unlinked", "random, unmatched"),
+            Diagnostic("Fixed", "$fixed", "never rotate"),
+            Diagnostic(
+                "Best chain",
+                "${chains.maxOfOrNull { it.addresses.size } ?: 0}",
+                "addresses long",
+            ),
+            Diagnostic(
+                "Strong",
+                "${chains.count { it.weakestLink == LinkConfidence.STRONG }}",
+                "chains throughout",
+            ),
+        ),
+        footnote = "Unlinked is the number that matters. A handful of chains against " +
+            "dozens of unmatched addresses means the matching is catching very little, " +
+            "which is the honest reading of most rooms - and nothing here can be proved " +
+            "the way the focused hunt can, because you cannot walk away with someone " +
+            "else's phone.",
+    )
+
+    chains.take(12).forEach { chain ->
+        Spacer(Modifier.height(8.dp))
+        ChainCard(chain, expanded == chain.id) { onExpand(chain.id) }
+    }
+
+    if (chains.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth()) {
+            Text("Export the chains")
+        }
+        exported?.let {
+            Text(
+                "Wrote $it - every link with the confidence it was made on.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChainCard(chain: Chain, expanded: Boolean, onToggle: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().clickable { onToggle() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (chain.weakestLink == LinkConfidence.STRONG) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        ),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.padding(end = 8.dp)) {
+                    Text(
+                        chain.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "${chain.addresses.size} addresses, " + chain.describePeriod(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${chain.rotations}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "rotations",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Text(
+                chain.weakestLink.label + " throughout",
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                chain.links.forEachIndexed { index, link ->
+                    Text(
+                        (if (index == 0) "" else "\u2192  ") + link.address +
+                            String.format(
+                                Locale.US,
+                                "   %.0f min",
+                                link.durationMs / 60_000.0,
+                            ),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    link.score?.supporting?.forEach {
+                        Text(
+                            "      " + it.text,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    "Tap for the chain and its reasoning",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
