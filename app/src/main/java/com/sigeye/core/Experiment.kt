@@ -71,6 +71,7 @@ object Experiments {
     const val BANDS = "bands"
     const val VULNERABILITY = "vulnerability"
     const val FOLLOWING = "following"
+    const val ROTATION_LAB = "rotationlab"
 
     val all: List<Experiment> = listOf(
 
@@ -827,6 +828,48 @@ object Experiments {
         ),
 
         // ----------------------------------------------------------- privacy
+        Experiment(
+            id = ROTATION_LAB,
+            title = "Rotation Lab",
+            blurb = "A whole room's address privacy, grouped by maker and measured by clock.",
+            teaches = "Rotation is a firmware decision, so it is a vendor trait - a " +
+                "maker's whole fleet behaves alike. And the fifteen minutes everyone " +
+                "quotes is a default, not a rule: the timeout is settable from a second " +
+                "to an hour, it runs from the last change rather than from a clock, and " +
+                "that free-running offset is an identifier every rotation preserves.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.READY,
+            needs = "A room with people in it. A cafe, a train, an office - somewhere with " +
+                "more than a handful of phones, and time to sit still.",
+            howTo = listOf(
+                "Open it somewhere busy and leave it running. The first tab fills " +
+                    "immediately; the other two need patience.",
+                "Read the cohorts. Each maker's bar is how much of their fleet bothers " +
+                    "with a private address, and a bar that is entirely red is a fleet " +
+                    "anybody with a phone can follow indefinitely.",
+                "Wait for the middle tab. A period is the gap between two address " +
+                    "changes, so a device has to be followed through three addresses " +
+                    "before there is one - about half an hour on the usual timer.",
+                "Use the third tab to check the work. Put two or three tracks on one " +
+                    "chart and look at what the signal does at each marker.",
+                "Export when you have something. The CSV carries every track, its " +
+                    "measured period and its phase.",
+            ),
+            reading = "A phase is where in the cycle a device changes, measured against " +
+                "the epoch rather than a clock. Two phones on the same nine hundred " +
+                "second timer land on different phases and keep them, which makes the " +
+                "phase a handle that survives the thing designed to remove handles - " +
+                "until Bluetooth is toggled, flight mode is used, or the device reboots. " +
+                "Worth one slot in twenty on a fifteen minute cycle: useful next to other " +
+                "evidence, useless on its own.",
+            limits = "Counting manufacturers is safe, because a company identifier is a " +
+                "fact in the payload about a product. Linking two addresses into a track " +
+                "is an inference about a stranger, so only the strongest rating is drawn " +
+                "at all and a track remains a hypothesis - Defeating Randomisation is " +
+                "where you test one, by walking a device you own out of range. A vendor " +
+                "read from an address prefix means nothing once the address is random, " +
+                "which is why much of any room stays unidentified.",
+        ),
         Experiment(
             id = VULNERABILITY,
             title = "Exposure Scan",

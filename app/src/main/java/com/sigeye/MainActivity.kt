@@ -44,6 +44,7 @@ import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.rotation.RotationScreen
+import com.sigeye.experiments.rotationlab.RotationLabScreen
 import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
@@ -183,6 +184,9 @@ private fun SigEyeApp() {
 
             Experiments.FOLLOWING ->
                 FollowingScreen(onBack = goBack, modifier = inset)
+
+            Experiments.ROTATION_LAB ->
+                RotationLabScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = goBack, modifier = inset)

@@ -97,7 +97,7 @@ green CI run and a release on GitHub.
       with the failure mode: a wrong re-acquisition silently transfers a name onto a
       stranger's phone, which is worse than losing the device, so it should require the
       strong rating and say when it has re-acquired.
-- [ ] **Defeating Randomisation, the masterclass.** The single best thing in the app and
+- [x] **Defeating Randomisation, the masterclass.** Shipped as Rotation Lab. The single best thing in the app and
       not yet close to what it could be. Wanted, in the user's words, as "a masterclass in
       tracking phones beyond MAC rotations":
       - Vendor cohorts as a first-class view. Show every Apple device, every Google device,
