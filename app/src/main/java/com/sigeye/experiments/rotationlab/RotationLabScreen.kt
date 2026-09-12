@@ -48,7 +48,7 @@ import com.sigeye.core.analysis.LinkConfidence
 import com.sigeye.core.analysis.RoomRhythm
 import com.sigeye.core.analysis.RotationLab
 import com.sigeye.core.analysis.RotationRhythm
-import com.sigeye.core.analysis.Track
+import com.sigeye.core.analysis.RotationTrack
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
 import com.sigeye.ui.Diagnostic
@@ -117,7 +117,7 @@ private fun Live() {
 
     var view by remember { mutableStateOf(View.COHORTS) }
     var cohorts by remember { mutableStateOf<List<Cohort>>(emptyList()) }
-    var tracks by remember { mutableStateOf<List<Track>>(emptyList()) }
+    var tracks by remember { mutableStateOf<List<RotationTrack>>(emptyList()) }
     var room by remember {
         mutableStateOf(RoomRhythm(emptyList(), null, emptyList(), 0, 0))
     }
@@ -297,7 +297,7 @@ private fun Live() {
 @Composable
 private fun Headline(
     cohorts: List<Cohort>,
-    tracks: List<Track>,
+    tracks: List<RotationTrack>,
     room: RoomRhythm,
     elapsedMs: Long,
 ) {
@@ -452,7 +452,7 @@ private fun PrivacyBar(cohort: Cohort) {
 // ---------------------------------------------------------------------- how often
 
 @Composable
-private fun RhythmView(room: RoomRhythm, tracks: List<Track>) {
+private fun RhythmView(room: RoomRhythm, tracks: List<RotationTrack>) {
     val measured = tracks.filter { it.rhythm.measurable }
 
     if (!room.measurable) {
@@ -548,7 +548,7 @@ private fun Histogram(room: RoomRhythm) {
 }
 
 @Composable
-private fun TrackRhythmCard(track: Track) {
+private fun TrackRhythmCard(track: RotationTrack) {
     Card(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Column(Modifier.padding(12.dp)) {
             Row(
@@ -612,7 +612,7 @@ private fun TrackRhythmCard(track: Track) {
 @Composable
 private fun CompareView(
     lab: RotationLab,
-    tracks: List<Track>,
+    tracks: List<RotationTrack>,
     compared: MutableList<Int>,
 ) {
     if (tracks.isEmpty()) {

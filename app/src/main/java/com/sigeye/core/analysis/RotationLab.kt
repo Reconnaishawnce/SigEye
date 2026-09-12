@@ -3,7 +3,7 @@ package com.sigeye.core.analysis
 import java.util.Locale
 
 /** One device's track through the room, with every address it has worn. */
-data class Track(
+data class RotationTrack(
     val chainId: Int,
     val label: String,
     val vendor: String,
@@ -147,11 +147,11 @@ class RotationLab(
      * old one was noticed to be gone - the second is a property of how long this app waits
      * before giving up, and would put the app's own timeout into the measurement.
      */
-    fun tracks(nicknameOf: (String) -> String? = { null }): List<Track> =
+    fun tracks(nicknameOf: (String) -> String? = { null }): List<RotationTrack> =
         chains.chains(nicknameOf).map { chain ->
             val changeTimes = chain.links.drop(1).map { it.startedAtMs }
             val head = seen[chain.current]
-            Track(
+            RotationTrack(
                 chainId = chain.id,
                 label = chain.label,
                 vendor = head?.let {
@@ -179,7 +179,7 @@ class RotationLab(
         }.sortedByDescending { it.rotations }
 
     /** The room's rotation habits, pooled across every track that produced a period. */
-    fun roomRhythm(tracks: List<Track>): RoomRhythm {
+    fun roomRhythm(tracks: List<RotationTrack>): RoomRhythm {
         val periods = tracks.flatMap { it.rhythm.periodsMs }.filter { RotationRhythm.withinSpec(it) }
         val sorted = periods.sorted()
         return RoomRhythm(
@@ -196,7 +196,7 @@ class RotationLab(
         seen[address.uppercase(Locale.US)]?.trail.orEmpty().toList()
 
     /** Every address of a track, end to end, so a rotation shows as one continuous line. */
-    fun trackTrail(track: Track): List<Pair<Long, Int>> =
+    fun trackTrail(track: RotationTrack): List<Pair<Long, Int>> =
         track.addresses.flatMap { trail(it) }.sortedBy { it.first }
 
     fun csv(): String = buildString {
