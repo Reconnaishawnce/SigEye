@@ -66,7 +66,7 @@ green CI run and a release on GitHub.
 - [x] **Doppler Walk.** Use the step counter (`Sensor.TYPE_STEP_COUNTER`) to get true
       distance walked, then solve the log-distance path loss model for the exponent `n`
       from RSSI against real metres. Turns "guess the distance" into a measurement.
-- [ ] **Rotational Polarisation.** Roll the phone about its long axis (gyroscope, not
+- [x] **Rotational Polarisation.** Roll the phone about its long axis (gyroscope, not
       compass) and chart RSSI against roll angle. Antenna polarisation typically gives
       10-20 dB between aligned and crossed. Reuse the `PolarSweep` spine; the gyroscope
       avoids every calibration problem the compass has.

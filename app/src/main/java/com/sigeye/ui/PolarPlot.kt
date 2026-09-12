@@ -47,6 +47,14 @@ fun PolarPlot(
     modifier: Modifier = Modifier,
     liveHeading: Float? = null,
     minSamplesPerSector: Int = 3,
+    /**
+     * What the four axes are called, clockwise from the top.
+     *
+     * Compass points by default, because that is what a heading sweep is. A roll sweep
+     * plots the same shape against a different quantity entirely, and labelling its axes
+     * north and east would be a plain lie about what was measured.
+     */
+    axisLabels: List<String> = listOf("N", "E", "S", "W"),
 ) {
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
     val label = MaterialTheme.colorScheme.onSurfaceVariant
@@ -96,7 +104,7 @@ fun PolarPlot(
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 6f)),
                 )
             }
-            drawCompassLabels(measurer, centre, maxRadius, label)
+            drawAxisLabels(measurer, centre, maxRadius, label, axisLabels)
             drawCoverageRing(
                 sectors = result.sectors,
                 minSamples = minSamplesPerSector,
@@ -247,13 +255,15 @@ private fun DrawScope.drawMarker(
 private fun compassToRadians(degrees: Float): Float =
     ((degrees - 90f) * PI.toFloat() / 180f)
 
-private fun DrawScope.drawCompassLabels(
+private fun DrawScope.drawAxisLabels(
     measurer: TextMeasurer,
     centre: Offset,
     maxRadius: Float,
     colour: Color,
+    labels: List<String>,
 ) {
-    listOf("N" to 0f, "E" to 90f, "S" to 180f, "W" to 270f).forEach { (text, angle) ->
+    labels.take(4).forEachIndexed { index, text ->
+        val angle = index * 90f
         val radians = compassToRadians(angle)
         val layout = measurer.measure(
             text = text,

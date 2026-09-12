@@ -66,6 +66,7 @@ object Experiments {
     const val CONVOY = "convoy"
     const val ROTATION = "rotation"
     const val DOPPLER = "doppler"
+    const val POLARISATION = "polarisation"
 
     val all: List<Experiment> = listOf(
 
@@ -439,6 +440,42 @@ object Experiments {
                 "A walk that curves, or one where the transmitter is not actually fixed, " +
                 "measures something other than path loss. Under a few metres of travel it " +
                 "declines to fit.",
+        ),
+        Experiment(
+            id = POLARISATION,
+            title = "Rotational Polarisation",
+            blurb = "Roll the phone over and watch the signal die.",
+            teaches = "Radio has an orientation. Turn a receiving antenna across the " +
+                "field and it stops hearing - ten to twenty dB from nothing but a twist " +
+                "of the wrist, and the depth of that null says how much of the signal " +
+                "reached you without bouncing off anything.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.READY,
+            needs = "One chatty transmitter a few metres away, and an accelerometer - " +
+                "which every phone has. No compass, so nothing to calibrate.",
+            howTo = listOf(
+                "Pick a source that talks at least twice a second, a few metres away " +
+                    "with a clear path. Too close and reflections fill the null in.",
+                "Hold the phone with its long axis level, pointing left and right in " +
+                    "front of you. Stood on end, gravity runs down that axis and there " +
+                    "is nothing left to measure roll against.",
+                "Roll it slowly about that axis, like turning a rolling pin - screen up, " +
+                    "screen sideways, screen down, all the way over and back. Keep it in " +
+                    "the same spot while you do.",
+                "Watch the plot go oval. The long way is aligned, the short way crossed.",
+                "Try it again on a different source. A phone tumbling in a pocket has no " +
+                    "fixed orientation to align with and gives almost nothing.",
+            ),
+            reading = "Depth is the gap between the best and worst roll angle. Six dB or " +
+                "more, with the two extremes about ninety degrees apart, is polarisation " +
+                "and nothing else in a room produces that shape. The deeper the null, the " +
+                "more of the signal arrived by one clean path - the same quantity " +
+                "Multipath Fading calls K, measured a completely different way.",
+            limits = "Stood on end the measurement is undefined and readings are dropped " +
+                "rather than plotted. Close in, or through walls, the null fills with " +
+                "reflections and the answer is honestly small rather than wrong. Moving " +
+                "the phone while rolling it measures distance instead. Some antennas are " +
+                "circularly polarised and simply have no null to find.",
         ),
         Experiment(
             id = "pathloss",

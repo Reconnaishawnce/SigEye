@@ -25,6 +25,7 @@ import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.convoy.ConvoyScreen
 import com.sigeye.experiments.discovery.DiscoveryScreen
 import com.sigeye.experiments.doppler.DopplerScreen
+import com.sigeye.experiments.polarisation.PolarisationScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
 import com.sigeye.experiments.faraday.FaradayScreen
@@ -158,6 +159,9 @@ private fun SigEyeApp() {
 
             Experiments.DOPPLER ->
                 DopplerScreen(onBack = goBack, modifier = inset)
+
+            Experiments.POLARISATION ->
+                PolarisationScreen(onBack = goBack, modifier = inset)
 
             Experiments.MOTION ->
                 MotionScreen(onBack = goBack, modifier = inset)
