@@ -39,6 +39,7 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
+import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.AdvertShape
 import com.sigeye.core.analysis.Chain
 import com.sigeye.core.analysis.ChainTracker
@@ -51,16 +52,20 @@ import com.sigeye.core.analysis.RotationHunt
 import com.sigeye.core.ble.AddressType
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.Phy
+import com.sigeye.experiments.watchlist.MatchKind
+import com.sigeye.experiments.watchlist.WatchStore
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.Field
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
+import com.sigeye.ui.Section
 import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "rotation"
 private const val TICK_MS = 1_000L
@@ -106,6 +111,12 @@ private fun Live() {
     val chains = remember { ChainTracker() }
 
     val notes by book.notes.collectAsStateWithLifecycle()
+    val watchRules by remember { WatchStore.get(context) }.rules.collectAsStateWithLifecycle()
+    val watched = remember(watchRules) {
+        watchRules.filter { it.kind == MatchKind.ADDRESS }
+            .map { it.value.uppercase(Locale.US) }
+            .toSet()
+    }
 
     var state by remember { mutableStateOf(HuntState()) }
     var candidates by remember { mutableStateOf<List<Identity>>(emptyList()) }
@@ -118,6 +129,7 @@ private fun Live() {
     var showRoom by remember { mutableStateOf(true) }
     var expandedChain by remember { mutableStateOf<Int?>(null) }
     var exported by remember { mutableStateOf<String?>(null) }
+    var seedsHeard by remember { mutableStateOf(0) }
 
     KeepScreenOn(state.stage != HuntStage.PICK)
 
@@ -171,6 +183,7 @@ private fun Live() {
         while (true) {
             delay(TICK_MS)
             val now = System.currentTimeMillis()
+            chains.seed(watched)
             hunt.tick(now)
             chains.tick(now)
             state = hunt.state(now)
@@ -178,6 +191,7 @@ private fun Live() {
             roomChains = chains.chains { notes[it.uppercase(Locale.US)]?.nickname }
             unlinked = chains.unlinked(now)
             fixed = chains.fixedCount(now)
+            seedsHeard = chains.seedsInRange(now)
             if (state.rotations.size > announced) {
                 announced = state.rotations.size
                 feedback.alert(alertStyle, urgent = true)
@@ -233,6 +247,8 @@ private fun Live() {
         chains = roomChains,
         unlinked = unlinked,
         fixed = fixed,
+        seedsHeard = seedsHeard,
+        watchedCount = watched.size,
         expanded = expandedChain,
         shown = showRoom,
         exported = exported,
@@ -263,6 +279,8 @@ private fun TheRoom(
     chains: List<Chain>,
     unlinked: Int,
     fixed: Int,
+    seedsHeard: Int,
+    watchedCount: Int,
     expanded: Int?,
     shown: Boolean,
     exported: String?,
@@ -276,7 +294,7 @@ private fun TheRoom(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "The rest of the room",
+            "Watchlist, followed through rotation",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
         )
@@ -289,37 +307,41 @@ private fun TheRoom(
     if (!shown) return
 
     Spacer(Modifier.height(8.dp))
-    DiagnosticsPanel(
-        title = "Rotations found without picking anything",
-        verdict = if (chains.isEmpty() && unlinked > 4) {
-            "Nothing has been linked yet. That is the usual outcome: matching needs a " +
-                "device to be distinctive and to rotate while you are watching, and most " +
-                "are neither."
-        } else {
-            null
+    Text(
+        when {
+            watchedCount == 0 -> "Nothing is on your watchlist, so nothing is being " +
+                "followed here. Add a device from any screen's actions and it will be " +
+                "tracked through its address changes from then on."
+            seedsHeard == 0 -> "$watchedCount on your watchlist, none of them audible " +
+                "right now."
+            chains.isEmpty() -> "Following $seedsHeard of $watchedCount watchlisted " +
+                "devices. None has rotated yet - most take about fifteen minutes, and " +
+                "many only rotate with the screen off."
+            else -> "Following $seedsHeard of $watchedCount watchlisted devices."
         },
-        initiallyExpanded = true,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(8.dp))
+    DiagnosticsPanel(
+        title = "The rest of the room, for scale",
         diagnostics = listOf(
-            Diagnostic("Chains", "${chains.size}", "devices followed"),
+            Diagnostic("Watched", "$seedsHeard/$watchedCount", "in range now"),
+            Diagnostic("Chains", "${chains.size}", "have rotated"),
             Diagnostic("Rotations", "${chains.sumOf { it.rotations }}", "links made"),
-            Diagnostic("Unlinked", "$unlinked", "random, unmatched"),
+            Diagnostic("Others", "$unlinked", "random, not followed"),
             Diagnostic("Fixed", "$fixed", "never rotate"),
-            Diagnostic(
-                "Best chain",
-                "${chains.maxOfOrNull { it.addresses.size } ?: 0}",
-                "addresses long",
-            ),
             Diagnostic(
                 "Strong",
                 "${chains.count { it.weakestLink == LinkConfidence.STRONG }}",
                 "chains throughout",
             ),
         ),
-        footnote = "Unlinked is the number that matters. A handful of chains against " +
-            "dozens of unmatched addresses means the matching is catching very little, " +
-            "which is the honest reading of most rooms - and nothing here can be proved " +
-            "the way the focused hunt can, because you cannot walk away with someone " +
-            "else's phone.",
+        footnote = "Only watchlisted devices are followed. Chaining everything in range " +
+            "produced a wall of claims about strangers' phones that nobody could check, " +
+            "and nothing here can be proved the way the focused hunt above can - you " +
+            "cannot walk away with someone else's device.",
     )
 
     chains.take(12).forEach { chain ->
@@ -513,8 +535,12 @@ private fun Pick(
             ) {
                 Column(Modifier.padding(end = 8.dp)) {
                     Text(
+                        // A randomised address has no vendor of its own, but the company
+                        // id in the payload does - and showing "Apple" beats showing hex
+                        // when every other screen already says Apple.
                         nicknameOf(candidate.address)
                             ?: candidate.shape.name
+                            ?: candidate.shape.companyId?.let { Vendors.byCompanyId(it) }
                             ?: candidate.address,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -760,160 +786,163 @@ private fun RotationCard(rotation: Rotation) {
 
 // ------------------------------------------------------------------------------ parts
 
+/**
+ * Everything measured about the subject, one question at a time.
+ *
+ * This was five headings of numbers shown at once, which is the same as showing none of
+ * them - by the fourth heading nobody is reading. Each section now carries the answer to
+ * its own question on the collapsed row, and keeps the workings behind a tap. The two that
+ * can produce an alarming answer open themselves when they do.
+ */
 @Composable
 private fun Fingerprint(state: HuntState) {
     val traits = state.traits
+    val shape = state.shape
+
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
-            Text(
-                "The fingerprint",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(6.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 Stat("Interval", "${traits.intervalSlots}", "slots")
-                Stat("Traits", "${state.shape.distinctiveness}", "distinctive")
+                Stat("Traits", "${shape.distinctiveness}", "distinctive")
                 Stat("Packets", "${state.packets}", "heard")
             }
 
             Spacer(Modifier.height(10.dp))
-            Text(
-                "Address",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Line("Type", traits.addressType.label)
-            Text(
-                traits.addressType.rotates,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (traits.addressType == AddressType.RANDOM_STATIC) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
 
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Timing",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Line(
-                "Interval",
-                String.format(
-                    Locale.US,
-                    "%d ms  (%d \u00D7 0.625 ms)",
-                    traits.intervalMs,
-                    traits.intervalSlots,
-                ),
-            )
-            Line(
-                "Stability",
-                traits.intervalStability +
-                    String.format(Locale.US, "  (\u00B1%.1f%%)", traits.intervalJitter * 100),
-            )
-            Line(
-                "Signal spread",
-                String.format(Locale.US, "%.1f dB", traits.rssiSpread),
-            )
-
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Link layer",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Line("Advertising", if (traits.isLegacy) "legacy" else "extended (BT 5)")
-            Line("Connectable", if (traits.isConnectable) "yes" else "no")
-            Line(
-                "PHY",
-                Phy.label(traits.primaryPhy) +
-                    if (traits.secondaryPhy != 0) " / " + Phy.label(traits.secondaryPhy) else "",
-            )
-            if (traits.advertisingSid != 0xFF) {
-                Line("Advertising set", traits.advertisingSid.toString())
-            }
-
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Payload",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            state.shape.name?.let { Line("Name", it) }
-            state.shape.companyId?.let {
-                Line("Company", String.format(Locale.US, "0x%04X", it))
-            }
-            if (state.shape.serviceUuids.isNotEmpty()) {
-                Line("Services", "${state.shape.serviceUuids.size} advertised")
-            }
-            state.shape.txPower?.let { Line("TX power", "$it dBm") }
-            if (traits.payloadLength > 0) {
-                Line("Bytes", "${traits.payloadLength}")
-                Line("Never change", "${traits.payloadStaticBytes}")
+            val staticAddress = traits.addressType == AddressType.RANDOM_STATIC
+            Section(
+                title = "Address",
+                summary = traits.addressType.label,
+                emphasis = staticAddress,
+                initiallyExpanded = staticAddress,
+            ) {
                 Text(
-                    traits.payloadMask,
+                    traits.addressType.rotates,
                     style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                traits.payloadNote,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (traits.payloadLeaksIdentity) {
-                    FontWeight.SemiBold
-                } else {
-                    FontWeight.Normal
-                },
-                color = if (traits.payloadLeaksIdentity) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.padding(top = 2.dp),
-            )
 
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (state.shape.tooPlainToMatchOn) {
+            Section(
+                title = "Timing",
+                summary = String.format(
+                    Locale.US,
+                    "%d ms, %s",
+                    traits.intervalMs,
+                    traits.intervalStability,
+                ),
+            ) {
+                Field(
+                    "Interval",
+                    String.format(
+                        Locale.US,
+                        "%d ms (%d \u00D7 0.625)",
+                        traits.intervalMs,
+                        traits.intervalSlots,
+                    ),
+                )
+                Field(
+                    "Jitter",
+                    String.format(Locale.US, "\u00B1%.1f%%", traits.intervalJitter * 100),
+                )
+                Field("Signal spread", String.format(Locale.US, "%.1f dB", traits.rssiSpread))
+                Text(
+                    "The interval is a firmware constant, given in the 0.625 ms slots the " +
+                        "specification uses - 244 slots is recognisably Apple in a way " +
+                        "that 152 ms is not.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            Section(
+                title = "Link layer",
+                summary = listOf(
+                    if (traits.isLegacy) "legacy" else "extended",
+                    if (traits.isConnectable) "connectable" else "broadcast only",
+                    Phy.label(traits.primaryPhy),
+                ).joinToString(", "),
+            ) {
+                Field("Advertising", if (traits.isLegacy) "legacy" else "extended (BT 5)")
+                Field("Connectable", if (traits.isConnectable) "yes" else "no")
+                Field(
+                    "PHY",
+                    Phy.label(traits.primaryPhy) +
+                        if (traits.secondaryPhy != 0) {
+                            " / " + Phy.label(traits.secondaryPhy)
+                        } else {
+                            ""
+                        },
+                )
+                if (traits.advertisingSid != 0xFF) {
+                    Field("Advertising set", traits.advertisingSid.toString())
+                }
+                Text(
+                    "Set by the advertising parameters, so a device cannot change any of " +
+                        "these without changing how it advertises.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            Section(
+                title = "Payload",
+                summary = when {
+                    traits.payloadLength == 0 -> "nothing carried"
+                    traits.payloadLeaksIdentity ->
+                        "${traits.payloadStaticBytes} of ${traits.payloadLength} bytes " +
+                            "never change"
+                    else -> "${traits.payloadLength} bytes, " +
+                        "${traits.payloadStaticBytes} unchanging"
+                },
+                emphasis = traits.payloadLeaksIdentity,
+                initiallyExpanded = traits.payloadLeaksIdentity,
+            ) {
+                shape.name?.let { Field("Name", it) }
+                shape.companyId?.let {
+                    Field(
+                        "Company",
+                        String.format(Locale.US, "0x%04X", it) +
+                            (Vendors.byCompanyId(it)?.let { name -> "  $name" } ?: ""),
+                    )
+                }
+                if (shape.serviceUuids.isNotEmpty()) {
+                    Field("Services", "${shape.serviceUuids.size} advertised")
+                }
+                shape.txPower?.let { Field("TX power", "$it dBm") }
+                if (traits.payloadLength > 0) {
+                    Field("Bytes", "${traits.payloadLength}")
+                    Text(
+                        traits.payloadMask,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                Text(
+                    traits.payloadNote,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            if (shape.tooPlainToMatchOn) {
+                Spacer(Modifier.height(8.dp))
+                Text(
                     "This advertisement carries almost nothing distinctive, so a match on " +
-                        "its structure would mean very little. Something with a name and " +
-                        "a few services is a far better subject."
-                } else {
-                    "Everything above the payload section is set by firmware and the " +
-                        "advertising parameters, not by the privacy scheme - which is " +
-                        "exactly why it survives a rotation. The mask shows which payload " +
-                        "bytes have ever changed: # never has, . has."
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                        "its structure would mean very little. Something with a name and a " +
+                        "few services is a far better subject.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
-    }
-}
-
-@Composable
-private fun Line(label: String, value: String) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 1.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-        )
     }
 }
 

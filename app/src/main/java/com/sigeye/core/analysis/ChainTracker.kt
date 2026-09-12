@@ -56,18 +56,19 @@ data class Chain(
 }
 
 /**
- * Rotation-hunting across everything in the room at once.
+ * Following the devices you have asked to be followed, through their address changes.
  *
- * The focused hunt follows one device you chose and lets you prove the link by walking
- * away with it. This does the same reasoning without a subject: every randomised address
- * that goes quiet is offered to every address that has just appeared, and the best match
- * above a threshold extends a chain.
+ * This began by chaining everything in range, which produced a wall of claims about
+ * strangers' phones that nobody could check and nobody wanted. It is seeded now: a chain
+ * only starts from an address you put on the watchlist, and then follows wherever that
+ * address goes. Everything else in the room is counted and otherwise left alone.
  *
- * That is a weaker claim and it is treated as one - there is no walk-away test available
- * for a stranger's phone, so nothing here can ever be confirmed, only argued. What it is
- * good for is the shape of the room: how many distinct devices are actually present behind
- * forty addresses, how often each rotates, and whether anything is not rotating at all,
- * which is far more interesting than anything that is.
+ * That also makes the claim worth more. Watchlisting a device is a statement that you know
+ * what it is, so a chain leading away from it is about something identified rather than
+ * about an anonymous address among forty others.
+ *
+ * The focused hunt is still the stronger tool, because a link there can be proved by
+ * walking away with the device. Nothing here can be - so it is argued, never asserted.
  *
  * Pure and Android-free.
  */
@@ -123,6 +124,21 @@ class ChainTracker(
     private val chains = LinkedHashMap<Int, MutableList<ChainLink>>()
     private var nextChainId = 1
 
+    /**
+     * Addresses a chain may start from.
+     *
+     * Updated as the watchlist changes. An address already inside a chain keeps being
+     * followed even if it is removed from the seeds, because abandoning a device halfway
+     * through a journey would lose the thing being measured.
+     */
+    private var seeds: Set<String> = emptySet()
+
+    fun seed(addresses: Collection<String>) {
+        seeds = addresses.map { it.uppercase(Locale.US) }.toSet()
+    }
+
+    val seedCount: Int get() = seeds.size
+
     val addressCount: Int get() = live.size
 
     fun reset() {
@@ -150,6 +166,10 @@ class ChainTracker(
         val finished = live.entries
             .filter { !it.value.closed && nowMs - it.value.lastSeenMs > silenceMs }
             .filter { it.value.isRandom && it.value.packets >= MIN_PACKETS }
+            // Seeded, not room-wide: a chain starts from something you asked about, or
+            // continues one already running. Chaining everything produced a wall of
+            // unverifiable claims about strangers.
+            .filter { it.value.chainId != null || seeds.contains(it.key) }
             .sortedBy { it.value.lastSeenMs }
 
         val claimed = mutableSetOf<String>()
@@ -207,6 +227,11 @@ class ChainTracker(
             ChainLink(address, entry.firstSeenMs, entry.lastSeenMs, score = null),
         )
         return id
+    }
+
+    /** Watchlisted addresses currently audible, whether or not they have rotated yet. */
+    fun seedsInRange(nowMs: Long): Int = live.count { (address, entry) ->
+        seeds.contains(address) && nowMs - entry.lastSeenMs <= silenceMs
     }
 
     /** Chains that have actually rotated at least once, longest first. */

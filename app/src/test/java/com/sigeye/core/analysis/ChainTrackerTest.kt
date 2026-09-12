@@ -14,7 +14,15 @@ class ChainTrackerTest {
         manufacturerPrefix = "0215",
     )
 
-    private fun tracker() = ChainTracker(silenceMs = 25_000L)
+    /** Seeded with everything, for the tests that are about chaining rather than scope. */
+    private fun tracker(vararg seeds: String) = ChainTracker(silenceMs = 25_000L).apply {
+        seed(if (seeds.isEmpty()) ALL_SEEDS else seeds.toList())
+    }
+
+    private val ALL_SEEDS = listOf(
+        "AA", "A1", "A2", "B1", "B2", "FIXED1", "RANDOM", "LONE0", "LONE1", "LONE2",
+        "LONE3", "LONE4", "LONE5",
+    )
 
     /** One address advertising steadily across a window. */
     private fun ChainTracker.advertise(
@@ -187,6 +195,52 @@ class ChainTrackerTest {
         tracker.advertise("FIXED", 0L, 30_000L, shapeFor("Camera"), isRandom = false)
         assertEquals(1, tracker.fixedCount(30_000L))
         assertEquals(1, tracker.unlinked(30_000L))
+    }
+
+    @Test
+    fun `only watchlisted addresses start a chain`() {
+        // The change that made this usable: chaining everything produced a wall of claims
+        // about strangers' phones that nobody could check.
+        val tracker = ChainTracker(silenceMs = 25_000L)
+        tracker.seed(listOf("WATCHED"))
+        val shape = shapeFor("Phone")
+
+        tracker.advertise("WATCHED", 0L, 60_000L, shape)
+        tracker.advertise("WATCHED2", 62_000L, 120_000L, shape)
+        tracker.advertise("STRANGER", 0L, 60_000L, shapeFor("Other", company = 0x0006))
+        tracker.advertise("STRANGER2", 62_000L, 120_000L, shapeFor("Other", company = 0x0006))
+        tracker.tick(95_000L)
+
+        val chains = tracker.chains()
+        assertEquals(1, chains.size)
+        assertEquals(listOf("WATCHED", "WATCHED2"), chains.first().addresses)
+    }
+
+    @Test
+    fun `a chain already running is followed even after its seed is removed`() {
+        // Abandoning a device halfway through a journey loses the thing being measured.
+        val tracker = ChainTracker(silenceMs = 25_000L)
+        tracker.seed(listOf("AA"))
+        val shape = shapeFor("Phone")
+        tracker.advertise("AA", 0L, 60_000L, shape)
+        tracker.advertise("BB", 62_000L, 120_000L, shape)
+        tracker.tick(95_000L)
+
+        tracker.seed(emptyList())
+        tracker.advertise("CC", 122_000L, 180_000L, shape)
+        tracker.tick(155_000L)
+
+        assertEquals(listOf("AA", "BB", "CC"), tracker.chains().first().addresses)
+    }
+
+    @Test
+    fun `seeds in range are counted, so the screen can say it is watching nothing`() {
+        val tracker = ChainTracker(silenceMs = 25_000L)
+        tracker.seed(listOf("WATCHED"))
+        tracker.advertise("WATCHED", 0L, 30_000L, shapeFor("Phone"))
+        tracker.advertise("OTHER", 0L, 30_000L, shapeFor("Other"))
+        assertEquals(1, tracker.seedsInRange(30_000L))
+        assertEquals(1, tracker.seedCount)
     }
 
     @Test

@@ -41,8 +41,10 @@ import com.sigeye.core.Permissions
 import com.sigeye.core.ScanService
 import com.sigeye.core.analysis.TrainLog
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.Field
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.Section
 import com.sigeye.ui.Sparkline
 import java.io.File
 import java.text.SimpleDateFormat
@@ -176,32 +178,50 @@ private fun Monitor() {
         ),
     ) {
         Column(Modifier.padding(14.dp)) {
+            // The headline answers the question the screen exists for, before any detail.
             Text(
-                if (log.inProgress) "Something is going past now" else "Passes",
-                style = MaterialTheme.typography.labelLarge,
+                when {
+                    log.inProgress -> "Something is going past now"
+                    log.count == 0 -> "Nothing has gone past yet"
+                    log.count == 1 -> "One pass"
+                    else -> "${log.count} passes"
+                },
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(4.dp))
-            Text(log.summary(), style = MaterialTheme.typography.bodySmall)
+            Text(
+                log.summary(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             if (passes.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                passes.takeLast(6).reversed().forEach { pass ->
+                Spacer(Modifier.height(6.dp))
+                Section(
+                    title = "Recent passes",
+                    summary = "Last ${minOf(passes.size, 6)} of ${passes.size}",
+                ) {
+                    passes.takeLast(6).reversed().forEach { pass ->
+                        Field(
+                            SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(pass.startMs)),
+                            pass.describe(),
+                        )
+                    }
+                }
+                Section(
+                    title = "How this is counted",
+                    summary = "A run of bursts is one pass",
+                ) {
                     Text(
-                        SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(pass.startMs)) +
-                            "  ·  " + pass.describe(),
+                        "A train takes longer than one bin, so consecutive bursts are " +
+                            "grouped - one train counts once however many bins it spans. " +
+                            "A brief dip in the middle is tolerated, because a gap " +
+                            "between carriages should not become two trains.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "A pass is a run of consecutive bursts, so one train counts once however " +
-                    "many bins it spans. A brief dip in the middle is tolerated - a gap " +
-                    "between carriages should not become two trains.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 
