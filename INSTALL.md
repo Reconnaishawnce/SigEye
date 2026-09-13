@@ -33,18 +33,24 @@ Open the phone's **Files** app → Downloads → tap `SigEye.apk` → **Install*
 
 ### 4. First run
 
-Open SigEye. You land on the experiment list — tap **Train Spotter**. It then asks for
-three permissions in one prompt:
+Open SigEye. You land on the experiment list — tap **Proximity Radar**, which needs nothing
+set up and shows something moving within a few seconds. It asks for permissions first:
 
 - **Nearby devices** → Allow
 - **Location** → choose **While using the app** (this is enough; the foreground service
-  keeps the grant alive with the screen off)
+  keeps the grant alive with the screen off). Android returns no scan results at all
+  without it, on any version, and nothing in here reads where you are.
 - **Notifications** → Allow
 
-Then tap **Start scanning**. Within a few seconds the big number should start moving.
+Blips should appear within a few seconds, arranged by how close each one sounds. Walk away
+from a speaker or a pair of earbuds and watch its blip slide outward.
 
-Burst alerts stay disarmed for the first two minutes while the baseline builds — the screen
-tells you how many bins are left.
+[docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) has what to try after that, and what to do
+when something looks wrong.
+
+**For Train Spotter specifically:** tap it, then **Start scanning**, and the big number
+starts moving. Burst alerts stay disarmed for the first two minutes while the baseline
+builds — the screen says how many bins are left.
 
 ### 5. Exempt it from battery optimisation
 
