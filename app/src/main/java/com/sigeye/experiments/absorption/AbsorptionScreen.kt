@@ -1,6 +1,5 @@
 package com.sigeye.experiments.absorption
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,9 +55,11 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.isBlocking
-import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.Source
+import com.sigeye.ui.SourceOrder
+import com.sigeye.ui.SourcePicker
 import com.sigeye.ui.PolarPlot
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -113,7 +113,6 @@ private fun Live() {
     val sweep = remember { PolarSweep(sectorCount = 24, minSamplesPerSector = MIN_SAMPLES_PER_SECTOR) }
 
     val heading by compass.heading.collectAsStateWithLifecycle()
-    val notes by book.notes.collectAsStateWithLifecycle()
 
     val session = remember { SweepSession() }
     var stage by remember { mutableStateOf(Stage.PICK_SOURCE) }
@@ -122,10 +121,7 @@ private fun Live() {
     // advertisement copied the whole thing per packet and recomposed the screen hundreds
     // of times a second, which starved the recording coroutine badly enough that most of
     // the turn never reached the sweep.
-    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
-    var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
     var sourceLabel by remember { mutableStateOf("-") }
-    var paused by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<SweepResult?>(null) }
     var sessionResult by remember { mutableStateOf(session.result()) }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
@@ -147,27 +143,6 @@ private fun Live() {
         onDispose {
             compass.stop()
             BleScanHub.release(HUB_TAG)
-        }
-    }
-
-    // Candidates are only needed while picking one, so nothing is collected for them
-    // during the sweep.
-    LaunchedEffect(stage) {
-        if (stage != Stage.PICK_SOURCE) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            synchronized(candidateTable) {
-                val existing = candidateTable[advert.address]
-                candidateTable[advert.address] = Candidate(
-                    address = advert.address,
-                    name = advert.name ?: existing?.name,
-                    vendor = advert.vendor,
-                    rssi = advert.rssi,
-                    isRandom = advert.isRandomAddress,
-                    sightings = (existing?.sightings ?: 0) + 1,
-                    firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
-                    lastSeenMs = advert.atMs,
-                )
-            }
         }
     }
 
@@ -253,33 +228,13 @@ private fun Live() {
         }
     }
 
-    // The picker list, snapshotted on a timer and freezable so a row can be tapped.
-    LaunchedEffect(paused, stage) {
-        while (stage == Stage.PICK_SOURCE && !paused) {
-            delay(700)
-            val now = System.currentTimeMillis()
-            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
-                .filter { now - it.lastSeenMs < 15_000 && it.sightings >= 3 }
-                .sortedByDescending { it.rssi }
-                .take(25)
-        }
-    }
 
     when (stage) {
         Stage.PICK_SOURCE -> PickSource(
-            candidates = frozen,
-            paused = paused,
-            onTogglePause = { paused = !paused },
-            nicknameOf = { notes[it.uppercase()]?.nickname },
             compassQuality = heading.quality,
-            onPick = { address ->
-                sourceAddress = address
-                sourceLabel = frozen.firstOrNull { it.address == address }?.let {
-                    notes[address.uppercase()]?.nickname
-                        ?: it.name?.takeIf { name -> name.isNotBlank() }
-                        ?: it.vendor
-                        ?: address
-                } ?: address
+            onPick = { candidate ->
+                sourceAddress = candidate.address
+                sourceLabel = candidate.label(book.nicknameOf(candidate.address))
                 sourcePackets.set(0)
                 worstCompass = CompassQuality.HIGH
                 sweep.reset()
@@ -338,43 +293,11 @@ private fun Live() {
     }
 }
 
-private data class Candidate(
-    val address: String,
-    val name: String?,
-    val vendor: String?,
-    val rssi: Int,
-    val isRandom: Boolean,
-    val sightings: Int,
-    val firstSeenMs: Long,
-    val lastSeenMs: Long,
-) {
-    /**
-     * Packets per second since first heard.
-     *
-     * The single most useful thing to know before picking a source: a sweep needs about
-     * three readings in each of 24 sectors, so under roughly 3/s there is no chance of
-     * filling the circle in the half minute a turn takes.
-     */
-    val rate: Double
-        get() {
-            val span = (lastSeenMs - firstSeenMs).coerceAtLeast(1L)
-            return sightings * 1000.0 / span
-        }
-
-    val isChatty: Boolean get() = rate >= 3.0
-}
 
 // ------------------------------------------------------------------ stage one
 
 @Composable
-private fun PickSource(
-    candidates: List<Candidate>,
-    paused: Boolean,
-    onTogglePause: () -> Unit,
-    nicknameOf: (String) -> String?,
-    compassQuality: CompassQuality,
-    onPick: (String) -> Unit,
-) {
+private fun PickSource(compassQuality: CompassQuality, onPick: (Source) -> Unit) {
     StepCard(
         step = "Step 1 of 3",
         title = "Choose something to listen to",
@@ -387,79 +310,14 @@ private fun PickSource(
     CompassBanner(compassQuality)
 
     Spacer(Modifier.height(10.dp))
-    if (candidates.isEmpty()) {
-        Text(
-            "Listening for something steady enough to use...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-
-    PauseBar(
-        paused = paused,
-        onToggle = onTogglePause,
-        summary = "${candidates.size} usable · ${candidates.count { it.isChatty }} chatty",
+    SourcePicker(
+        onPick = onPick,
+        heading = "Nearby",
+        order = SourceOrder.RATE,
+        wantsRate = 3.0,
+        warnOnRandom = true,
     )
-    Spacer(Modifier.height(6.dp))
-
-    candidates.forEach { candidate ->
-        Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-                .clickable { onPick(candidate.address) },
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-        ) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        nicknameOf(candidate.address)
-                            ?: candidate.name?.takeIf { it.isNotBlank() }
-                            ?: candidate.vendor
-                            ?: candidate.address,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        candidate.address,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (candidate.isRandom) {
-                        Text(
-                            "Randomised address - fine for one sweep, gone within " +
-                                "about fifteen minutes",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${candidate.rssi}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        String.format(Locale.US, "%.1f/s", candidate.rate),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (candidate.isChatty) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        },
-                    )
-                }
-            }
-        }
-    }
 }
-
-// ------------------------------------------------------------------ stage two
 
 @Composable
 private fun Sweeping(

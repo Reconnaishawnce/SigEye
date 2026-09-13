@@ -2,7 +2,6 @@ package com.sigeye.experiments.fading
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,9 +49,11 @@ import com.sigeye.core.analysis.rf.FadingCharacter
 import com.sigeye.core.analysis.rf.FadingStats
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.ExperimentHeader
-import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.Source
+import com.sigeye.ui.SourceOrder
+import com.sigeye.ui.SourcePicker
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
@@ -64,18 +65,6 @@ private const val HALF_WAVELENGTH_CM = 6.1
 
 private enum class Stage { PICK, RECORD, RESULT }
 
-private data class Candidate(
-    val address: String,
-    val name: String?,
-    val vendor: String?,
-    val rssi: Int,
-    val sightings: Int,
-    val firstSeenMs: Long,
-    val lastSeenMs: Long,
-) {
-    val rate: Double
-        get() = sightings * 1000.0 / (lastSeenMs - firstSeenMs).coerceAtLeast(1L)
-}
 
 /** One place the phone was held still, and what the signal did there. */
 private data class Spot(val label: String, val stats: FadingStats)
@@ -114,7 +103,6 @@ fun FadingScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 private fun Live() {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
-    val notes by book.notes.collectAsStateWithLifecycle()
 
     var stage by remember { mutableStateOf(Stage.PICK) }
     var target by remember { mutableStateOf<String?>(null) }
@@ -123,51 +111,6 @@ private fun Live() {
     // Both of these are deliberately outside Compose. Rebuilding an immutable collection
     // on every advertisement and writing it back to state recomposes the whole screen
     // hundreds of times a second, which starves the very coroutine doing the collecting.
-    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
-    val record = remember { mutableListOf<FadeSample>() }
-
-    var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
-    var paused by remember { mutableStateOf(false) }
-    var liveRssi by remember { mutableStateOf<Int?>(null) }
-    var trace by remember { mutableStateOf<List<Int>>(emptyList()) }
-    var stats by remember { mutableStateOf(FadingAnalysis.analyse(emptyList())) }
-    var spots by remember { mutableStateOf<List<Spot>>(emptyList()) }
-
-    DisposableEffect(Unit) {
-        BleScanHub.init(context)
-        BleScanHub.acquire(HUB_TAG)
-        onDispose { BleScanHub.release(HUB_TAG) }
-    }
-
-    LaunchedEffect(stage) {
-        if (stage != Stage.PICK) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            synchronized(candidateTable) {
-                val existing = candidateTable[advert.address]
-                candidateTable[advert.address] = Candidate(
-                    address = advert.address,
-                    name = advert.name ?: existing?.name,
-                    vendor = advert.vendor,
-                    rssi = advert.rssi,
-                    sightings = (existing?.sightings ?: 0) + 1,
-                    firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
-                    lastSeenMs = advert.atMs,
-                )
-            }
-        }
-    }
-
-    LaunchedEffect(paused, stage) {
-        while (stage == Stage.PICK && !paused) {
-            delay(700)
-            val now = System.currentTimeMillis()
-            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
-                .filter { now - it.lastSeenMs < 12_000 && it.sightings >= 3 }
-                .sortedByDescending { it.rate }
-                .take(20)
-        }
-    }
-
     LaunchedEffect(stage, target) {
         val address = target
         if (stage != Stage.RECORD || address == null) return@LaunchedEffect
@@ -196,16 +139,9 @@ private fun Live() {
 
     when (stage) {
         Stage.PICK -> PickSource(
-            candidates = frozen,
-            paused = paused,
-            onTogglePause = { paused = !paused },
-            nicknameOf = { notes[it.uppercase()]?.nickname },
             onPick = { candidate ->
                 target = candidate.address
-                targetLabel = notes[candidate.address.uppercase()]?.nickname
-                    ?: candidate.name?.takeIf { it.isNotBlank() }
-                    ?: candidate.vendor
-                    ?: candidate.address
+                targetLabel = candidate.label(book.nicknameOf(candidate.address))
                 synchronized(record) { record.clear() }
                 spots = emptyList()
                 trace = emptyList()
@@ -262,13 +198,7 @@ private const val TRACE_POINTS = 180
 // --------------------------------------------------------------------- stage one
 
 @Composable
-private fun PickSource(
-    candidates: List<Candidate>,
-    paused: Boolean,
-    onTogglePause: () -> Unit,
-    nicknameOf: (String) -> String?,
-    onPick: (Candidate) -> Unit,
-) {
+private fun PickSource(onPick: (Source) -> Unit) {
     StepCard(
         "Step 1 of 3",
         "Pick something chatty",
@@ -277,64 +207,13 @@ private fun PickSource(
             "device that speaks once a second will take all afternoon.",
     )
     Spacer(Modifier.height(10.dp))
-    if (candidates.isEmpty()) {
-        Text(
-            "Listening...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    PauseBar(paused = paused, onToggle = onTogglePause, summary = "${candidates.size} nearby")
-    Spacer(Modifier.height(6.dp))
-    candidates.forEach { candidate ->
-        val name = nicknameOf(candidate.address)
-            ?: candidate.name?.takeIf { it.isNotBlank() }
-            ?: candidate.vendor
-            ?: candidate.address
-        Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-                .clickable { onPick(candidate) },
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.padding(end = 8.dp)) {
-                    Text(name, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        candidate.address,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        String.format(Locale.US, "%.1f/s", candidate.rate),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (candidate.rate >= 2.0) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    Text(
-                        "${candidate.rssi} dBm",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
+    SourcePicker(
+        onPick = onPick,
+        heading = "Nearby",
+        order = SourceOrder.RATE,
+        wantsRate = 2.0,
+    )
 }
-
-// --------------------------------------------------------------------- stage two
 
 @Composable
 private fun Recording(
