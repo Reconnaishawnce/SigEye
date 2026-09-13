@@ -108,12 +108,52 @@ class PlaceProfile(
     var bucketMs: Long = 10 * 60_000L,
 ) {
 
+    /**
+     * Running totals for one slice, instead of every reading in it.
+     *
+     * Three numbers are asked of these readings - how many there were, their mean, and
+     * their spread - and all three come from a count, a sum and a sum of squares. Keeping
+     * the readings themselves cost the size of the recording rather than the size of the
+     * answer, and this experiment is the one that is meant to be left somewhere for hours:
+     * a busy place at five packets a second fills a ten minute slice with three thousand
+     * of them, per device, and addresses rotate so the device count climbs all day. That
+     * is how a phone left on a windowsill runs out of memory.
+     */
+    private class Tally {
+        var count: Int = 0
+            private set
+        private var sum: Double = 0.0
+        private var sumSquares: Double = 0.0
+
+        fun add(rssi: Int) {
+            count++
+            sum += rssi
+            sumSquares += rssi.toDouble() * rssi
+        }
+
+        val mean: Double get() = if (count == 0) 0.0 else sum / count
+
+        /** Population standard deviation, from the same three numbers. */
+        val spread: Double
+            get() {
+                if (count < 2) return 0.0
+                val variance = (sumSquares / count) - (mean * mean)
+                return kotlin.math.sqrt(variance.coerceAtLeast(0.0))
+            }
+
+        fun merge(other: Tally) {
+            count += other.count
+            sum += other.sum
+            sumSquares += other.sumSquares
+        }
+    }
+
     private data class Track(
         var firstSeenMs: Long,
         var lastSeenMs: Long,
         var label: String,
         val buckets: MutableSet<Int> = mutableSetOf(),
-        val rssiByBucket: MutableMap<Int, MutableList<Int>> = mutableMapOf(),
+        val rssiByBucket: MutableMap<Int, Tally> = mutableMapOf(),
         var packets: Int = 0,
     )
 
@@ -124,6 +164,7 @@ class PlaceProfile(
 
     val deviceCount: Int get() = tracks.size
 
+    @Synchronized
     fun start(nowMs: Long) {
         tracks.clear()
         startedAtMs = nowMs
@@ -131,6 +172,7 @@ class PlaceProfile(
         started = true
     }
 
+    @Synchronized
     fun observe(address: String, rssi: Int, atMs: Long, label: String? = null) {
         if (!started || atMs < startedAtMs) return
         val key = address.uppercase(Locale.US)
@@ -143,10 +185,11 @@ class PlaceProfile(
         track.lastSeenMs = atMs
         track.packets++
         track.buckets.add(bucket)
-        track.rssiByBucket.getOrPut(bucket) { mutableListOf() }.add(rssi)
+        track.rssiByBucket.getOrPut(bucket) { Tally() }.add(rssi)
         if (atMs > lastAtMs) lastAtMs = atMs
     }
 
+    @Synchronized
     fun report(nowMs: Long = lastAtMs): PlaceReport {
         if (!started) return PlaceReport(emptyList(), emptyList(), 0, 0)
 
@@ -167,7 +210,7 @@ class PlaceProfile(
                 // and over, and the churn figure becomes meaningless.
                 arrivals = present.count { (_, track) -> track.buckets.min() == index },
                 departures = if (index == 0) 0 else previous.count { !present.containsKey(it) },
-                packets = present.values.sumOf { it.rssiByBucket[index]?.size ?: 0 },
+                packets = present.values.sumOf { it.rssiByBucket[index]?.count ?: 0 },
                 residents = present.count { (_, track) ->
                     track.buckets.size >= bucketCount * 0.8
                 },
@@ -189,17 +232,17 @@ class PlaceProfile(
 
     private fun residentFor(address: String, track: Track, bucketCount: Int): Resident {
         val means = track.rssiByBucket
-            .filterValues { it.isNotEmpty() }
-            .mapValues { (_, values) -> values.average() }
+            .filterValues { it.count > 0 }
+            .mapValues { (_, tally) -> tally.mean }
             .toSortedMap()
 
-        val all = track.rssiByBucket.values.flatten()
-        val mean = all.average()
-        val spread = if (all.size < 2) {
-            0.0
-        } else {
-            kotlin.math.sqrt(all.sumOf { (it - mean) * (it - mean) } / all.size)
-        }
+        // The whole recording, folded together the same way. Adding tallies is exact:
+        // three sums added are the three sums of the combined set, so this is the same
+        // number the flattened list produced rather than an approximation of it.
+        val all = Tally()
+        track.rssiByBucket.values.forEach { all.merge(it) }
+        val mean = all.mean
+        val spread = all.spread
 
         // A move is one big step. Oscillation is many equal ones.
         //

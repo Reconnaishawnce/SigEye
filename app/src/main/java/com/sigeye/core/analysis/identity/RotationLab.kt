@@ -92,6 +92,7 @@ class RotationLab(
         minimumConfidence = LinkConfidence.STRONG,
     )
 
+    @Synchronized
     fun observe(
         address: String,
         rssi: Int,
@@ -112,6 +113,7 @@ class RotationLab(
         chains.observe(key, rssi, atMs, shape, isRandom)
     }
 
+    @Synchronized
     fun tick(nowMs: Long) {
         // Room-wide: every address may start a chain. The hunt screen is the one that
         // narrows to a single device the user asked about.
@@ -122,8 +124,10 @@ class RotationLab(
 
     val addressCount: Int get() = seen.size
 
+    @Synchronized
     fun audible(nowMs: Long): Int = seen.count { nowMs - it.value.lastSeenMs <= silenceMs }
 
+    @Synchronized
     fun cohorts(nowMs: Long): List<Cohort> = Cohorts.build(
         seen.entries
             .filter { nowMs - it.value.lastSeenMs <= COHORT_MEMORY_MS }
@@ -147,6 +151,7 @@ class RotationLab(
      * old one was noticed to be gone - the second is a property of how long this app waits
      * before giving up, and would put the app's own timeout into the measurement.
      */
+    @Synchronized
     fun tracks(nicknameOf: (String) -> String? = { null }): List<RotationTrack> =
         chains.chains(nicknameOf).map { chain ->
             val changeTimes = chain.links.drop(1).map { it.startedAtMs }
@@ -179,6 +184,7 @@ class RotationLab(
         }.sortedByDescending { it.rotations }
 
     /** The room's rotation habits, pooled across every track that produced a period. */
+    @Synchronized
     fun roomRhythm(tracks: List<RotationTrack>): RoomRhythm {
         val periods = tracks.flatMap { it.rhythm.periodsMs }.filter { RotationRhythm.withinSpec(it) }
         val sorted = periods.sorted()
@@ -192,13 +198,16 @@ class RotationLab(
     }
 
     /** Signal over time for one address, for drawing against another. */
+    @Synchronized
     fun trail(address: String): List<Pair<Long, Int>> =
         seen[address.uppercase(Locale.US)]?.trail.orEmpty().toList()
 
     /** Every address of a track, end to end, so a rotation shows as one continuous line. */
+    @Synchronized
     fun trackTrail(track: RotationTrack): List<Pair<Long, Int>> =
         track.addresses.flatMap { trail(it) }.sortedBy { it.first }
 
+    @Synchronized
     fun csv(): String = buildString {
         appendLine("# SigEye rotation lab")
         appendLine("track,vendor,addresses,rotations,period_ms,phase_ms,phase_usable,confidence")

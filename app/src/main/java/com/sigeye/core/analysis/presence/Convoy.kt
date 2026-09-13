@@ -231,6 +231,7 @@ class ConvoyTracker {
     val isRecording: Boolean get() = current != null
 
     /** Closes any open leg and starts a new one. */
+    @Synchronized
     fun startLeg(label: String, nowMs: Long) {
         current?.let { it.endedAtMs = nowMs }
         val builder = LegBuilder(legs.size, label, nowMs, nowMs)
@@ -238,11 +239,13 @@ class ConvoyTracker {
         current = builder
     }
 
+    @Synchronized
     fun closeLeg(nowMs: Long) {
         current?.endedAtMs = nowMs
         current = null
     }
 
+    @Synchronized
     fun reset() {
         legs.clear()
         current = null
@@ -255,6 +258,7 @@ class ConvoyTracker {
      * so keeping it only in memory made the experiment unusable for the thing it exists
      * to do.
      */
+    @Synchronized
     fun export(): List<JourneyLeg> = legs.map { leg ->
         JourneyLeg(
             index = leg.index,
@@ -277,6 +281,7 @@ class ConvoyTracker {
     }
 
     /** Restores a journey. Any leg that was open is restored closed. */
+    @Synchronized
     fun restore(journey: List<JourneyLeg>) {
         legs.clear()
         current = null
@@ -306,6 +311,7 @@ class ConvoyTracker {
      * than one recorded five minutes ago in the same street - the whole difficulty with
      * this experiment is getting real separation between legs.
      */
+    @Synchronized
     fun addLegFromSnapshot(label: String, atMs: Long, devices: List<Sighting>) {
         current?.let { it.endedAtMs = atMs }
         current = null
@@ -327,6 +333,7 @@ class ConvoyTracker {
     }
 
     /** Every device in every leg, for export. */
+    @Synchronized
     fun csv(): String = buildString {
         appendLine("# SigEye journey")
         appendLine("leg,leg_label,address,label,packets,best_rssi_dbm,random")
@@ -344,6 +351,7 @@ class ConvoyTracker {
         }
     }
 
+    @Synchronized
     fun observe(
         address: String,
         rssi: Int,
@@ -374,6 +382,7 @@ class ConvoyTracker {
      *   so a single stray packet from three streets away does not make something a
      *   traveling companion.
      */
+    @Synchronized
     fun report(mine: Set<String> = emptySet(), minPackets: Int = 3): ConvoyReport {
         val mineUpper = mine.map { it.uppercase(Locale.US) }.toSet()
         val closed = legs.map {

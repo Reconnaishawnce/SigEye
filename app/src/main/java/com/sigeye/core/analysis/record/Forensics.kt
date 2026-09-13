@@ -290,6 +290,7 @@ class ForensicRecorder(
     val packetCount: Int get() = builders.values.sumOf { it.pings.size + it.dropped }
     val isRecording: Boolean get() = recording
 
+    @Synchronized
     fun start(nowMs: Long) {
         builders.clear()
         startedAtMs = nowMs
@@ -297,11 +298,13 @@ class ForensicRecorder(
         recording = true
     }
 
+    @Synchronized
     fun stop(nowMs: Long) {
         lastAtMs = maxOf(nowMs, lastAtMs)
         recording = false
     }
 
+    @Synchronized
     fun observe(
         address: String,
         rssi: Int,
@@ -343,6 +346,7 @@ class ForensicRecorder(
         if (atMs > lastAtMs) lastAtMs = atMs
     }
 
+    @Synchronized
     fun tracks(): List<Track> = builders.map { (address, builder) ->
         Track(
             address = address,
@@ -359,6 +363,7 @@ class ForensicRecorder(
     val spanMs: Long get() = (lastAtMs - startedAtMs).coerceAtLeast(0L)
 
     /** Applies a filter and a sort, which is the whole review workflow. */
+    @Synchronized
     fun review(
         filter: ForensicFilter = ForensicFilter(),
         sort: ForensicSort = ForensicSort.ARRIVAL,
@@ -382,10 +387,12 @@ class ForensicRecorder(
     }
 
     /** How many of each behavior, for the summary. */
+    @Synchronized
     fun census(): Map<Behavior, Int> =
         tracks().groupingBy { it.behavior }.eachCount()
 
     /** Every reading, flattened, for export. */
+    @Synchronized
     fun csv(): String = buildString {
         append("# SigEye forensic recording\n")
         append("# devices=").append(builders.size)

@@ -56,6 +56,7 @@ class Follower(
     private val _state = MutableStateFlow(FollowState())
     val state: StateFlow<FollowState> = _state
 
+    @Synchronized
     fun onAdvert(advert: Advert) {
         val key = advert.address.uppercase(Locale.US)
         val shape = advert.shape()
@@ -73,6 +74,7 @@ class Follower(
      * user has already named is never adopted as somebody else's successor - it is
      * evidently a different thing, or the user would not have two names for it.
      */
+    @Synchronized
     fun tick(nowMs: Long) {
         val followedLists = store.lists.value
         val allNotes = book.notes.value
@@ -127,6 +129,7 @@ class Follower(
     }
 
     /** Undoes one move, putting the name back where it was. */
+    @Synchronized
     fun undo(handoverId: String): Boolean {
         val handover = store.handovers.value.firstOrNull { it.id == handoverId } ?: return false
         if (!book.move(handover.toAddress, handover.fromAddress)) return false

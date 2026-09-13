@@ -986,6 +986,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     val paused: Boolean get() = blindSince != null
 
     /** How long nothing was being listened to, between two moments. */
+    @Synchronized
     fun blindMsBetween(fromMs: Long, toMs: Long): Long {
         if (toMs <= fromMs) return 0L
         val open = blindSince?.let { listOf(it..maxOf(it, toMs)) }.orEmpty()
@@ -997,6 +998,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     }
 
     /** How long a device has been silent, not counting time nobody was listening. */
+    @Synchronized
     fun silenceMs(lastSeenMs: Long, nowMs: Long): Long =
         (nowMs - lastSeenMs - blindMsBetween(lastSeenMs, nowMs)).coerceAtLeast(0L)
 
