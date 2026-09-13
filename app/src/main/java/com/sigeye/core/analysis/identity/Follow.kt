@@ -28,11 +28,17 @@ enum class FollowPhase(val label: String) {
  * lobby is worth a mile of travel.
  */
 enum class LegKind(val label: String, val weight: Int) {
-    /** Standing about. Cuts whatever walks past, and very little else. */
+    /** The opening census. Everything audible from where you are standing. */
+    BASELINE("Baseline", 0),
+
+    /** Standing about afterwards. Cuts whatever walks past, and very little else. */
     STILL("Standing still", 1),
 
     /** A slow circle around the person. Cuts what is not centred on them. */
     ORBIT("Circling them", 2),
+
+    /** Walking past a person standing still. Selects rather than eliminates. */
+    WALK_BY("Walking past them", 2),
 
     /** Walking together. Cuts everything that stayed behind, which is nearly everything. */
     TOGETHER("Walking together", 3),
@@ -164,6 +170,16 @@ data class FollowCandidate(
     val addresses: List<String>,
     /** Null until a circle has been walked. */
     val orbit: OrbitScore? = null,
+    /** Null until a walk-by has been done. */
+    val walkBy: WalkByScore? = null,
+    /**
+     * True when this device was not audible during the baseline and turned up afterwards.
+     *
+     * The whole point of taking a baseline with the target out of the room: whoever walks
+     * in afterwards is a much shorter list than whoever is in the building.
+     */
+    val arrived: Boolean = false,
+    val firstSeenMs: Long = 0L,
 ) {
     val survivedAll: Boolean get() = legsPossible > 0 && legsSeen == legsPossible
 
@@ -183,12 +199,19 @@ data class FollowCandidate(
      * come out of this is: came with you and centred, then came with you, then centred
      * only.
      */
-    val weight: Int get() = legsSeen + movingLegsSeen * 2 + if (orbit?.centred == true) 1 else 0
+    val weight: Int
+        get() = legsSeen +
+            movingLegsSeen * 2 +
+            (if (orbit?.centred == true) 1 else 0) +
+            (if (walkBy?.passed == true) 2 else 0) +
+            (if (arrived) 1 else 0)
 
     fun describe(): String = buildString {
         append("$legsSeen of $legsPossible legs")
         if (movingLegsSeen > 0) append(", $movingLegsSeen while moving")
         orbit?.let { append(", ${it.describe()}") }
+        walkBy?.let { append(", ${it.describe()}") }
+        if (arrived) append(", arrived after the baseline")
         if (rotations > 0) append(", followed through $rotations rotation")
         if (rotations > 1) append("s")
     }
@@ -211,6 +234,8 @@ data class FollowState(
     val silentForMs: Long,
     val rhythm: Rhythm?,
     val expectedReturnMs: Long?,
+    /** How long the session has been running, for the prompt to re-baseline. */
+    val runningForMs: Long = 0L,
 ) {
     val survivors: Int get() = candidates.count { it.survivedAll }
 
@@ -219,6 +244,38 @@ data class FollowState(
 
     /** Survivors the circle also said are centred on you. */
     val centred: Int get() = candidates.count { it.survivedAll && it.orbit?.centred == true }
+
+    val walkedBy: Boolean get() = legs.any { it.kind == LegKind.WALK_BY }
+
+    /** Survivors the walk-by picked out. */
+    val passed: Int get() = candidates.count { it.survivedAll && it.walkBy?.passed == true }
+
+    /** Everything still in the running, best first. */
+    val stillIn: List<FollowCandidate> get() = candidates.filter { it.survivedAll }
+
+    /**
+     * The short list, or empty while there are still too many for one.
+     *
+     * A list of forty is a room, and calling it a short list would be flattering it. Five
+     * is the point at which a person can hold the whole thing in their head, look at each
+     * one, and decide - and it is also the point at which it is worth spending effort per
+     * device, which is what the rotation watch does.
+     */
+    val shortlist: List<FollowCandidate>
+        get() = stillIn.takeIf { it.size in 1..FollowSession.SHORTLIST_MAX }.orEmpty()
+
+    val narrowed: Boolean get() = shortlist.isNotEmpty()
+
+    /**
+     * True when this has been running a while and has not got anywhere.
+     *
+     * Almost always one thing: the target changed address partway through, so the device
+     * you were narrowing towards stopped existing and its replacement missed every leg
+     * before it appeared. Starting the baseline again is the fix, and nobody works that
+     * out on their own while staring at a list that will not shrink.
+     */
+    val shouldRebaseline: Boolean
+        get() = runningForMs >= FollowSession.REBASELINE_AFTER_MS && !narrowed && legs.size > 1
 
     /** How much the elimination has actually narrowed things down. */
     fun narrowing(): String = when {
@@ -270,6 +327,12 @@ class FollowSession {
         val orbitArcs: MutableSet<Int> = mutableSetOf()
         val orbitRssi: MutableList<Int> = mutableListOf()
 
+        /** Every reading during the walk-by, in time order. */
+        val walkByTrail: MutableList<Pair<Long, Int>> = mutableListOf()
+
+        /** Not audible during the baseline, so it turned up afterwards. */
+        var arrived: Boolean = false
+
         val meanRssi: Double get() = if (packets == 0) -127.0 else rssiTotal / packets
     }
 
@@ -277,6 +340,13 @@ class FollowSession {
     private val legs = mutableListOf<FollowLeg>()
 
     private var targetKey: String? = null
+    private var startedAtMs: Long = 0L
+
+    /** Set when the baseline leg ends, so anything first heard later counts as an arrival. */
+    private var baselineEndedAtMs: Long? = null
+
+    /** When the person said they were closest during the walk-by. */
+    private var walkByMidMs: Long? = null
 
     var phase: FollowPhase = FollowPhase.CENSUS
         private set
@@ -292,9 +362,15 @@ class FollowSession {
         vendor: String?,
         isRandom: Boolean,
     ) {
+        if (startedAtMs == 0L) startedAtMs = atMs
         val key = address.uppercase(Locale.US)
         val entry = tracked.getOrPut(key) {
-            Tracked(label, vendor, isRandom, atMs).also { it.addresses.add(key) }
+            Tracked(label, vendor, isRandom, atMs).also {
+                it.addresses.add(key)
+                // Decided once, when the device is first heard, rather than recomputed
+                // later. A device that arrives and then goes quiet is still an arrival.
+                it.arrived = baselineEndedAtMs?.let { ended -> atMs > ended } ?: false
+            }
         }
         label?.takeIf { it.isNotBlank() }?.let { entry.label = it }
         vendor?.let { entry.vendor = it }
@@ -303,13 +379,33 @@ class FollowSession {
         entry.rssiTotal += rssi
 
         legs.lastOrNull()?.takeIf { it.running }?.let { leg ->
-            entry.legs.add(leg.index)
+            // The baseline is what everything else is measured against, not a test to
+            // survive. Counting it would eliminate the one device the baseline exists to
+            // find: if the target was out of the room, it missed that leg by definition.
+            if (leg.kind != LegKind.BASELINE) entry.legs.add(leg.index)
             if (leg.moving) entry.movingLegs.add(leg.index)
             if (leg.kind == LegKind.ORBIT) {
                 entry.orbitArcs.add(arcOf(leg, atMs))
                 entry.orbitRssi.add(rssi)
             }
+            if (leg.kind == LegKind.WALK_BY) {
+                entry.walkByTrail.add(atMs to rssi)
+            }
         }
+    }
+
+    /**
+     * Marks the moment of closest approach during a walk-by.
+     *
+     * A tap rather than anything clever, because the person holding the phone knows
+     * exactly when they drew level and no sensor on the phone does. Ignored outside a
+     * walk-by leg, and the last tap wins - somebody who taps early and corrects themselves
+     * meant the second one.
+     */
+    fun markClosest(atMs: Long) {
+        val leg = legs.lastOrNull() ?: return
+        if (leg.kind != LegKind.WALK_BY || !leg.running) return
+        walkByMidMs = atMs
     }
 
     /**
@@ -341,9 +437,56 @@ class FollowSession {
      */
     fun beginLeg(label: String, kind: LegKind, atMs: Long) {
         if (kind == LegKind.ORBIT && legs.any { it.kind == LegKind.ORBIT }) return
+        if (kind == LegKind.WALK_BY && legs.any { it.kind == LegKind.WALK_BY }) return
+        if (startedAtMs == 0L) startedAtMs = atMs
         endLeg(atMs)
+        if (kind == LegKind.WALK_BY) walkByMidMs = null
         legs.add(FollowLeg(legs.size, label, atMs, null, kind))
+        if (phase == FollowPhase.CENSUS && kind != LegKind.BASELINE) {
+            phase = FollowPhase.NARROWING
+        }
+    }
+
+    /**
+     * Ends the baseline and starts counting arrivals from here.
+     *
+     * Separate from [endLeg] because the baseline is the only leg whose ending changes what
+     * a later device means. Everything first heard after this is somebody who walked in.
+     */
+    fun endBaseline(atMs: Long) {
+        endLeg(atMs)
+        baselineEndedAtMs = atMs
         if (phase == FollowPhase.CENSUS) phase = FollowPhase.NARROWING
+    }
+
+    /**
+     * Throws the legs away and starts the elimination again, keeping what is known.
+     *
+     * For the case the session cannot otherwise recover from: the target changed address
+     * partway through, so the device being narrowed towards stopped existing and its
+     * replacement has missed every leg since. Wiping leg membership puts every device back
+     * on equal terms without forgetting the room.
+     *
+     * The baseline moment moves too, so "arrived" means arrived since this moment. That is
+     * the honest reading - a device first heard an hour ago is not news now.
+     */
+    fun rebaseline(atMs: Long) {
+        endLeg(atMs)
+        legs.clear()
+        walkByMidMs = null
+        baselineEndedAtMs = null
+        startedAtMs = atMs
+        targetKey = null
+        targetChanges.clear()
+        phase = FollowPhase.CENSUS
+        tracked.values.forEach { entry ->
+            entry.legs.clear()
+            entry.movingLegs.clear()
+            entry.orbitArcs.clear()
+            entry.orbitRssi.clear()
+            entry.walkByTrail.clear()
+            entry.arrived = false
+        }
     }
 
     fun endLeg(atMs: Long) {
@@ -359,9 +502,14 @@ class FollowSession {
      * the elimination works at all.
      */
     fun candidates(nowMs: Long, minPackets: Int = MIN_PACKETS): List<FollowCandidate> {
-        val possible = legs.size
+        val possible = legs.count { it.kind != LegKind.BASELINE }
         val orbitLeg = legs.firstOrNull { it.kind == LegKind.ORBIT }
         val arcs = orbitLeg?.let { arcsIn(it.durationMs(nowMs)) } ?: 0
+        val walkLeg = legs.firstOrNull { it.kind == LegKind.WALK_BY }
+        // Scored only once the walk is over and the middle was marked. A walk-by with no
+        // middle is three readings and a guess, and half a walk has no far end to compare.
+        val walkMid = walkByMidMs
+        val walkEnd = walkLeg?.endedAtMs
         return tracked.entries
             .filter { it.value.packets >= minPackets }
             .map { (address, entry) ->
@@ -378,6 +526,18 @@ class FollowSession {
                     lastSeenMs = entry.lastSeenMs,
                     addresses = entry.addresses.toList(),
                     orbit = if (orbitLeg == null) null else scoreOrbit(entry, arcs),
+                    walkBy = if (walkLeg == null || walkMid == null || walkEnd == null) {
+                        null
+                    } else {
+                        WalkBy.score(
+                            readings = entry.walkByTrail,
+                            startMs = walkLeg.startedAtMs,
+                            midMs = walkMid,
+                            endMs = walkEnd,
+                        )
+                    },
+                    arrived = entry.arrived,
+                    firstSeenMs = entry.firstSeenMs,
                 )
             }
             .sortedWith(
@@ -461,6 +621,7 @@ class FollowSession {
             silentForMs = silent,
             rhythm = rhythm,
             expectedReturnMs = expectedReturn(rhythm),
+            runningForMs = if (startedAtMs == 0L) 0L else nowMs - startedAtMs,
         )
     }
 
@@ -515,6 +676,24 @@ class FollowSession {
     companion object {
         /** Below this, a device has not been heard from enough to have survived anything. */
         const val MIN_PACKETS = 3
+
+        /**
+         * How many candidates count as a short list.
+         *
+         * Five is the number a person can hold in their head at once, look at each of, and
+         * decide between. It is also the point at which it becomes worth spending real
+         * effort per device, which is what the rotation watch does.
+         */
+        const val SHORTLIST_MAX = 5
+
+        /**
+         * How long to let a session flounder before suggesting a fresh baseline.
+         *
+         * Five minutes is long enough that a couple of legs have been walked and short
+         * enough to be inside one rotation of the usual fifteen minute timer, so the
+         * suggestion arrives while starting again is still cheap.
+         */
+        const val REBASELINE_AFTER_MS = 5 * 60 * 1000L
 
         /**
          * Silence after which the target counts as lost rather than quiet.
