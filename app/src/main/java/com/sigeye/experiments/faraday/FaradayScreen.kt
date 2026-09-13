@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,9 +41,14 @@ import com.sigeye.core.Permissions
 import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.AbComparison
 import com.sigeye.core.analysis.rf.AbResult
+import com.sigeye.core.analysis.rf.FadeSample
+import com.sigeye.core.analysis.rf.FadingAnalysis
+import com.sigeye.core.analysis.rf.FadingStats
 import com.sigeye.core.analysis.rf.Significance
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.Field
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -57,9 +63,24 @@ import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "faraday"
 private const val SAMPLE_MS = 1_000L
+/** Clear of the room's own wander by enough that the container is the explanation. */
+private const val CLEAR_MARGIN = 3.0
+
+/** Above it, but not by enough to believe on one run. */
+private const val SOME_MARGIN = 1.5
+
 private const val TARGET_SECONDS = 15
 
-private enum class Stage { PICK, OUTSIDE, INSIDE, RESULT }
+private enum class Stage { PICK, FLOOR, OUTSIDE, INSIDE, RESULT }
+
+/**
+ * How long to watch the room do nothing before measuring anything.
+ *
+ * Thirty seconds is enough for a device advertising once a second to show what its level
+ * does when nothing is happening to it, which is the number every later claim is measured
+ * against.
+ */
+private const val FLOOR_SECONDS = 30
 
 
 @Composable
@@ -105,6 +126,8 @@ private fun Live() {
     val notes by book.notes.collectAsStateWithLifecycle()
 
     var stage by remember { mutableStateOf(Stage.PICK) }
+    val floorReadings = remember { mutableStateListOf<Int>() }
+    var floor by remember { mutableStateOf(FadingAnalysis.analyze(emptyList())) }
     var target by remember { mutableStateOf<String?>(null) }
     var targetLabel by remember { mutableStateOf("-") }
     var paused by remember { mutableStateOf(false) }
@@ -135,12 +158,16 @@ private fun Live() {
     // Recording, keyed so it restarts cleanly when the phase or the target changes.
     LaunchedEffect(stage, target) {
         val address = target
-        val measuring = stage == Stage.OUTSIDE || stage == Stage.INSIDE
+        val measuring = stage == Stage.FLOOR || stage == Stage.OUTSIDE || stage == Stage.INSIDE
         if (!measuring || address == null) return@LaunchedEffect
         BleScanHub.adverts.collect { advert ->
             if (advert.address != address) return@collect
             liveRssi = advert.rssi
             lastHeardMs.set(advert.atMs)
+            if (stage == Stage.FLOOR) {
+                floorReadings.add(advert.rssi)
+                return@collect
+            }
             comparison.record(advert.rssi.toDouble())
             when (comparison.phase) {
                 AbComparison.Phase.BASELINE -> outsideCount.incrementAndGet()
@@ -151,6 +178,22 @@ private fun Live() {
     }
 
     LaunchedEffect(stage) {
+        phaseSeconds = 0
+        while (stage == Stage.FLOOR) {
+            delay(SAMPLE_MS)
+            phaseSeconds++
+            floor = FadingAnalysis.analyze(
+                floorReadings.mapIndexed { index, rssi ->
+                    FadeSample(atMs = index * 1_000L, rssi = rssi)
+                },
+            )
+            val heard = lastHeardMs.get()
+            silent = heard > 0 && System.currentTimeMillis() - heard > 4_000
+            if (phaseSeconds >= FLOOR_SECONDS && floorReadings.size >= FadingAnalysis.MIN_SAMPLES) {
+                comparison.startBaseline()
+                stage = Stage.OUTSIDE
+            }
+        }
         phaseSeconds = 0
         while (stage == Stage.OUTSIDE || stage == Stage.INSIDE) {
             delay(SAMPLE_MS)
@@ -209,8 +252,9 @@ private fun Live() {
                             lastHeardMs.set(0L)
                             silent = false
                             liveRssi = null
-                            comparison.startBaseline()
-                            stage = Stage.OUTSIDE
+                            floorReadings.clear()
+                            floor = FadingAnalysis.analyze(emptyList())
+                            stage = Stage.FLOOR
                         },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -250,8 +294,23 @@ private fun Live() {
             }
         }
 
+        // Before anything is measured, watch the room do nothing. A four decibel result
+        // means one thing in a corridor that sits within one, and nothing at all in a
+        // kitchen that wanders six on its own - and until now there was no way to tell
+        // those two apart, so every shallow reading looked like a finding.
+        Stage.FLOOR -> FloorPanel(
+            label = targetLabel,
+            seconds = phaseSeconds,
+            total = FLOOR_SECONDS,
+            readings = floorReadings.size,
+            floor = floor,
+            liveRssi = liveRssi,
+            silent = silent,
+            onCancel = { stage = Stage.PICK },
+        )
+
         Stage.OUTSIDE -> PhasePanel(
-            step = "Step 2 of 3",
+            step = "Step 3 of 4",
             title = "Measuring it in the open",
             instruction = "Leave the device out in the open, a pace or two from the " +
                 "phone, and do not move either. This is the reference.",
@@ -272,7 +331,7 @@ private fun Live() {
         )
 
         Stage.INSIDE -> PhasePanel(
-            step = "Step 3 of 3",
+            step = "Step 4 of 4",
             title = "Measuring it shielded",
             instruction = "Put the device inside the container and close it properly. " +
                 "Keep the container where the device was, and keep the phone still.",
@@ -293,6 +352,7 @@ private fun Live() {
         )
 
         Stage.RESULT -> Results(
+            floor = floor,
             result = result,
             outsidePackets = outsidePackets,
             insidePackets = insidePackets,
@@ -306,7 +366,9 @@ private fun Live() {
                 silent = false
                 liveRssi = null
                 comparison.startBaseline()
-                stage = Stage.OUTSIDE
+                floorReadings.clear()
+                floor = FadingAnalysis.analyze(emptyList())
+                stage = Stage.FLOOR
             },
             onNewTarget = {
                 target = null
@@ -315,6 +377,68 @@ private fun Live() {
                 stage = Stage.PICK
             },
         )
+    }
+}
+
+/**
+ * Thirty seconds of watching the room do nothing, which is what a result is measured against.
+ *
+ * Every reading here has been a before and against an after with nothing between them to
+ * say how much of the difference was the container and how much was the room. Four decibels
+ * is a real result in a corridor that sits within one, and nothing at all in a kitchen that
+ * wanders six on its own - and both of those looked identical on this screen.
+ */
+@Composable
+private fun FloorPanel(
+    label: String,
+    seconds: Int,
+    total: Int,
+    readings: Int,
+    floor: FadingStats,
+    liveRssi: Int?,
+    silent: Boolean,
+    onCancel: () -> Unit,
+) {
+    StepCard(
+        "Step 2 of 4",
+        "Watching the room do nothing",
+        "Leave everything exactly where it is and do not move. This measures how much the " +
+            "signal wanders on its own, which is the only thing that makes the next two " +
+            "numbers mean anything - a shallow result in a restless room is not a result.",
+    )
+
+    Spacer(Modifier.height(14.dp))
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        CountdownRing(
+            elapsedMs = seconds.coerceAtMost(total) * 1_000L,
+            totalMs = total * 1_000L,
+            label = "settling",
+            caption = "$readings readings",
+        )
+    }
+
+    Spacer(Modifier.height(12.dp))
+    Field("Watching", label)
+    Field("Right now", liveRssi?.let { "$it dBm" } ?: "nothing yet")
+    if (readings >= FadingAnalysis.MIN_SAMPLES) {
+        Field("Wander so far", String.format(Locale.US, "%.1f dB", floor.sdDb))
+        Field("Range", "${floor.minDbm} to ${floor.maxDbm} dBm")
+    }
+
+    if (silent) {
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Nothing heard for a few seconds. If it stays quiet the device may have gone to " +
+                "sleep - wake it and start again, because a floor measured from four packets " +
+                "is not a floor.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+
+    Spacer(Modifier.height(14.dp))
+    OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+        Text("Start over")
     }
 }
 
@@ -402,6 +526,7 @@ private fun PhasePanel(
 
 @Composable
 private fun Results(
+    floor: FadingStats,
     result: AbResult,
     outsidePackets: Int,
     insidePackets: Int,
@@ -432,6 +557,82 @@ private fun Results(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+
+    // How many times the room's own wander the result is. This is the whole point of the
+    // floor: four decibels is a finding in a corridor that sits within one and nothing at
+    // all in a kitchen that moves six, and the two used to look identical here.
+    val wander = floor.sdDb.takeIf { floor.samples >= FadingAnalysis.MIN_SAMPLES && it > 0.1 }
+    val margin = attenuation?.let { depth -> wander?.let { depth / it } }
+
+    if (wander != null) {
+        Spacer(Modifier.height(14.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    complete -> MaterialTheme.colorScheme.primaryContainer
+                    margin == null -> MaterialTheme.colorScheme.surfaceVariant
+                    margin >= CLEAR_MARGIN -> MaterialTheme.colorScheme.primaryContainer
+                    margin >= SOME_MARGIN -> MaterialTheme.colorScheme.surfaceVariant
+                    else -> MaterialTheme.colorScheme.errorContainer
+                },
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    when {
+                        complete -> "Nothing got through at all"
+                        margin == null -> "No depth to measure"
+                        margin >= CLEAR_MARGIN -> "Well clear of the room's own wander"
+                        margin >= SOME_MARGIN -> "Above the room's wander, but not by much"
+                        else -> "Inside the room's own wander"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    buildString {
+                        append("Before anything was in the container this signal wandered ")
+                        append(String.format(Locale.US, "%.1f dB", wander))
+                        append(" on its own, with nothing moving. ")
+                        when {
+                            complete -> append(
+                                "Nothing came through the container at all, which no amount " +
+                                    "of wander explains.",
+                            )
+
+                            margin == null -> append("There is no depth to compare it to.")
+
+                            margin >= CLEAR_MARGIN -> append(
+                                "The container took " +
+                                    String.format(Locale.US, "%.1f", margin) +
+                                    " times that, which is a real shield rather than the " +
+                                    "room having a moment.",
+                            )
+
+                            margin >= SOME_MARGIN -> append(
+                                "The container took " +
+                                    String.format(Locale.US, "%.1f", margin) +
+                                    " times that. Something is happening, but not much more " +
+                                    "than this spot does by itself - worth repeating before " +
+                                    "believing.",
+                            )
+
+                            else -> append(
+                                "The container took " +
+                                    String.format(Locale.US, "%.1f", margin) +
+                                    " times that, which is to say it did nothing this room " +
+                                    "was not already doing. This is not a measurement of a " +
+                                    "shield.",
+                            )
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 
     Spacer(Modifier.height(14.dp))
@@ -482,6 +683,12 @@ private fun Results(
         figures = listOfNotNull(
             attenuation?.let {
                 RunFigure("Blocked", it, "dB", 1, higherIsBetter = true)
+            },
+            wander?.let {
+                RunFigure("Room wander", it, "dB", 1, higherIsBetter = false)
+            },
+            margin?.let {
+                RunFigure("Times the wander", it, decimals = 1, higherIsBetter = true)
             },
             packetLoss?.let {
                 RunFigure("Packets lost", it * 100, "%", 0, higherIsBetter = true)
