@@ -46,19 +46,35 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
 
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      # Release rather than debug. A debug APK is debuggable by anything with adb, which
+      # is the wrong property for this app to ship with. assembleRelease also runs
+      # lintVitalRelease, so fatal issues fail here rather than on somebody's phone.
+      - name: Assemble release APK
+        run: ./gradlew assembleRelease --no-daemon
 
       # Not continue-on-error any more. It was, and it hid a real NoSuchMethodError on
       # Android 8 for weeks: CellIdentity.mccString is API 28 while minSdk is 26, lint
       # said so on every single run, and nobody reads a step that cannot fail.
       - name: Lint
-        run: ./gradlew lintDebug --no-daemon
+        run: ./gradlew lintRelease --no-daemon
 
+      # Signed and unsigned land under different names, and quietly publishing the
+      # unsigned one would produce a release nobody can install over their existing copy.
       - name: Stage APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/SigEye.apk
+          SIGNED=app/build/outputs/apk/release/app-release.apk
+          UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
+          if [ -f "$SIGNED" ]; then
+            cp "$SIGNED" out/SigEye.apk
+          elif [ -f "$UNSIGNED" ]; then
+            echo "::warning::No signing key, staging an unsigned APK. It will not install"\
+                 "over an existing SigEye."
+            cp "$UNSIGNED" out/SigEye.apk
+          else
+            echo "::error::assembleRelease produced no APK."
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -102,5 +118,5 @@ jobs:
           name: reports
           path: |
             app/build/reports/tests/**
-            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-release.html
           retention-days: 14

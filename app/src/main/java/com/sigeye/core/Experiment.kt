@@ -223,7 +223,7 @@ object Experiments {
         Experiment(
             id = CONVOY,
             title = "Traveling Companions",
-            blurb = "Record here, then there, then somewhere else. What appears in all of it?",
+            blurb = "The devices that turned up in every place you recorded, not just one.",
             teaches = "Anything present in three unrelated places was traveling with you " +
                 "rather than living in any of them. The idea is simple; being honest " +
                 "about how weak it is takes most of the work.",
@@ -305,7 +305,7 @@ object Experiments {
         Experiment(
             id = SPEED,
             title = "Speed Estimator",
-            blurb = "How fast was that, from the shape of the signal.",
+            blurb = "How fast something passed, from how its signal rose and fell.",
             teaches = "A device going past is loudest when it draws level. Six dB below " +
                 "that peak is a known greater range, and a known range at a known distance " +
                 "from the track is a right-angled triangle - so the length of track " +
@@ -354,7 +354,7 @@ object Experiments {
         Experiment(
             id = FORENSICS,
             title = "Forensics",
-            blurb = "Record everything, then work out afterwards what mattered.",
+            blurb = "Records everything now so the question can be asked later.",
             teaches = "Two hundred devices go past in three minutes and the one you care " +
                 "about is indistinguishable in the moment. Recording first and filtering " +
                 "afterwards turns an impossible live problem into an easy review.",
@@ -437,7 +437,7 @@ object Experiments {
         Experiment(
             id = PLACE,
             title = "Place Profiler",
-            blurb = "Leave the phone somewhere for hours and see the shape of the place.",
+            blurb = "How busy a place is hour by hour, from a phone left sitting there.",
             teaches = "Somewhere busy and somewhere quiet look identical in a snapshot and " +
                 "nothing alike over an afternoon. A car park is flat and full overnight; " +
                 "a corridor is spiky and empty. The shape is the fingerprint.",
@@ -478,7 +478,7 @@ object Experiments {
         Experiment(
             id = DOPPLER,
             title = "Doppler Walk",
-            blurb = "Walk away counting your steps, and measure the number everything guesses.",
+            blurb = "The path loss exponent where you are, paced out instead of assumed.",
             teaches = "Signal turns into distance through one formula with one unknown in " +
                 "it, the path loss exponent. Every proximity feature ever shipped has " +
                 "guessed that number. Count your steps and you can measure it instead.",
@@ -512,7 +512,7 @@ object Experiments {
         Experiment(
             id = POLARIZATION,
             title = "Rotational Polarization",
-            blurb = "Roll the phone over and watch the signal die.",
+            blurb = "How much signal is lost when two antennas stop lining up.",
             teaches = "Radio has an orientation. Turn a receiving antenna across the field " +
                 "and it stops hearing, ten to twenty dB from nothing but a twist of the " +
                 "wrist. How deep that null goes tells you how much of the signal reached " +
@@ -622,7 +622,7 @@ object Experiments {
         Experiment(
             id = FADING,
             title = "Multipath Fading",
-            blurb = "Stand still and watch the signal move anyway.",
+            blurb = "How much a signal wanders on its own, with nothing moving.",
             teaches = "Reflections add and cancel, so signal swings several dB with " +
                 "nothing moving. This is why signal strength is a poor ruler.",
             category = Experiment.Category.PHYSICS,
@@ -655,7 +655,7 @@ object Experiments {
         Experiment(
             id = ABSORPTION,
             title = "Body Absorption",
-            blurb = "Turn slowly in a circle and find your own shadow.",
+            blurb = "How much of the signal your own body blocks, in decibels.",
             teaches = "You are mostly water and water absorbs 2.4 GHz, so a notch appears " +
                 "when your torso sits between the phone and the source. Several dB of it " +
                 "is a body; much more means a wall joined in.",
@@ -714,7 +714,7 @@ object Experiments {
         Experiment(
             id = FARADAY,
             title = "Faraday Cage Test",
-            blurb = "How many dB does a tin, a fridge or a crisp packet really block?",
+            blurb = "What a tin, a fridge or a crisp packet really blocks, in decibels.",
             teaches = "Shielding, apertures, and why the seams matter more than the metal. " +
                 "A gap far smaller than the wavelength still leaks, and 2.4 GHz is 12 cm.",
             category = Experiment.Category.PHYSICS,
@@ -741,7 +741,7 @@ object Experiments {
         Experiment(
             id = MICROWAVE,
             title = "Microwave Interference",
-            blurb = "Watch a microwave flatten the 2.4 GHz band.",
+            blurb = "How much a microwave oven costs the 2.4 GHz band, if anything.",
             teaches = "A consumer microwave leaks around 2.45 GHz, right in the middle of " +
                 "the band Bluetooth uses. Measure how many advertisements survive with " +
                 "it off, then with it on.",

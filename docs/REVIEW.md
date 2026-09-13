@@ -271,7 +271,7 @@ survey of a building, which is what someone actually walks around to get.
 
 ## Engineering
 
-### 29. The release build is not minified and the shipped artifact is a debug build
+### 29. The release build is not minified and the shipped artifact is a debug build — *done*
 
 `isMinifyEnabled = false` on release, and CI ships `app-debug.apk`. That is a deliberate,
 reasonable choice for a tool distributed by direct download — debug builds are easier to
@@ -318,7 +318,7 @@ exactly where it was.
 | 26. Speed Estimator's cross-check | **Open.** No GPS comparison. |
 | 27. Bluetooth Explorer's rule about writes | **Done in turn 13.** On the screen, in the KDoc, and enforced by `GattWriteRuleTest`, which reads the source and fails the build on a mutating call. |
 | 28. Wall Penetration's floor plan | **Done.** You name each spot as you save it, the list is ordered worst first, and the survey says which room costs the most and by how much over the best one. Spots persist across screen exits with the baseline they were measured against, so walking a house survives locking the phone, and re-baselining starts a new survey instead of silently deleting the old one. |
-| 29. The shipped artifact | **Open.** `isMinifyEnabled = false` and CI still ships `app-debug.apk`. Fine as a decision, but the release block is dead code that reads as if it were used. |
+| 29. The shipped artifact | **Done.** CI builds and ships `app-release.apk`, so the published binary is no longer debuggable by anything holding adb. Minify stays off deliberately and says why in the build file: the app is an instrument for a paper and has to be readable, and CrashLog hands the user a stack trace that R8 would render useless without shipping a mapping file. |
 | 30. Crashes in the field | **Done in turn 13.** Traces written to app-private storage, listed in Settings, sent only on a tap. No network anywhere in it. |
 
 The honest summary: the shared work is largely done and the per-experiment work is largely
@@ -359,7 +359,7 @@ currently teleports between frames, which reads as a glitch rather than as an el
 Animate every count that is a finding, and let eliminated rows fall out of the list rather
 than vanish between recompositions.
 
-### 34. One true sentence at the top of every screen — *open*
+### 34. One true sentence at the top of every screen — *done*
 
 Review item 16, still open and now across thirty screens. Every screen needs a line that is
 true before any measurement exists - "this measures how much of 2.4 GHz your building is

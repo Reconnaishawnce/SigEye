@@ -55,12 +55,26 @@ android {
 
     buildTypes {
         debug {
-            // The shipped artifact is a debug build, so this is the one that must carry
-            // the stable signature.
+            // Signed with the same stable key so a locally built debug APK still installs
+            // over a release one, which is the difference between testing a fix on the
+            // phone and uninstalling to test a fix on the phone.
             if (signingStore != null) signingConfig = signingConfigs.getByName("sigeye")
         }
         release {
+            /*
+             * What ships. It used to be the debug build, which meant the published APK was
+             * debuggable: any process with adb access could attach to it and read memory.
+             * For a tool whose whole job is watching radio traffic and keeping lists of
+             * devices, that is not a detail.
+             *
+             * Minification stays off, and that is a decision rather than an oversight.
+             * This is an instrument for a paper, so somebody must be able to read what it
+             * does; and CrashLog hands the user a stack trace to send, which R8 would turn
+             * into a page of single letters unless the mapping file went out with every
+             * build. There is no store listing and no size pressure buying anything back.
+             */
             isMinifyEnabled = false
+            isShrinkResources = false
             if (signingStore != null) signingConfig = signingConfigs.getByName("sigeye")
         }
     }
