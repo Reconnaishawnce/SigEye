@@ -24,11 +24,24 @@ send somebody.
 **Then Crowd Counter, in a cafe or on a platform.** Roughly how many people are around you,
 worked out from how many devices are. It is an estimate and it says so.
 
-**When you have twenty minutes and somebody willing:** Follow Me. It narrows a room down to
-the device travelling with a person, without knowing anything about it in advance. It walks
-you through it a step at a time. Run it on a phone you own, carried by somebody who knows
-you are running it - that is not legal boilerplate, it is the actual condition under which
-this is a demonstration rather than something else.
+**When you have twenty minutes and somebody willing:** Follow Me. It narrows a street down
+to the device travelling with a person, without knowing anything about it in advance.
+
+Take a baseline where you are, say whether they are with you, and then walk. The number
+falls on its own as everything that did not come with you drops out - there is nothing to
+press while you are walking, and the phone can be in a pocket. Two things are worth doing
+while you are stopped: walk a slow circle around them, or walk past them and tap as you draw
+level. Both pick devices out rather than ruling them out, and both can be repeated.
+
+A word about the first time you try it. Walk a few blocks alone and several devices will
+come with you, and they will all be yours - your watch, your earbuds, a tag in a coat.
+Anything in your own bag survives every test by construction, because it goes everywhere you
+go. The app flags what it thinks is yours and there is a button to say so; once you have,
+it is gone from every follow after that.
+
+Run it on a phone you own, carried by somebody who knows you are running it. That is not
+legal boilerplate, it is the actual condition under which this is a demonstration rather
+than something else.
 
 ## What to expect
 
@@ -75,8 +88,10 @@ have been run on real hardware in the real world and behaved.
 **Two are marked Beta**, meaning complete and tested but not yet run anywhere but a build
 server:
 
-- **Follow Me** was rebuilt from scratch for this release, including a new test that works
-  by walking a circle around somebody. None of that has been on a phone yet.
+- **Follow Me** has been rebuilt more than once for this release and is still the newest
+  thing here. It works, and the numbers it decides on - how long a device may go unheard
+  before it counts as gone, how steady something has to be before it is called yours - are
+  judgement calls that want checking against real walks. They are all sliders.
 - **Doppler Walk** fits a path loss curve to a walk and has not been out on one.
 
 **Five are marked In development.** They are described and not built, and tapping them does
@@ -85,32 +100,49 @@ a list that pretends the app is finished.
 
 ### New in 0.1
 
-- **Follow Me is a guided sequence** rather than a page of controls: a census, a question
-  about whether the person is actually with you, a circle walked around them, then walking
-  together. The circle is new and is the interesting part - a device on the person stays the
-  same distance from you the whole way round, while a device across the room does not.
+- **Follow Me is one continuous follow.** Start it and walk; the list shrinks on its own and
+  the number only falls. Anything unheard for a minute drops out and stays out, because
+  something that went quiet while you covered a quarter of a mile did not come with you.
+  It runs with the screen off, so the walk is a pocket rather than a lit phone held down a
+  street.
+- **Two ways to pick a device out rather than rule it out.** Walk a circle around somebody
+  and whatever is on them stays the same distance from you the whole way round. Walk past
+  them and whatever is on them rises as you draw level and comes back down. Both can be done
+  as many times as you like, and every one keeps its own chart so you can see the shape the
+  verdict was read from.
+- **A device you find leads somewhere.** Name it, put it on a list, open it on the radar,
+  watch it change address, walk towards it, or keep following it across address changes
+  until you say otherwise.
 - **Presentation mode.** One result, alone on a black screen, in type you can read across a
   room, with a card you can share. The denominator and the caveat are drawn into the image
   so they cannot be cropped off.
-- **Saved runs.** Six experiments can save a run with a name and put two of them side by
+- **Saved runs.** Nine experiments can save a run with a name and put two of them side by
   side. Two percent of movement reads as "steady" rather than as an improvement, because
   signal strength wanders that much with nothing happening.
-- **Microwave Interference has a control band.** It now watches a 5 GHz radio as well, so
-  "2.4 collapsed and 5 did not" is the finding rather than the drop. If both fall, the
-  experiment failed and it tells you so.
+- **Microwave Interference has a control band.** It watches a 5 GHz radio as well, so "2.4
+  collapsed and 5 did not" is the finding rather than the drop. If both fall, the experiment
+  failed and it tells you so.
+- **Train Spotter decides on a sliding window.** A burst landing across a bin boundary used
+  to be cut in half and missed silently. The count on screen is the last eight seconds
+  rather than a sawtooth that resets, and the baseline has a live chart of what the radio is
+  actually finding.
+- **Rotation Lab can be left running** with the screen off, which is the measurement it is
+  for: a rotation period is only measured rather than assumed once a fifteen minute timer
+  has come round at least once.
 - **Every chart says what it found out loud** for anybody using a screen reader - the
   finding in words, not a label saying "chart".
-- **Panels can be rearranged** on screens that have them, under a grey "Arrange panels" at
-  the bottom.
+- **Crashes leave a file** on the phone, in Settings, sent only if you send it.
 
 ### Known rough edges
 
-- Three experiments - Faraday Cage Test, Multipath Fading, Body Absorption - cannot save a
-  run yet. The other six can.
-- Rotation Lab has to stay on screen to keep recording. Its best output wants half an hour
-  of a busy room, which currently means half an hour of holding the phone.
+- Follow Me's thresholds are judgement calls that have not been checked against many real
+  walks. If your own kit keeps surviving, the settings are where to say so.
 - Crowd Counter's devices-per-person figure is an assumption, not a measurement, and there
   is no way yet to correct it against a headcount you actually took.
+- Faraday Cage Test measures a before and after without first measuring how much the room
+  wanders on its own, so a shallow result is hard to tell from noise.
+- Train Spotter collects ground-truth taps and does not yet fit its threshold to them.
+- Speed Estimator does not check itself against GPS, which it could.
 - The shipped APK is a debug build. That is deliberate for a tool distributed by direct
   download, but it means it is larger than it needs to be.
 
