@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.AbComparison
 import com.sigeye.core.analysis.rf.AbResult
 import com.sigeye.core.analysis.rf.Significance
@@ -45,13 +46,14 @@ import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RunHistory
 import com.sigeye.ui.SourceOrder
 import com.sigeye.ui.rememberSources
-import kotlinx.coroutines.delay
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "faraday"
 private const val SAMPLE_MS = 1_000L
@@ -473,6 +475,23 @@ private fun Results(
             )
         }
     }
+
+    Spacer(Modifier.height(12.dp))
+    RunHistory(
+        experiment = Experiments.FARADAY,
+        figures = listOfNotNull(
+            attenuation?.let {
+                RunFigure("Blocked", it, "dB", 1, higherIsBetter = true)
+            },
+            packetLoss?.let {
+                RunFigure("Packets lost", it * 100, "%", 0, higherIsBetter = true)
+            },
+            RunFigure("Outside", result.baseline.mean, "dBm", 1),
+            RunFigure("Inside", result.test.mean, "dBm", 1),
+            RunFigure("Outside packets", outsidePackets.toDouble(), decimals = 0),
+            RunFigure("Inside packets", insidePackets.toDouble(), decimals = 0),
+        ),
+    )
 
     Spacer(Modifier.height(12.dp))
     Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("Try another container") }

@@ -29,13 +29,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.FadeSample
 import com.sigeye.core.analysis.rf.FadingAnalysis
 import com.sigeye.core.analysis.rf.FadingCharacter
@@ -53,12 +54,13 @@ import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Source
 import com.sigeye.ui.SourceOrder
 import com.sigeye.ui.SourcePicker
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "fading"
 
@@ -460,6 +462,24 @@ private fun Results(
             }
         }
     }
+
+    Spacer(Modifier.height(16.dp))
+    RunHistory(
+        experiment = Experiments.FADING,
+        figures = spots.lastOrNull()?.stats?.let { stats ->
+            listOfNotNull(
+                RunFigure("Spread", stats.rangeDb.toDouble(), "dB", 0, higherIsBetter = false),
+                RunFigure("Fade depth", stats.fadeDepthDb, "dB", 1, higherIsBetter = false),
+                RunFigure("Wander", stats.sdDb, "dB", 1, higherIsBetter = false),
+                stats.ricianKDb
+                    ?.takeIf { it.isFinite() }
+                    ?.let { RunFigure("Rician K", it, "dB", 1, higherIsBetter = true) },
+                RunFigure("Mean", stats.meanDbm, "dBm", 1),
+                RunFigure("Readings", stats.samples.toDouble(), decimals = 0),
+            )
+        }.orEmpty(),
+        note = label,
+    )
 
     Spacer(Modifier.height(16.dp))
     Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) {

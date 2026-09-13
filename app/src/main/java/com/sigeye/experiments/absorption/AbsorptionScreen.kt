@@ -36,16 +36,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
-import com.sigeye.core.Permissions
 import com.sigeye.core.Experiments
+import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.SweepExport
 import com.sigeye.core.analysis.rf.DropReason
 import com.sigeye.core.analysis.rf.PolarSweep
+import com.sigeye.core.analysis.rf.SessionResult
+import com.sigeye.core.analysis.rf.SweepAgreement
 import com.sigeye.core.analysis.rf.SweepCounters
 import com.sigeye.core.analysis.rf.SweepDiagnostics
-import com.sigeye.core.analysis.rf.SweepAgreement
 import com.sigeye.core.analysis.rf.SweepResult
-import com.sigeye.core.analysis.rf.SessionResult
 import com.sigeye.core.analysis.rf.SweepSession
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.CompassQuality
@@ -54,16 +55,17 @@ import com.sigeye.ui.BodyDiagram
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
-import com.sigeye.ui.isBlocking
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.PolarPlot
+import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Source
 import com.sigeye.ui.SourceOrder
 import com.sigeye.ui.SourcePicker
-import com.sigeye.ui.PolarPlot
-import kotlinx.coroutines.delay
+import com.sigeye.ui.isBlocking
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "absorption"
 private const val MIN_SAMPLES_PER_SECTOR = 3
@@ -620,6 +622,25 @@ private fun Results(
         "Source: $sourceLabel",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(12.dp))
+    RunHistory(
+        experiment = Experiments.ABSORPTION,
+        figures = listOfNotNull(
+            combined.frontToBackDb?.let {
+                RunFigure("Your shadow", it, "dB", 1, higherIsBetter = true)
+            },
+            combined.notchBearingDegrees?.let {
+                RunFigure("Shadow at", it.toDouble(), "deg", 0)
+            },
+            session.notchSpreadDegrees?.let {
+                RunFigure("Sweeps disagree by", it.toDouble(), "deg", 0, higherIsBetter = false)
+            },
+            RunFigure("Coverage", combined.coverage * 100.0, "%", 0, higherIsBetter = true),
+            RunFigure("Sweeps", session.runCount.toDouble(), decimals = 0),
+        ),
+        note = sourceLabel,
     )
 
     Spacer(Modifier.height(12.dp))

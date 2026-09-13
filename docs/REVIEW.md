@@ -188,7 +188,7 @@ instead*. "Only 12% coverage" should be followed by "keep turning"; "5 GHz too w
 "move closer or accept 2.4"; "no candidate matched" by "stand still for a minute". Some
 screens do this well — Doppler and Wall Penetration — and the rest could copy them.
 
-### 18. There is no way to compare two runs of the same experiment — *done for six of them*
+### 18. There is no way to compare two runs of the same experiment — *done*
 
 Forensics has history and comparison. Wall Penetration has saved spots. Everything else
 throws the previous run away. The generic version — save a run, name it, list past runs,
@@ -334,7 +334,7 @@ are done, with item 30, in turn 13. What is left of this half - 21, 22, 24, 25, 
 The app is now for two audiences: somebody trying an experiment, and somebody recording a
 demonstration to show other people how exposed they are. These serve both.
 
-### 31. A tutorial that runs on a recording rather than on the room — *open*
+### 31. A tutorial that runs on a recording rather than on the room — *dropped, not wanted*
 
 Every experiment needs a room with something in it, and a first try in an empty flat at
 eleven at night shows nothing and teaches nothing. The replay machinery already exists.
@@ -392,6 +392,6 @@ the card so neither can be cropped off, and `ui/Presentation.kt` shows the same 
 screen with the number counting up. Wired into Follow Me, Rotation Lab, Exposure Scan and
 Wall Penetration, each refusing to offer a card while the claim would not stand up.
 
-Open: 31 (the bundled recording), 34 (one true sentence per screen) and 35 (advice when a
-reading is bad). All three are breadth rather than depth - thirty screens each needing a
-sentence - and none of them blocks a first release.
+Open: 34 (one true sentence per screen) and 35 (advice when a reading is bad). Both are
+breadth rather than depth - thirty screens each needing a sentence - and neither blocks a
+release. 31, the bundled recording, is dropped: not wanted.
