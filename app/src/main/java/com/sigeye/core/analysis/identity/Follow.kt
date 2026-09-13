@@ -582,19 +582,56 @@ class FollowSession {
      */
     fun reacquire(newAddress: String, atMs: Long) {
         val old = targetKey ?: return
+        reacquire(old, newAddress, atMs)
+    }
+
+    /**
+     * Carries one candidate's history onto the address it has just put on.
+     *
+     * Written for any candidate rather than only the locked target, because the short list
+     * is where this matters most. Five devices being watched for a rotation is five chances
+     * to keep the trail; only watching the one you already committed to means the rotation
+     * that loses you the target is the one you were not looking at.
+     *
+     * The decision to call this is [Following]'s, refusals intact. This only records what
+     * it was told - including when, which is what makes a rotation rhythm measurable and
+     * therefore what makes it possible to say when the next one is due.
+     *
+     * @return true when the move was made. False means the new address is not one this
+     *   session has heard, which is a caller bug rather than a refusal.
+     */
+    fun reacquire(oldAddress: String, newAddress: String, atMs: Long): Boolean {
+        val old = oldAddress.uppercase(Locale.US)
         val key = newAddress.uppercase(Locale.US)
-        val entry = tracked[key] ?: return
-        tracked[old]?.let { previous ->
-            entry.addresses.clear()
-            entry.addresses.addAll(previous.addresses)
-            entry.addresses.add(key)
-            entry.label = entry.label ?: previous.label
-            entry.legs.addAll(previous.legs)
-            entry.movingLegs.addAll(previous.movingLegs)
+        if (old == key) return false
+        val entry = tracked[key] ?: return false
+        val previous = tracked[old] ?: return false
+
+        entry.addresses.clear()
+        entry.addresses.addAll(previous.addresses)
+        entry.addresses.add(key)
+        entry.label = entry.label ?: previous.label
+        entry.vendor = entry.vendor ?: previous.vendor
+        entry.legs.addAll(previous.legs)
+        entry.movingLegs.addAll(previous.movingLegs)
+        entry.orbitArcs.addAll(previous.orbitArcs)
+        entry.orbitRssi.addAll(previous.orbitRssi)
+        entry.walkByTrail.addAll(previous.walkByTrail)
+        // An address that replaced one which was already here is not a new arrival. The
+        // device arrived once, under whatever name it was wearing then.
+        entry.arrived = previous.arrived
+
+        // The old address is dropped rather than left behind. Leaving it would put the same
+        // device on the list twice, once as a ghost that stopped answering, and a short list
+        // with a ghost on it is a short list that is one shorter than it looks.
+        tracked.remove(old)
+
+        if (targetKey == old) {
+            targetChanges.add(atMs)
+            targetKey = key
+            phase = FollowPhase.HOLDING
         }
-        targetChanges.add(atMs)
-        targetKey = key
-        phase = FollowPhase.HOLDING
+        return true
     }
 
     fun state(nowMs: Long): FollowState {
