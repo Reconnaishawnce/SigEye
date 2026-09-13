@@ -36,9 +36,9 @@ import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
-import com.sigeye.core.Finding
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
+import com.sigeye.core.Takeaway
 import com.sigeye.core.analysis.identity.FollowCandidate
 import com.sigeye.core.analysis.identity.FollowDecision
 import com.sigeye.core.analysis.identity.FollowPhase
@@ -57,11 +57,11 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
-import com.sigeye.ui.FindingButton
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
+import com.sigeye.ui.TakeawayButton
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -744,7 +744,7 @@ private fun Pick(
         Text("Walk another leg")
     }
 
-    FindingButton(findingFrom(state))
+    TakeawayButton(takeawayFrom(state))
 }
 
 /**
@@ -755,12 +755,12 @@ private fun Pick(
  * mistake travels furthest. The limit line is the same sentence the screen has always said
  * and is the reason this experiment is defensible at all: co-presence is not identity.
  */
-private fun findingFrom(state: FollowState): Finding? {
+private fun takeawayFrom(state: FollowState): Takeaway? {
     if (state.watching == 0) return null
     val movingLegs = state.legs.count { it.moving && !it.running }
     if (movingLegs == 0) return null
 
-    return Finding(
+    return Takeaway(
         experiment = "Follow Me",
         headline = "${state.survivors}",
         unit = if (state.survivors == 1) "device stayed with you" else "devices stayed with you",

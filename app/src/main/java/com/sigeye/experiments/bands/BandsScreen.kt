@@ -35,9 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Experiments
-import com.sigeye.core.Finding
 import com.sigeye.core.Permissions
 import com.sigeye.core.RunFigure
+import com.sigeye.core.Takeaway
 import com.sigeye.core.analysis.rf.BandPair
 import com.sigeye.core.analysis.rf.DualBand
 import com.sigeye.core.analysis.rf.Penetration
@@ -47,12 +47,12 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
-import com.sigeye.ui.FindingButton
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Section
+import com.sigeye.ui.TakeawayButton
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -338,9 +338,9 @@ private fun Live() {
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Export the pairs") }
 
-    FindingButton(
+    TakeawayButton(
         typical?.takeIf { settled.isNotEmpty() }?.let { excess ->
-            Finding(
+            Takeaway(
                 experiment = "Wall Penetration",
                 headline = String.format(Locale.US, "%.1f", excess),
                 unit = "dB of extra loss on 5 GHz",

@@ -4,14 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class FindingTest {
+class TakeawayTest {
 
-    private fun finding(
+    private fun takeaway(
         headline: String = "3",
         denominator: String = "of 214 in range",
         limit: String = "Co-presence is not identity.",
         context: List<String> = listOf("2 legs", "1.4 km"),
-    ) = Finding(
+    ) = Takeaway(
         experiment = "Follow Me",
         headline = headline,
         unit = "devices still with you",
@@ -25,15 +25,15 @@ class FindingTest {
     fun `a number with nothing to divide it by cannot be built`() {
         // The type is the enforcement. Three devices is a headline; three out of two
         // hundred and fourteen is a finding, and the difference is the whole argument.
-        val thrown = runCatching { finding(denominator = "") }.exceptionOrNull()
+        val thrown = runCatching { takeaway(denominator = "") }.exceptionOrNull()
 
         assertTrue(thrown is IllegalArgumentException)
         assertTrue(thrown!!.message!!.contains("what its number is out of"))
     }
 
     @Test
-    fun `a finding that does not say what it fails to prove cannot be built`() {
-        val thrown = runCatching { finding(limit = "   ") }.exceptionOrNull()
+    fun `a takeaway that does not say what it fails to prove cannot be built`() {
+        val thrown = runCatching { takeaway(limit = "   ") }.exceptionOrNull()
 
         assertTrue(thrown is IllegalArgumentException)
         assertTrue(thrown!!.message!!.contains("does not prove"))
@@ -41,7 +41,7 @@ class FindingTest {
 
     @Test
     fun `an empty headline is refused too`() {
-        assertTrue(runCatching { finding(headline = "") }.isFailure)
+        assertTrue(runCatching { takeaway(headline = "") }.isFailure)
     }
 
     @Test
@@ -50,16 +50,16 @@ class FindingTest {
         // an empty string rather than as a shorter list.
         assertEquals(
             "2 legs · 1.4 km",
-            finding(context = listOf("2 legs", "", "1.4 km")).conditions(),
+            takeaway(context = listOf("2 legs", "", "1.4 km")).conditions(),
         )
-        assertEquals("", finding(context = emptyList()).conditions())
+        assertEquals("", takeaway(context = emptyList()).conditions())
     }
 
     @Test
     fun `the text form carries the denominator and the limit, in that order`() {
         // Somebody who pastes this into a message has to be making the same claim the card
         // makes, or the two versions disagree about how strong the result was.
-        val text = finding().asText()
+        val text = takeaway().asText()
 
         assertTrue(text.contains("3 devices still with you"))
         assertTrue(text.contains("of 214 in range"))
@@ -70,8 +70,8 @@ class FindingTest {
     }
 
     @Test
-    fun `a finding with no conditions still reads properly`() {
-        val text = finding(context = emptyList()).asText()
+    fun `a takeaway with no conditions still reads properly`() {
+        val text = takeaway(context = emptyList()).asText()
 
         assertTrue(text.contains("of 214 in range"))
         assertTrue(text.contains("Co-presence is not identity."))

@@ -41,9 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
-import com.sigeye.core.Finding
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
+import com.sigeye.core.Takeaway
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.identity.Cohort
 import com.sigeye.core.analysis.identity.Cohorts
@@ -58,11 +58,11 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
-import com.sigeye.ui.FindingButton
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
+import com.sigeye.ui.TakeawayButton
 import com.sigeye.ui.Track2D
 import com.sigeye.ui.TrackChart
 import java.io.File
@@ -182,7 +182,7 @@ private fun Live() {
 
     Headline(cohorts, tracks, room, elapsed)
 
-    FindingButton(findingFrom(cohorts, room, elapsed))
+    TakeawayButton(takeawayFrom(cohorts, room, elapsed))
 
     Spacer(Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -323,13 +323,13 @@ private fun Live() {
  * a card claiming it did would be wrong in the most quotable possible way. That caveat is
  * also the limit line, because it never stops being true - it only gets weaker.
  */
-private fun findingFrom(cohorts: List<Cohort>, room: RoomRhythm, elapsedMs: Long): Finding? {
+private fun takeawayFrom(cohorts: List<Cohort>, room: RoomRhythm, elapsedMs: Long): Takeaway? {
     val watched = cohorts.sumOf { it.size }
     if (watched == 0 || elapsedMs < MIN_FOR_FINDING_MS) return null
     val fixed = cohorts.sumOf { it.fixed }
     val minutes = elapsedMs / 60_000L
 
-    return Finding(
+    return Takeaway(
         experiment = "Rotation Lab",
         headline = "$fixed",
         unit = if (fixed == 1) {

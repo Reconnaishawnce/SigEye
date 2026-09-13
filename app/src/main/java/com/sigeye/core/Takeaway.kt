@@ -13,7 +13,7 @@ import java.util.Locale
  * and a mile" is exactly the overclaim every verdict in this app is written to avoid - and
  * cropping is the normal fate of screenshots, not a rare accident.
  *
- * So the denominator and the limit are not optional fields on this type. A finding that
+ * So the denominator and the limit are not optional fields on this type. A takeaway that
  * cannot say what its number is out of, and cannot say in one line what it does not prove,
  * is not ready to be shown big. That constraint is the whole reason this exists rather than
  * each screen formatting its own card.
@@ -27,7 +27,7 @@ import java.util.Locale
  * @param limit one line on what this does not prove. Not optional, and it travels with
  *   the image.
  */
-data class Finding(
+data class Takeaway(
     val experiment: String,
     val headline: String,
     val unit: String,
@@ -37,12 +37,12 @@ data class Finding(
     val takenAtMs: Long = System.currentTimeMillis(),
 ) {
     init {
-        require(headline.isNotBlank()) { "A finding with no number is not a finding." }
+        require(headline.isNotBlank()) { "A takeaway with no number is nothing to show." }
         require(denominator.isNotBlank()) {
-            "A finding has to say what its number is out of. That is the whole point of it."
+            "A takeaway has to say what its number is out of. That is the whole point of it."
         }
         require(limit.isNotBlank()) {
-            "A finding has to say in one line what it does not prove."
+            "A takeaway has to say in one line what it does not prove."
         }
     }
 

@@ -8,16 +8,16 @@ import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import java.util.Locale
 import java.io.File
+import java.util.Locale
 
 /**
- * Draws a finding as a picture somebody can post.
+ * Draws a takeaway as a picture somebody can post.
  *
  * Drawn rather than screenshotted, for one reason: a screenshot is whatever happened to be
  * on screen, and what is on screen scrolls. The number people want is usually at the top
  * and the denominator and the limit are usually below the fold, so the honest half is the
- * half that does not make it into the picture. Composing the image from a [Finding] means
+ * half that does not make it into the picture. Composing the image from a [Takeaway] means
  * the caveat cannot be cropped off, because it was never in a different part of the page.
  *
  * Portrait and a fixed palette, not the phone's theme. The image is going to be looked at
@@ -26,9 +26,9 @@ import java.io.File
  *
  * The layout is deliberately boring: label, enormous number, what it counts, what it is out
  * of, the conditions, then the limit in a box of its own at the bottom. The limit gets a box
- * so that it reads as part of the finding rather than as small print under it.
+ * so that it reads as part of the takeaway rather than as small print under it.
  */
-object FindingImage {
+object TakeawayImage {
 
     private const val WIDTH = 1080
     private const val HEIGHT = 1350
@@ -41,49 +41,49 @@ object FindingImage {
     private const val MUTED = 0xFF8C9AA3.toInt()
     private const val PANEL = 0xFF1A2028.toInt()
 
-    fun render(finding: Finding): Bitmap {
+    fun render(takeaway: Takeaway): Bitmap {
         val bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(GROUND)
 
         var y = MARGIN + 40f
 
-        y = drawText(canvas, finding.experiment.uppercase(Locale.US), MARGIN, y, 34f, ACCENT, bold = true)
+        y = drawText(canvas, takeaway.experiment.uppercase(Locale.US), MARGIN, y, 34f, ACCENT, bold = true)
         y += 48f
 
         // The number, as large as it will go and still fit. A long one has to shrink or it
         // runs off the side, and running off the side is how a card looks broken.
-        val headlineSize = fitted(finding.headline, WIDTH - MARGIN * 2, 260f)
-        y = drawText(canvas, finding.headline, MARGIN, y, headlineSize, INK, bold = true)
+        val headlineSize = fitted(takeaway.headline, WIDTH - MARGIN * 2, 260f)
+        y = drawText(canvas, takeaway.headline, MARGIN, y, headlineSize, INK, bold = true)
         y += 16f
 
-        y = drawWrapped(canvas, finding.unit, MARGIN, y, 52f, INK)
+        y = drawWrapped(canvas, takeaway.unit, MARGIN, y, 52f, INK)
         y += 18f
-        y = drawWrapped(canvas, finding.denominator, MARGIN, y, 40f, ACCENT)
+        y = drawWrapped(canvas, takeaway.denominator, MARGIN, y, 40f, ACCENT)
 
-        finding.conditions().takeIf { it.isNotBlank() }?.let {
+        takeaway.conditions().takeIf { it.isNotBlank() }?.let {
             y += 14f
             y = drawWrapped(canvas, it, MARGIN, y, 34f, MUTED)
         }
 
-        drawLimit(canvas, finding)
-        drawFooter(canvas, finding)
+        drawLimit(canvas, takeaway)
+        drawFooter(canvas, takeaway)
         return bitmap
     }
 
     /** Writes the picture next to the exports and hands it to the share sheet. */
-    fun share(context: Context, finding: Finding) {
+    fun share(context: Context, takeaway: Takeaway) {
         runCatching {
             val directory = File(context.getExternalFilesDir(null), "cards").apply { mkdirs() }
-            val file = File(directory, "sigeye-${finding.takenAtMs}.png")
+            val file = File(directory, "sigeye-${takeaway.takenAtMs}.png")
             file.outputStream().use { out ->
-                render(finding).compress(Bitmap.CompressFormat.PNG, 100, out)
+                render(takeaway).compress(Bitmap.CompressFormat.PNG, 100, out)
             }
             SweepExport.share(
                 context = context,
                 file = file,
                 mime = "image/png",
-                title = "Share this finding",
+                title = "Share this result",
             )
         }
     }
@@ -95,10 +95,10 @@ object FindingImage {
      * does not depend on how much else there was to say. A caveat that moves around is a
      * caveat people learn to skip.
      */
-    private fun drawLimit(canvas: Canvas, finding: Finding) {
+    private fun drawLimit(canvas: Canvas, takeaway: Takeaway) {
         val paint = textPaint(30f, INK, bold = false)
         val width = (WIDTH - MARGIN * 2 - 56f).toInt()
-        val layout = wrap(finding.limit, paint, width)
+        val layout = wrap(takeaway.limit, paint, width)
 
         val padding = 28f
         val labelSize = 24f
@@ -127,10 +127,10 @@ object FindingImage {
         canvas.restore()
     }
 
-    private fun drawFooter(canvas: Canvas, finding: Finding) {
+    private fun drawFooter(canvas: Canvas, takeaway: Takeaway) {
         drawText(
             canvas,
-            "SigEye · ${finding.stamp()}",
+            "SigEye · ${takeaway.stamp()}",
             MARGIN,
             HEIGHT - MARGIN + 10f,
             26f,

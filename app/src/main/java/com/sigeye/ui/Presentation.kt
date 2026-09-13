@@ -34,8 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.sigeye.core.Finding
-import com.sigeye.core.FindingImage
+import com.sigeye.core.Takeaway
+import com.sigeye.core.TakeawayImage
 import java.util.Locale
 
 /**
@@ -46,13 +46,13 @@ import java.util.Locale
  * a reading means and wrong for the other thing this app is for, which is showing somebody
  * else how exposed they are. A result worth filming needs to be the only thing on screen.
  *
- * Null means the experiment has not produced a finding yet, and the control is simply absent
+ * Null means the experiment has not produced a takeaway yet, and the control is simply absent
  * rather than present and disabled. A greyed-out button on a screen that has not been run is
  * a puzzle nobody needs.
  */
 @Composable
-fun FindingButton(finding: Finding?, modifier: Modifier = Modifier) {
-    if (finding == null) return
+fun TakeawayButton(takeaway: Takeaway?, modifier: Modifier = Modifier) {
+    if (takeaway == null) return
     var showing by remember { mutableStateOf(false) }
 
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -60,19 +60,19 @@ fun FindingButton(finding: Finding?, modifier: Modifier = Modifier) {
     }
 
     if (showing) {
-        PresentationCard(finding, onClose = { showing = false })
+        PresentationCard(takeaway, onClose = { showing = false })
     }
 }
 
 /**
- * One finding, alone on a black screen, in type you can read from across a room.
+ * One takeaway, alone on a black screen, in type you can read from across a room.
  *
  * Black and a fixed palette rather than the app's theme, for the same reason the shared
  * image is: this gets recorded and the recording gets watched somewhere else, and a card
  * that came out pale because of how somebody had their phone set up is a card nobody reads.
  *
  * The denominator and the limit are on the card and not behind anything. The whole design
- * constraint of [Finding] is that a number cannot be shown big without them, and putting
+ * constraint of [Takeaway] is that a number cannot be shown big without them, and putting
  * them behind a tap here would give that away at the last step.
  *
  * The number counts up when it is a number. On a screen recording, three appearing where
@@ -80,7 +80,7 @@ fun FindingButton(finding: Finding?, modifier: Modifier = Modifier) {
  * and fourteen reads as an elimination, which is what actually happened.
  */
 @Composable
-fun PresentationCard(finding: Finding, onClose: () -> Unit) {
+fun PresentationCard(takeaway: Takeaway, onClose: () -> Unit) {
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -97,27 +97,27 @@ fun PresentationCard(finding: Finding, onClose: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
             ) {
                 Text(
-                    finding.experiment.uppercase(Locale.US),
+                    takeaway.experiment.uppercase(Locale.US),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = ACCENT,
                 )
 
                 Spacer(Modifier.height(28.dp))
-                Headline(finding.headline)
+                Headline(takeaway.headline)
 
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    finding.unit,
+                    takeaway.unit,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = INK,
                 )
 
                 Spacer(Modifier.height(12.dp))
-                Text(finding.denominator, fontSize = 20.sp, color = ACCENT)
+                Text(takeaway.denominator, fontSize = 20.sp, color = ACCENT)
 
-                finding.conditions().takeIf { it.isNotBlank() }?.let {
+                takeaway.conditions().takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, fontSize = 16.sp, color = MUTED)
                 }
@@ -137,15 +137,15 @@ fun PresentationCard(finding: Finding, onClose: () -> Unit) {
                             color = MUTED,
                         )
                         Spacer(Modifier.height(6.dp))
-                        Text(finding.limit, fontSize = 15.sp, color = INK)
+                        Text(takeaway.limit, fontSize = 15.sp, color = INK)
                     }
                 }
 
                 Spacer(Modifier.height(20.dp))
-                Text("SigEye · ${finding.stamp()}", fontSize = 12.sp, color = MUTED)
+                Text("SigEye · ${takeaway.stamp()}", fontSize = 12.sp, color = MUTED)
 
                 Spacer(Modifier.height(24.dp))
-                ShareRow(finding, onClose)
+                ShareRow(takeaway, onClose)
                 Spacer(Modifier.height(32.dp))
             }
         }
@@ -169,7 +169,7 @@ private fun Headline(headline: String) {
     val shown by animateIntAsState(
         targetValue = number,
         animationSpec = tween(durationMillis = 700),
-        label = "finding",
+        label = "takeaway",
     )
     Text(
         shown.toString(),
@@ -180,7 +180,7 @@ private fun Headline(headline: String) {
 }
 
 @Composable
-private fun ShareRow(finding: Finding, onClose: () -> Unit) {
+private fun ShareRow(takeaway: Takeaway, onClose: () -> Unit) {
     val context = LocalContext.current
     Row(
         Modifier.fillMaxWidth(),
@@ -188,7 +188,7 @@ private fun ShareRow(finding: Finding, onClose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Button(
-            onClick = { FindingImage.share(context, finding) },
+            onClick = { TakeawayImage.share(context, takeaway) },
             colors = ButtonDefaults.buttonColors(containerColor = ACCENT, contentColor = GROUND),
             modifier = Modifier.weight(1f),
         ) { Text("Share the card") }
