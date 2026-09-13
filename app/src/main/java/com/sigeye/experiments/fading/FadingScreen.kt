@@ -108,9 +108,22 @@ private fun Live() {
     var target by remember { mutableStateOf<String?>(null) }
     var targetLabel by remember { mutableStateOf("-") }
 
-    // Both of these are deliberately outside Compose. Rebuilding an immutable collection
-    // on every advertisement and writing it back to state recomposes the whole screen
-    // hundreds of times a second, which starves the very coroutine doing the collecting.
+    // The recording buffer stays outside Compose deliberately. Rebuilding an immutable
+    // list on every advertisement and writing it back to state recomposes the whole
+    // screen hundreds of times a second, starving the very coroutine doing the collecting.
+    val record = remember { mutableListOf<FadeSample>() }
+
+    var liveRssi by remember { mutableStateOf<Int?>(null) }
+    var trace by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var stats by remember { mutableStateOf(FadingAnalysis.analyse(emptyList())) }
+    var spots by remember { mutableStateOf<List<Spot>>(emptyList()) }
+
+    DisposableEffect(Unit) {
+        BleScanHub.init(context)
+        BleScanHub.acquire(HUB_TAG)
+        onDispose { BleScanHub.release(HUB_TAG) }
+    }
+
     LaunchedEffect(stage, target) {
         val address = target
         if (stage != Stage.RECORD || address == null) return@LaunchedEffect
