@@ -94,21 +94,28 @@ class ThresholdFitTest {
 
     @Test
     fun `missing a train is never traded away for a quieter threshold`() {
-        // The whole point of the button. A threshold that misses one is not offered however
-        // few extra alerts it would produce.
+        // The whole point of the button. Here the quiet train and the background drizzle sit
+        // at the same level, so nothing can separate them: every threshold that catches the
+        // quiet one also lets the drizzle through, and every threshold that silences the
+        // drizzle loses the train. The trade is forced, and it has to go one way.
         val bins = (0..60).map { index ->
             when (index) {
                 10 -> bin(index, 48, label = "TRAIN")
                 20 -> bin(index, 14, label = "TRAIN")
-                // A steady drizzle of medium bursts, so a low threshold is noisy.
-                else -> if (index % 3 == 0) bin(index, 13) else bin(index, 4)
+                else -> if (index % 3 == 0) bin(index, 14) else bin(index, 4)
             }
         }
 
-        val suggested = advise(bins).suggested!!
+        val advice = advise(bins)
+        val suggested = advice.suggested!!
 
-        assertEquals(0, suggested.missed)
+        assertEquals("nothing that misses a train is offered", 0, suggested.missed)
         assertTrue("even though it costs extra alerts", suggested.unmarked > 0)
+
+        // And the alternative it turned down really was quieter.
+        val quieter = advice.scores.filter { it.unmarked < suggested.unmarked }
+        assertTrue("there was a quieter option", quieter.isNotEmpty())
+        assertTrue("and every one of them missed a train", quieter.all { it.missed > 0 })
     }
 
     @Test
