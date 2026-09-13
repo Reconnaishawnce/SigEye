@@ -1,14 +1,14 @@
 package com.sigeye.core
 
 import android.content.Context
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * A device a follow ended on, and the evidence it ended on.
@@ -30,6 +30,14 @@ data class TargetDevice(
     val addedAtMs: Long,
     /** Every address it has been seen wearing, oldest first. */
     val addresses: List<String> = listOf(address),
+    /**
+     * When each of those changes happened.
+     *
+     * Kept because it is the only way to say when the next one is due. Two changes give a
+     * measured rhythm for this particular device, which beats the specification default by
+     * a distance - the default is what most stacks inherit, not what any given phone does.
+     */
+    val changesAtMs: List<Long> = emptyList(),
     /** Updated as it is heard again, so a lost target can say how long it has been gone. */
     val lastSeenMs: Long = addedAtMs,
 ) {
@@ -100,6 +108,7 @@ class TargetStore private constructor(context: Context) {
             existing.copy(
                 address = newAddress.uppercase(Locale.US),
                 addresses = existing.addresses + newAddress.uppercase(Locale.US),
+                changesAtMs = existing.changesAtMs + atMs,
                 lastSeenMs = atMs,
             ),
         )
@@ -135,7 +144,8 @@ class TargetStore private constructor(context: Context) {
                         .put("from", target.fromFollow)
                         .put("added", target.addedAtMs)
                         .put("last", target.lastSeenMs)
-                        .put("addresses", JSONArray(target.addresses)),
+                        .put("addresses", JSONArray(target.addresses))
+                        .put("changes", JSONArray(target.changesAtMs)),
                 )
             }
             file.writeText(array.toString())
@@ -158,6 +168,9 @@ class TargetStore private constructor(context: Context) {
                 addresses = (0 until worn.length()).map { worn.getString(it) }
                     .ifEmpty { listOf(json.optString("address")) },
                 lastSeenMs = json.optLong("last", json.optLong("added")),
+                changesAtMs = (json.optJSONArray("changes") ?: JSONArray()).let { changes ->
+                    (0 until changes.length()).map { changes.getLong(it) }
+                },
             )
         }
     }.getOrDefault(emptyList())

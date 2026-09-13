@@ -236,6 +236,14 @@ data class FollowState(
     val expectedReturnMs: Long?,
     /** How long the session has been running, for the prompt to re-baseline. */
     val runningForMs: Long = 0L,
+    /**
+     * When the held target was seen changing address, in order.
+     *
+     * The raw moments rather than only the derived [rhythm], because the countdown needs to
+     * know when the last change was and the rhythm does not carry that. Two consumers were
+     * otherwise going to derive the same deadline separately and drift apart.
+     */
+    val rotationChangesAtMs: List<Long> = emptyList(),
 ) {
     val survivors: Int get() = candidates.count { it.survivedAll }
 
@@ -659,6 +667,7 @@ class FollowSession {
             rhythm = rhythm,
             expectedReturnMs = expectedReturn(rhythm),
             runningForMs = if (startedAtMs == 0L) 0L else nowMs - startedAtMs,
+            rotationChangesAtMs = targetChanges.toList(),
         )
     }
 

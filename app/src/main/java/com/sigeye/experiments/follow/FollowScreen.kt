@@ -57,11 +57,9 @@ import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.Following
 import com.sigeye.core.analysis.identity.LegKind
 import com.sigeye.core.analysis.identity.LiveAddress
-import com.sigeye.core.analysis.identity.RotationRhythm
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
 import com.sigeye.ui.CountUp
-import com.sigeye.ui.CountdownBar
 import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
@@ -71,6 +69,7 @@ import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.LiveBars
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RotationCountdown
 import com.sigeye.ui.Section
 import com.sigeye.ui.TakeawayButton
 import com.sigeye.ui.barsSpoken
@@ -284,9 +283,12 @@ private fun Live(onLocate: (String) -> Unit) {
                 session = session,
                 live = live,
                 nowMs = now,
-                onMoved = { message ->
+                onMoved = { from, to, message ->
                     log = listOf(message) + log
                     feedback.alert(AlertStyle.BOTH, urgent = true)
+                    // A saved target that rotates has to come along, or the targets screen
+                    // goes on hunting for an address nothing will ever send again.
+                    targetStore.reacquire(from, to, now)
                 },
             )
 
@@ -575,7 +577,7 @@ private fun watchForRotations(
     session: FollowSession,
     live: Map<String, LiveAddress>,
     nowMs: Long,
-    onMoved: (String) -> Unit,
+    onMoved: (from: String, to: String, message: String) -> Unit,
 ) {
     val watching = (state.shortlist + listOfNotNull(state.target)).distinctBy { it.address }
     if (watching.isEmpty()) return
@@ -593,6 +595,8 @@ private fun watchForRotations(
         if (decision is FollowDecision.Reacquired) {
             if (session.reacquire(candidate.address, decision.address, nowMs)) {
                 onMoved(
+                    candidate.address,
+                    decision.address,
                     "${candidate.label ?: candidate.address} rotated to ${decision.address}, " +
                         "${decision.score.points} points of evidence",
                 )
@@ -976,6 +980,41 @@ private fun Hub(
         }
     }
 
+    val silent = targets.filter { nowMs - it.lastSeenMs > LOST_AFTER_MS }
+    if (silent.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    if (silent.size == 1) {
+                        "Lost ${silent.first().name}"
+                    } else {
+                        "Lost ${silent.size} of your targets"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Quiet for over a minute. Open the targets to see when the next address " +
+                        "change is due and to hunt for it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onTargets, modifier = Modifier.fillMaxWidth()) {
+                    Text("Hunt")
+                }
+            }
+        }
+    }
+
     Spacer(Modifier.height(14.dp))
 
     if (running != null) {
@@ -1248,14 +1287,24 @@ private fun Targets(
                 )
 
                 if (lost) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
-                        "Lost. It may have changed address, in which case it is in range " +
-                            "under a name nothing here recognises. Persistent Tracking is " +
-                            "the experiment that looks for it, and it will only take it " +
-                            "back on unambiguous evidence.",
+                        "HUNT MODE",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Lost. Far more often than not that means it is still here wearing " +
+                            "a name nothing recognises, rather than gone.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    RotationCountdown(
+                        changesAtMs = target.changesAtMs,
+                        nowMs = nowMs,
                     )
                 }
 
@@ -1528,38 +1577,10 @@ private fun Holding(
                 )
                 Spacer(Modifier.height(6.dp))
 
-                val due = state.expectedReturnMs
-                if (due != null) {
-                    val now = System.currentTimeMillis()
-                    val period = state.rhythm?.medianPeriodMs
-                        ?: RotationRhythm.SPEC_DEFAULT_MS
-                    CountdownBar(
-                        elapsedMs = (period - (due - now)).coerceIn(0L, period),
-                        totalMs = period,
-                        label = if (state.rhythm?.measurable == true) {
-                            "next address due, on its measured rhythm"
-                        } else {
-                            "next address due, on the specification default"
-                        },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "When it changes address it will reappear as a stranger, and this " +
-                            "will only take it back if the evidence is unambiguous. If the " +
-                            "countdown passes with nothing found, the trail is cold.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                } else {
-                    Text(
-                        "It has not changed address while being watched, so there is no " +
-                            "rhythm to predict from. It could put on a new one at any " +
-                            "moment, and a countdown to a made-up deadline would be worse " +
-                            "than none.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
+                RotationCountdown(
+                    changesAtMs = state.rotationChangesAtMs,
+                    nowMs = System.currentTimeMillis(),
+                )
 
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(onClick = onLocate, modifier = Modifier.fillMaxWidth()) {
