@@ -45,6 +45,10 @@ green CI run and a release on GitHub.
   a red build twice. Anything containing a backslash — regexes above all — goes in with the
   Write or Edit tool. While you are there: `$` starts a template in a Kotlin string, so a
   regex end-of-input anchor is spelled `\z`, not `$`.
+- **Grep before naming a new top-level type in `core/analysis`.** It is one flat package of
+  thirty-odd files, and a collision there is a compile error in a file you did not touch.
+  `Track` collided with Forensics, `Leg` collided with Convoy, and both cost a red build.
+  The real fix is subpackages (item 7 in `docs/REVIEW.md`), now overdue.
 - Long-running recordings live in `core/Recordings.kt` and are driven by `ScanService`, not
   by the screen. A screen reads them and toggles a `ScanService.Mode`; it must not own a
   recorder, or the measurement dies with the composition.

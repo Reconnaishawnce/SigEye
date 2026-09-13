@@ -18,7 +18,7 @@ enum class FollowPhase(val label: String) {
 }
 
 /** One stretch of the session: a place stood in, or a distance travelled. */
-data class Leg(
+data class FollowLeg(
     val index: Int,
     val label: String,
     val startedAtMs: Long,
@@ -78,7 +78,7 @@ data class FollowCandidate(
  */
 data class FollowState(
     val phase: FollowPhase,
-    val legs: List<Leg>,
+    val legs: List<FollowLeg>,
     val candidates: List<FollowCandidate>,
     val watching: Int,
     val target: FollowCandidate?,
@@ -138,7 +138,7 @@ class FollowSession {
     }
 
     private val tracked = LinkedHashMap<String, Tracked>()
-    private val legs = mutableListOf<Leg>()
+    private val legs = mutableListOf<FollowLeg>()
 
     private var targetKey: String? = null
 
@@ -181,7 +181,7 @@ class FollowSession {
      */
     fun beginLeg(label: String, moving: Boolean, atMs: Long) {
         endLeg(atMs)
-        legs.add(Leg(legs.size, label, atMs, null, moving))
+        legs.add(FollowLeg(legs.size, label, atMs, null, moving))
         if (phase == FollowPhase.CENSUS) phase = FollowPhase.NARROWING
     }
 

@@ -197,7 +197,7 @@ private fun Live(onLocate: (String) -> Unit) {
             onLegName = { legName = it },
             onBeginLeg = { moving ->
                 session.beginLeg(
-                    legName.ifBlank { if (moving) "Leg ${state.legs.size + 1}" else "Stopped" },
+                    legName.ifBlank { if (moving) "FollowLeg ${state.legs.size + 1}" else "Stopped" },
                     moving,
                     System.currentTimeMillis(),
                 )
