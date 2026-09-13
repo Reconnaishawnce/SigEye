@@ -334,7 +334,7 @@ are done, with item 30, in turn 13. What is left of this half - 21, 22, 24, 25, 
 The app is now for two audiences: somebody trying an experiment, and somebody recording a
 demonstration to show other people how exposed they are. These serve both.
 
-### 31. A tutorial that runs on a recording rather than on the room
+### 31. A tutorial that runs on a recording rather than on the room — *open*
 
 Every experiment needs a room with something in it, and a first try in an empty flat at
 eleven at night shows nothing and teaches nothing. The replay machinery already exists.
@@ -343,7 +343,7 @@ offer "watch this work on a recording first". No permissions, no waiting, no luc
 and the result is real data rather than a mockup. It is also the only way a demo can be
 rehearsed before it is filmed.
 
-### 32. A presentation mode, because screen recordings are the deliverable
+### 32. A presentation mode, because screen recordings are the deliverable — *done*
 
 People will record their screen. What the app should provide is a frame worth recording: a
 full-bleed result card with the headline number in enormous type, the denominator under it,
@@ -351,7 +351,7 @@ no navigation, no diagnostics, no permissions banner. One tap from any finished 
 Right now the most striking result in the app - a room narrowed to three devices - is a
 paragraph in the middle of a scrolling page.
 
-### 33. Animate the number when the number is the finding
+### 33. Animate the number when the number is the finding — *done, on the five that matter*
 
 `CountUp` exists and is used on exactly one screen. The survivor count in Follow Me going
 from two hundred and fourteen to three is the most watchable thing this app does and it
@@ -359,21 +359,21 @@ currently teleports between frames, which reads as a glitch rather than as an el
 Animate every count that is a finding, and let eliminated rows fall out of the list rather
 than vanish between recompositions.
 
-### 34. One true sentence at the top of every screen
+### 34. One true sentence at the top of every screen — *open*
 
 Review item 16, still open and now across thirty screens. Every screen needs a line that is
 true before any measurement exists - "this measures how much of 2.4 GHz your building is
 eating" - above the fold, before the long-form explanation. Somebody standing in a corridor
 reads the heading, the number, and nothing else.
 
-### 35. Say what to do when a reading is bad, everywhere
+### 35. Say what to do when a reading is bad, everywhere — *open*
 
 Review item 17, still open. Follow Me's guided flow now proves the pattern: it says "the
 target probably changed address partway through, walk another leg" instead of showing an
 empty list. One shared component that turns a verdict into a next action, and every screen
 with a verdict gets one.
 
-### 36. Build the caveat into the share, not next to it
+### 36. Build the caveat into the share, not next to it — *done*
 
 A screenshot of "3 devices still with you" with the denominator cropped off is exactly the
 overclaim this app's whole tone is written to avoid, and cropping is what happens to
@@ -381,3 +381,17 @@ screenshots. Anything shareable should carry its denominator and its one-line li
 into the image - "3 of 214, after two legs and 1.4 km" - so the honest version is the one
 that travels. This matters more than the other five, because the share is the part other
 people see.
+
+---
+
+## Where turn 14 left the six
+
+Done: 32, 33 and 36, which were one piece of work rather than three. `core/Takeaway.kt`
+will not construct without a denominator and a one-line limit, `core/TakeawayImage.kt` draws
+the card so neither can be cropped off, and `ui/Presentation.kt` shows the same thing full
+screen with the number counting up. Wired into Follow Me, Rotation Lab, Exposure Scan and
+Wall Penetration, each refusing to offer a card while the claim would not stand up.
+
+Open: 31 (the bundled recording), 34 (one true sentence per screen) and 35 (advice when a
+reading is bad). All three are breadth rather than depth - thirty screens each needing a
+sentence - and none of them blocks a first release.
