@@ -21,6 +21,7 @@ import com.sigeye.experiments.trainspotter.TrainSpotterEngine
 import com.sigeye.experiments.watchlist.WatchEngine
 import com.sigeye.experiments.watchlist.WatchHit
 import com.sigeye.experiments.watchlist.WatchStore
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +32,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * One foreground service for every background experiment.
@@ -55,6 +55,7 @@ class ScanService : Service() {
         FORENSICS("Forensics"),
         PLACE("Place Profiler"),
         CONVOY("Journey"),
+        FOLLOW("Follow Me"),
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -155,7 +156,10 @@ class ScanService : Service() {
 
             // The recordings are started by the screen that owns them, because only it
             // knows the settings - slice length, leg name. The service just feeds them.
-            Mode.FORENSICS, Mode.PLACE, Mode.CONVOY -> Unit
+            // Follow Me is the same: the screen owns the baseline, the pool and the probes,
+            // and this only keeps the radio open and the session fed while the screen is
+            // away - which for a follow is most of it.
+            Mode.FORENSICS, Mode.PLACE, Mode.CONVOY, Mode.FOLLOW -> Unit
         }
 
         BleScanHub.acquire(HUB_TAG)
@@ -178,9 +182,10 @@ class ScanService : Service() {
             }
 
             Mode.FORENSICS -> Recordings.forensics.stop(System.currentTimeMillis())
-            // Place and Convoy keep whatever they have: stopping the service should not
-            // throw away four hours of profile, and the screen decides what to do with it.
-            Mode.PLACE, Mode.CONVOY -> Unit
+            // Place, Convoy and Follow keep whatever they have: stopping the service should
+            // not throw away four hours of profile or half an hour of walking, and the
+            // screen decides what to do with it.
+            Mode.PLACE, Mode.CONVOY, Mode.FOLLOW -> Unit
         }
         publishModes()
         if (modes.isEmpty()) {
@@ -219,6 +224,9 @@ class ScanService : Service() {
                     trainSpotter?.onAdvert(advert)
                     watch?.onAdvert(advert)
                     Recordings.onAdvert(advert, modes)
+                    if (modes.contains(Mode.FOLLOW)) {
+                        FollowRunner.onAdvert(advert, Recordings.book())
+                    }
                 }
             }
         }
@@ -231,6 +239,7 @@ class ScanService : Service() {
                     val now = System.currentTimeMillis()
                     trainSpotter?.tick(now)
                     trainSpotter?.publish(BleScanHub.health.value)
+                    if (modes.contains(Mode.FOLLOW)) FollowRunner.tick(now)
                     if (now - lastPrune > 10 * 60_000L) {
                         watch?.prune(now)
                         lastPrune = now

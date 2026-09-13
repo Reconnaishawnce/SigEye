@@ -2,12 +2,13 @@ package com.sigeye.core
 
 import android.content.Context
 import com.sigeye.core.analysis.presence.ConvoyTracker
-import com.sigeye.core.analysis.record.ForensicRecorder
 import com.sigeye.core.analysis.presence.PlaceProfile
+import com.sigeye.core.analysis.record.ForensicRecorder
 import com.sigeye.core.analysis.record.TrackDetail
 import com.sigeye.core.ble.Advert
 import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,7 +16,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * The long recordings, held where the screen cannot take them away.
@@ -38,6 +38,9 @@ object Recordings {
     val convoy = ConvoyTracker()
 
     private var book: DeviceBook? = null
+
+    /** The nickname book, for whoever else on the service tick needs one. */
+    fun book(): DeviceBook? = book
 
     private var _follower: Follower? = null
 
@@ -144,6 +147,9 @@ object Recordings {
                     forensics.packetCount,
                 ),
             )
+        }
+        if (modes.contains(ScanService.Mode.FOLLOW)) {
+            add(FollowRunner.summary())
         }
         if (modes.contains(ScanService.Mode.PLACE)) {
             add("Place Profiler: ${place.deviceCount} devices")

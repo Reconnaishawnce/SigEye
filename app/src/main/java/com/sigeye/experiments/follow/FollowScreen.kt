@@ -43,9 +43,11 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.FollowLead
 import com.sigeye.core.FollowLibrary
+import com.sigeye.core.FollowRunner
 import com.sigeye.core.IgnoreList
 import com.sigeye.core.Permissions
 import com.sigeye.core.SavedFollow
+import com.sigeye.core.ScanService
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Takeaway
 import com.sigeye.core.TargetDevice
@@ -197,8 +199,14 @@ private fun Live(
     val live = remember { LinkedHashMap<String, LiveAddress>() }
 
     var tuning by remember { mutableStateOf(settings.load()) }
-    var session by remember { mutableStateOf(FollowSession(tuning)) }
-    var state by remember { mutableStateOf(FollowState()) }
+
+    // The session lives in FollowRunner rather than in this composition, because a follow
+    // is half an hour of walking and the phone is in a pocket for most of it. Holding a lit
+    // screen for a mile is conspicuous, costs the battery, and is the opposite of what
+    // anybody demonstrating this would do. The service keeps feeding it while the screen is
+    // away; the screen reads what it says.
+    val state by FollowRunner.state.collectAsStateWithLifecycle()
+    val session: FollowSession get() = FollowRunner.session()
 
     var step by remember { mutableStateOf(Step.LIBRARY) }
     var stepStartedMs by remember { mutableStateOf(0L) }
@@ -250,13 +258,14 @@ private fun Live(
                 return
             }
         tuning = restored.tuning
-        session = restored
+        FollowRunner.adopt(restored)
+        ScanService.start(context, ScanService.Mode.FOLLOW)
         live.clear()
         bars.clear()
         lastWatched = 0
         startedAtMs = restored.state(System.currentTimeMillis()).followStartedAtMs ?: 0L
         theyAreHere = true
-        // The radio was off while the app was away, so none of that counts as silence.
+        // Whatever gap there was while nothing was listening does not count as silence.
         // Without this, coming back to a follow would find every device dropped at once.
         restored.resume(System.currentTimeMillis())
         step = when (restored.phase) {
@@ -271,7 +280,7 @@ private fun Live(
         library.clearInProgress()
         resumable = false
         tuning = settings.load()
-        session = FollowSession(tuning)
+        FollowRunner.begin(tuning)
         live.clear()
         log = emptyList()
         tests.clear()
@@ -283,7 +292,10 @@ private fun Live(
         startedAtMs = 0L
     }
 
-    KeepScreenOn(step != Step.LIBRARY && step != Step.TARGETS)
+    // Only while something on screen is worth looking at. A follow proper runs in the
+    // service now, so the phone can be in a pocket for the walk - which is the difference
+    // between a demonstration and somebody holding a lit screen down a street.
+    KeepScreenOn(step == Step.BASELINE || step == Step.CIRCLE || step == Step.WALK_BY)
 
     BackHandler(enabled = step != Step.LIBRARY) {
         step = if (startedAtMs == 0L) Step.LIBRARY else Step.FOLLOWING
@@ -293,31 +305,26 @@ private fun Live(
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
         onDispose {
-            // Written down on the way out, and the clock stopped. The radio is about to go
-            // quiet because this screen was the only thing holding it open, and a minute of
-            // that would otherwise read as every device in the pool leaving at once.
             val now = System.currentTimeMillis()
-            session.pause(now)
             if (session.state(now).followStartedAtMs != null) {
+                // The service is still listening, so the clock keeps running - only the
+                // screen has gone. Written down anyway, because a killed process would
+                // otherwise take half an hour of walking with it.
                 library.saveInProgress(session.snapshot().toString())
+            } else {
+                // Nothing worth keeping the radio open for.
+                ScanService.stop(context, ScanService.Mode.FOLLOW)
             }
             feedback.release()
             BleScanHub.release(HUB_TAG)
         }
     }
 
+    // The session itself is fed by the service. This keeps the second, parallel record that
+    // re-acquisition needs, because identities want interval and signal history and the
+    // session does not carry either.
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
-            session.observe(
-                address = advert.address,
-                rssi = advert.rssi,
-                atMs = advert.atMs,
-                label = book.nicknameOf(advert.address) ?: advert.name,
-                vendor = advert.vendor,
-                isRandom = advert.isRandomAddress,
-            )
-            // A second, parallel record of the same packets, because re-acquisition needs
-            // identities and identities need interval and signal history.
             val key = advert.address.uppercase(Locale.US)
             val entry = live.getOrPut(key) {
                 LiveAddress(advert.shape(), advert.isRandomAddress, advert.atMs, advert.atMs)
@@ -332,7 +339,7 @@ private fun Live(
 
     // Kept on the session rather than filtered in the screen, so a device you have said is
     // yours never reaches the pool, the radar, the short list or the export.
-    LaunchedEffect(ignored, session) {
+    LaunchedEffect(ignored, state.atMs) {
         session.ignored = ignored
     }
 
@@ -354,7 +361,11 @@ private fun Live(
                 },
             )
 
-            val next = session.state(now)
+            // Ticked here as well as on the service, so the screen is live even in the
+            // moment before the service has attached. Recomputing the state twice is
+            // harmless: it is derived from the session rather than accumulated.
+            FollowRunner.tick(now)
+            val next = FollowRunner.state.value
 
             // One bar a second, of whatever the screen is about at the time.
             bars.add(
@@ -375,6 +386,7 @@ private fun Live(
 
                     true -> {
                         session.startFollowing(now)
+                        ScanService.start(context, ScanService.Mode.FOLLOW)
                         bars.clear()
                         step = Step.FOLLOWING
                     }
@@ -405,7 +417,6 @@ private fun Live(
             }
 
             wasLost = next.phase == FollowPhase.LOST
-            state = next
 
             // Kept up to date rather than only written on the way out, because the way out
             // is not always graceful - a killed process would otherwise take the follow.
@@ -514,6 +525,7 @@ private fun Live(
                 theyAreHere = here
                 if (here) {
                     session.startFollowing(System.currentTimeMillis())
+                    ScanService.start(context, ScanService.Mode.FOLLOW)
                     bars.clear()
                     goTo(Step.FOLLOWING)
                 } else {
@@ -527,6 +539,7 @@ private fun Live(
             onArrived = {
                 theyAreHere = true
                 session.startFollowing(System.currentTimeMillis())
+                ScanService.start(context, ScanService.Mode.FOLLOW)
                 bars.clear()
                 goTo(Step.FOLLOWING)
             },
@@ -568,6 +581,8 @@ private fun Live(
             onFinish = {
                 library.save(state.asSavedFollow(startedAtMs, followName, tests.toList()))
                 library.clearInProgress()
+                ScanService.stop(context, ScanService.Mode.FOLLOW)
+                FollowRunner.end()
                 resumable = false
                 goTo(Step.LIBRARY)
             },
