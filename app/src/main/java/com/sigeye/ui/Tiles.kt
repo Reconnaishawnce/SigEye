@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,9 +39,15 @@ data class Tile(
  * the count and the chart and nothing else. Somebody working out why a reading looks odd
  * wants the diagnostics first. Rather than guess, this lets them move it, and remembers.
  *
- * The arranging controls only exist while arranging. A screen covered in little arrows all
- * the time is a worse screen for the ninety-nine percent of the time nobody is rearranging
- * it, and this app is meant to be pointed at things rather than fiddled with.
+ * The arranging controls only exist while arranging, and the way in is one grey word at
+ * the bottom of the panels. A screen covered in little arrows all the time is a worse
+ * screen for the ninety-nine percent of the time nobody is rearranging it, and a bright
+ * button competing with the measurement is worse still. The control has to be findable,
+ * not prominent, so it sits below the last panel in the same colour as a caption.
+ *
+ * The switch lives here rather than in the caller. Every screen that gained panels also
+ * gained a copy of the same boolean and the same little row to toggle it, which is four
+ * lines to get subtly different on each screen.
  *
  * Hiding is separate from ordering on purpose: putting a panel away should not forget
  * where it was if you bring it back.
@@ -52,9 +57,9 @@ fun TileColumn(
     screen: String,
     tiles: List<Tile>,
     modifier: Modifier = Modifier,
-    arranging: Boolean = false,
     spacing: Int = 16,
 ) {
+    var arranging by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val store = remember { TileStore.get(context) }
     val version by store.version.collectAsStateWithLifecycle()
@@ -119,10 +124,39 @@ fun TileColumn(
             if (isHidden && arranging) Spacer(Modifier.height(8.dp))
         }
 
-        if (arranging) {
-            TextButton(onClick = { store.reset(screen) }) {
-                Text("Back to the original layout")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (arranging) {
+                Text(
+                    "Back to the original layout",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clickable { store.reset(screen) }
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                )
             }
+            Text(
+                if (arranging) "Done" else "Arrange panels",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (arranging) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier
+                    .clickable(
+                        onClickLabel = if (arranging) {
+                            "Finish arranging the panels"
+                        } else {
+                            "Rearrange, hide or show the panels on this screen"
+                        },
+                    ) { arranging = !arranging }
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+            )
         }
     }
 }

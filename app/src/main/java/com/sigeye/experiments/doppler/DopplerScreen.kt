@@ -29,18 +29,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.CsvExport
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
-import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.FitQuality
 import com.sigeye.core.analysis.rf.PathLossFit
 import com.sigeye.core.analysis.rf.PathLossResult
@@ -54,14 +55,15 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RunHistory
+import com.sigeye.ui.Section
 import com.sigeye.ui.Source
 import com.sigeye.ui.SourceOrder
 import com.sigeye.ui.SourcePicker
-import com.sigeye.ui.Section
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "doppler"
 private const val TICK_MS = 500L
@@ -503,6 +505,20 @@ private fun Results(
             )
         }
     }
+
+    Spacer(Modifier.height(12.dp))
+    RunHistory(
+        experiment = Experiments.DOPPLER,
+        figures = listOf(
+            RunFigure("Path loss exponent", fit.exponent, decimals = 2),
+            RunFigure("Reference at 1 m", fit.referenceRssi, "dBm", 1),
+            RunFigure("R squared", fit.rSquared, decimals = 2, higherIsBetter = true),
+            RunFigure("Typical miss", fit.residualDb, "dB", 1, higherIsBetter = false),
+            RunFigure("Distance walked", fit.spanMetres, "m", 1),
+            RunFigure("Readings", fit.samples.toDouble(), decimals = 0),
+        ),
+        note = label,
+    )
 
     Spacer(Modifier.height(12.dp))
     DiagnosticsPanel(

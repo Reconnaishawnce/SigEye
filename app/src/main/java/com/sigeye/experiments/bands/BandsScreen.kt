@@ -33,9 +33,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
+import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.BandPair
 import com.sigeye.core.analysis.rf.DualBand
 import com.sigeye.core.analysis.rf.Penetration
@@ -48,10 +49,11 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Section
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "bands"
 private const val SCAN_INTERVAL_MS = 6_000L
@@ -333,6 +335,26 @@ private fun Live() {
         enabled = pairs.isNotEmpty(),
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Export the pairs") }
+
+    Spacer(Modifier.height(12.dp))
+    RunHistory(
+        experiment = Experiments.BANDS,
+        figures = if (settled.isEmpty()) {
+            emptyList()
+        } else {
+            listOfNotNull(
+                typical?.let { RunFigure("Excess loss on 5 GHz", it, "dB", 1, higherIsBetter = false) },
+                RunFigure("Dual-band pairs", pairs.size.toDouble(), decimals = 0),
+                RunFigure("Settled pairs", settled.size.toDouble(), decimals = 0),
+                RunFigure(
+                    "5 GHz unusable",
+                    penetrations.count { !it.usable5 }.toDouble(),
+                    decimals = 0,
+                    higherIsBetter = false,
+                ),
+            )
+        },
+    )
 
     Spacer(Modifier.height(12.dp))
     DiagnosticsPanel(

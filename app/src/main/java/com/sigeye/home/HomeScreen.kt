@@ -296,10 +296,29 @@ private fun FavoritesSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        // Grey rather than a button. Rearranging is something you do once and then never
+        // again, and a primary-coloured control next to the list you actually came to tap
+        // reads as the more important of the two.
         if (favorites.isNotEmpty() || editing) {
-            TextButton(onClick = onEditToggle) {
-                Text(if (editing) "Done" else "Arrange")
-            }
+            Text(
+                text = if (editing) "Done" else "Arrange",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (editing) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier
+                    .clickable(
+                        onClickLabel = if (editing) {
+                            "Finish arranging your favorites"
+                        } else {
+                            "Reorder or remove your favorites"
+                        },
+                        onClick = onEditToggle,
+                    )
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+            )
         }
     }
     Spacer(Modifier.height(10.dp))

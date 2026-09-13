@@ -26,14 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
@@ -42,9 +42,10 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
+import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.AdvertChannelLoad
 import com.sigeye.core.analysis.rf.ChannelLoad
 import com.sigeye.core.analysis.rf.Occupant
@@ -60,10 +61,11 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Section
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "congestion"
 private const val TICK_MS = 1_000L
@@ -279,6 +281,31 @@ private fun Live() {
         enabled = band24.isNotEmpty(),
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Export the band") }
+
+    Spacer(Modifier.height(14.dp))
+    RunHistory(
+        experiment = Experiments.CONGESTION,
+        figures = if (band24.isEmpty()) {
+            emptyList()
+        } else {
+            val loaded = channels.mapNotNull { load -> load.loadDbm?.let { load to it } }
+            listOfNotNull(
+                RunFigure("Access points on 2.4", band24.size.toDouble(), decimals = 0),
+                loaded.maxByOrNull { it.second }?.let {
+                    RunFigure("Busiest channel", it.first.channel.toDouble(), decimals = 0)
+                },
+                loaded.maxByOrNull { it.second }?.let {
+                    RunFigure("Load there", it.second, "dBm", 1, higherIsBetter = false)
+                },
+                loaded.minByOrNull { it.second }?.let {
+                    RunFigure("Emptiest channel", it.first.channel.toDouble(), decimals = 0)
+                },
+                best?.let {
+                    RunFigure("Best reception here", it.observedPerSecond, "pkt/s", 1, higherIsBetter = true)
+                },
+            )
+        },
+    )
 
     Spacer(Modifier.height(14.dp))
     DiagnosticsPanel(

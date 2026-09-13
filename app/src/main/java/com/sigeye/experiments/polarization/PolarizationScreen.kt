@@ -31,10 +31,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.CsvExport
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
-import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.PolarSweep
 import com.sigeye.core.analysis.rf.Polarization
 import com.sigeye.core.analysis.rf.PolarizationResult
@@ -47,12 +48,13 @@ import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.PolarPlot
+import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Source
 import com.sigeye.ui.SourceOrder
 import com.sigeye.ui.SourcePicker
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "polarization"
 private const val TICK_MS = 300L
@@ -475,6 +477,25 @@ private fun Results(
             }
         }
     }
+
+    Spacer(Modifier.height(12.dp))
+    RunHistory(
+        experiment = Experiments.POLARIZATION,
+        figures = listOfNotNull(
+            polarization.depthDb?.let {
+                RunFigure("Depth of the null", it, "dB", 1, higherIsBetter = true)
+            },
+            polarization.bestRollDegrees?.let {
+                RunFigure("Best roll angle", it.toDouble(), "deg", 0)
+            },
+            polarization.separationDegrees?.let {
+                RunFigure("Separation", it.toDouble(), "deg", 0)
+            },
+            RunFigure("Coverage", polarization.coverage * 100.0, "%", 0, higherIsBetter = true),
+            RunFigure("Packets recorded", recorded.toDouble(), decimals = 0),
+        ),
+        note = label,
+    )
 
     Spacer(Modifier.height(12.dp))
     DiagnosticsPanel(

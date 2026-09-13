@@ -27,11 +27,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.AbComparison
 import com.sigeye.core.analysis.rf.AbResult
 import com.sigeye.core.analysis.rf.Significance
@@ -46,11 +47,12 @@ import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
+import com.sigeye.ui.RunHistory
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "microwave"
 
@@ -254,6 +256,19 @@ private fun Live() {
     if (result.baseline.samples >= 3 && result.test.samples >= 3) {
         Spacer(Modifier.height(16.dp))
         Verdict(result)
+
+        Spacer(Modifier.height(16.dp))
+        RunHistory(
+            experiment = Experiments.MICROWAVE,
+            figures = listOfNotNull(
+                RunFigure("Baseline", result.baseline.mean, "dBm", 1),
+                RunFigure("With the oven on", result.test.mean, "dBm", 1),
+                RunFigure("Change", result.delta, "dB", 1, higherIsBetter = true),
+                result.tStatistic?.let { RunFigure("t statistic", it, decimals = 2) },
+                RunFigure("Baseline packets", result.baseline.samples.toDouble(), decimals = 0),
+                RunFigure("Test packets", result.test.samples.toDouble(), decimals = 0),
+            ),
+        )
     }
 
     if (phase == AbComparison.Phase.IDLE && result.baseline.samples > 0) {

@@ -21,7 +21,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,7 +97,6 @@ private fun Monitor() {
     val context = LocalContext.current
     val state by PulseState.state.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
-    var arranging by remember { mutableStateOf(false) }
 
     state.error?.let { message ->
         Card(
@@ -265,19 +263,8 @@ private fun Monitor() {
     // Arranged how you want them, and remembered. The count and the chart are one tile
     // rather than two: they are a single picture and separating them would let somebody
     // put the chart somewhere the number is not.
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = { arranging = !arranging }) {
-            Text(if (arranging) "Done" else "Arrange")
-        }
-    }
-
     TileColumn(
         screen = Experiments.TRAIN_SPOTTER,
-        arranging = arranging,
         tiles = tiles {
             tile("count", "Count and chart", countAndChart)
             tile("passes", "Passes", passesCard)
