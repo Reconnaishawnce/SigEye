@@ -39,7 +39,9 @@ import com.sigeye.core.SettingsStore
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.Density
 import com.sigeye.core.analysis.Environment
+import com.sigeye.core.SweepExport
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.ble.CaptureStore
 import com.sigeye.ui.BackupWarning
 import com.sigeye.ui.Field
 import com.sigeye.ui.Section
@@ -176,6 +178,9 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 Text("Read the whole thing again")
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+        CaptureSection()
 
         Spacer(Modifier.height(10.dp))
         Section(
@@ -345,5 +350,138 @@ private fun DensitySection(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+// --------------------------------------------------------------------------- capture
+
+/**
+ * Recording the raw radio, and playing one back.
+ *
+ * The most useful thing in this screen and the least glamorous. Every experiment reads one
+ * flow of advertisements and none of them cares where it came from, so a capture replayed
+ * at a desk drives the whole app exactly as the room did - which turns "it looked wrong on
+ * the train" from a thing nobody can chase into a file somebody can open.
+ */
+@Composable
+private fun CaptureSection() {
+    val context = LocalContext.current
+    val captures = remember { CaptureStore.get(context) }
+    val recording by captures.recording.collectAsStateWithLifecycle()
+    val packets by captures.packets.collectAsStateWithLifecycle()
+
+    var saved by remember { mutableStateOf(captures.list()) }
+    var replaying by remember { mutableStateOf<String?>(null) }
+
+    Section(
+        title = "Capture and replay",
+        summary = if (recording) {
+            "Recording - $packets packets so far."
+        } else {
+            "${saved.size} saved capture${if (saved.size == 1) "" else "s"}."
+        },
+    ) {
+        Text(
+            "Records every advertisement to a plain text file, and plays one back later as " +
+                "though the radio were producing it. Every experiment reads the same flow " +
+                "and none of them can tell the difference, so something odd seen on a train " +
+                "can be looked at again at a desk - or sent to somebody else to look at.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Recording is a passenger: it never turns the radio on by itself. Start it " +
+                "here, then open an experiment, or it will record nothing at all.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        if (recording) {
+            Button(
+                onClick = {
+                    captures.stop()
+                    BleScanHub.record(null)
+                    saved = captures.list()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Stop recording ($packets packets)") }
+        } else {
+            Button(
+                onClick = {
+                    BleScanHub.init(context)
+                    if (captures.start()) BleScanHub.record { captures.write(it) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Start recording") }
+        }
+
+        replaying?.let { name ->
+            Spacer(Modifier.height(8.dp))
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        "Replaying $name",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        "The live radio is muted while this runs, so what every experiment " +
+                            "sees is the recording and nothing else. Open one now.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = {
+                            BleScanHub.stopReplay()
+                            replaying = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Stop replaying") }
+                }
+            }
+        }
+
+        if (saved.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            saved.forEach { capture ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(capture.name, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            capture.describe(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(
+                        enabled = !recording && replaying == null && capture.packets > 0,
+                        onClick = {
+                            BleScanHub.init(context)
+                            val adverts = captures.read(capture.file, System.currentTimeMillis())
+                            replaying = capture.name
+                            BleScanHub.startReplay(adverts) { replaying = null }
+                        },
+                    ) { Text("Play") }
+                    TextButton(
+                        enabled = replaying == null,
+                        onClick = {
+                            SweepExport.share(context, capture.file)
+                        },
+                    ) { Text("Send") }
+                }
+            }
+        }
     }
 }

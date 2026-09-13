@@ -173,6 +173,60 @@ object BleScanHub {
     @Synchronized
     fun isHeldBy(tag: String): Boolean = claims.contains(tag)
 
+    // ------------------------------------------------------------- capture and replay
+
+    @Volatile
+    private var replaying = false
+
+    private var replayJob: Job? = null
+
+    /** Set while a capture is being recorded; called for every live advertisement. */
+    @Volatile
+    private var recorder: ((Advert) -> Unit)? = null
+
+    val isReplaying: Boolean get() = replaying
+
+    fun record(sink: ((Advert) -> Unit)?) {
+        recorder = sink
+    }
+
+    /**
+     * Plays a recorded capture onto the advertisement flow in its original timing.
+     *
+     * Every experiment reads this flow and none of them needs to know where it came from,
+     * which is the whole point: a bug that happens on a train can be reproduced at a desk
+     * without a single screen being aware it is looking at a recording.
+     *
+     * The timing is preserved rather than replayed as fast as possible, because half the
+     * app measures gaps between packets. An advertising interval is a fingerprint, a burst
+     * is a train, and a capture flushed through in one go would say every device in the
+     * room advertises infinitely fast.
+     */
+    fun startReplay(adverts: List<Advert>, onFinished: () -> Unit = {}) {
+        stopReplay()
+        if (adverts.isEmpty()) return
+        replaying = true
+        val startedAt = System.currentTimeMillis()
+        val firstAt = adverts.first().atMs
+        replayJob = scope.launch {
+            adverts.forEach { advert ->
+                val due = startedAt + (advert.atMs - firstAt)
+                val wait = due - System.currentTimeMillis()
+                if (wait > 0) delay(wait)
+                if (!replaying) return@launch
+                _adverts.tryEmit(advert.copy(atMs = System.currentTimeMillis()))
+            }
+            replaying = false
+            onFinished()
+        }
+    }
+
+    fun stopReplay() {
+        replaying = false
+        replayJob?.cancel()
+        replayJob = null
+    }
+
     // --------------------------------------------------------------- scanning
 
     private fun adapter(): BluetoothAdapter? =
@@ -180,6 +234,10 @@ object BleScanHub {
 
     private val callback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            // A replay must be the only thing on the flow. Letting the live radio through
+            // at the same time would mix a recorded room with the one you are sitting in,
+            // and every reading afterwards would be of neither.
+            if (replaying) return
             val scanResult = result ?: return
             val address = scanResult.device?.address ?: return
             if (ignoreList.isIgnored(address)) return
@@ -190,6 +248,7 @@ object BleScanHub {
 
             val advert = Advert.from(scanResult, now) ?: return
             _adverts.tryEmit(advert)
+            recorder?.invoke(advert)
         }
 
         override fun onBatchScanResults(results: MutableList<ScanResult>?) {
