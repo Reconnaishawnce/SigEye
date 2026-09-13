@@ -37,6 +37,22 @@ object Recordings {
     val place = PlaceProfile()
     val convoy = ConvoyTracker()
 
+    /**
+     * A whole room's address privacy, measured over however long you leave it.
+     *
+     * Out here with the other long recordings because its best output needs half an hour of
+     * a busy carriage, and a measurement that lives in a composition is a measurement that
+     * ends when the screen locks. This is also the instrument the rotation paper depends
+     * on: ninety minutes of ten phones is the experiment, and it cannot be ninety minutes
+     * of holding a lit screen.
+     */
+    var rotationLab = RotationLab()
+        private set
+
+    /** When the rotation lab started, so it can say how long it has been listening. */
+    var rotationLabStartedAtMs: Long = 0L
+        private set
+
     private var book: DeviceBook? = null
 
     /** The nickname book, for whoever else on the service tick needs one. */
@@ -124,6 +140,18 @@ object Recordings {
             )
         }
 
+        if (modes.contains(ScanService.Mode.ROTATION_LAB)) {
+            rotationLab.observe(
+                address = advert.address,
+                rssi = advert.rssi,
+                atMs = advert.atMs,
+                shape = advert.shape(),
+                isRandom = advert.isRandomAddress,
+                payloadVendor = advert.companyId?.let { Vendors.byCompanyId(it) },
+                ouiVendor = Vendors.byAddress(advert.address),
+            )
+        }
+
         if (modes.contains(ScanService.Mode.CONVOY)) {
             convoy.observe(
                 address = advert.address,
@@ -134,6 +162,18 @@ object Recordings {
                 isRandom = advert.isRandomAddress,
             )
         }
+    }
+
+    /**
+     * Starts a fresh measurement of the room.
+     *
+     * A new instance rather than a reset, because the lab has a good deal of state - every
+     * address, every gap between changes, every shape - and "clear all of it" is the same
+     * thing as a new one with one more place to forget a field.
+     */
+    fun startRotationLab(nowMs: Long) {
+        rotationLab = RotationLab()
+        rotationLabStartedAtMs = nowMs
     }
 
     /** One line per running recording, for the ongoing notification. */
@@ -150,6 +190,9 @@ object Recordings {
         }
         if (modes.contains(ScanService.Mode.FOLLOW)) {
             add(FollowRunner.summary())
+        }
+        if (modes.contains(ScanService.Mode.ROTATION_LAB)) {
+            add("Rotation Lab: ${rotationLab.addressCount} addresses")
         }
         if (modes.contains(ScanService.Mode.PLACE)) {
             add("Place Profiler: ${place.deviceCount} devices")

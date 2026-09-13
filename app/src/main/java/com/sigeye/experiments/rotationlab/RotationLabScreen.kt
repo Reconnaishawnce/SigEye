@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
+import com.sigeye.core.Recordings
+import com.sigeye.core.ScanService
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Takeaway
 import com.sigeye.core.Vendors
@@ -128,7 +130,9 @@ fun RotationLabScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 private fun Live() {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
-    val lab = remember { RotationLab() }
+    val activeModes by ScanService.activeModes.collectAsStateWithLifecycle()
+    val recording = activeModes.contains(ScanService.Mode.ROTATION_LAB)
+    val lab = Recordings.rotationLab
 
     var view by remember { mutableStateOf(View.COHORTS) }
     var cohorts by remember { mutableStateOf<List<Cohort>>(emptyList()) }
@@ -141,7 +145,9 @@ private fun Live() {
     var elapsed by remember { mutableStateOf(0L) }
     val compared = remember { mutableStateListOf<Int>() }
 
-    KeepScreenOn(true)
+    // Only while it is not recording properly. Once the service has it, the whole point is
+    // that the phone can be in a pocket on a train for half an hour.
+    KeepScreenOn(!recording)
 
     BackHandler(enabled = view != View.COHORTS) { view = View.COHORTS }
 
@@ -151,7 +157,11 @@ private fun Live() {
         onDispose { BleScanHub.release(HUB_TAG) }
     }
 
-    LaunchedEffect(Unit) {
+    // The lab is fed by the service while it is recording, and by this screen while it is
+    // not - so opening it without starting a recording still shows the room, which is what
+    // somebody glancing at it expects, and starting one does not reset anything.
+    LaunchedEffect(recording) {
+        if (recording) return@LaunchedEffect
         BleScanHub.adverts.collect { advert ->
             lab.observe(
                 address = advert.address,
@@ -165,7 +175,7 @@ private fun Live() {
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(lab) {
         val startedAt = System.currentTimeMillis()
         while (true) {
             delay(TICK_MS)
@@ -176,10 +186,57 @@ private fun Live() {
             room = lab.roomRhythm(tracks)
             addresses = lab.addressCount
             audible = lab.audible(now)
-            elapsed = now - startedAt
+            elapsed = now - (Recordings.rotationLabStartedAtMs.takeIf { it > 0L } ?: startedAt)
         }
     }
 
+    // The control that makes this usable for the thing it is best at: half an hour of a
+    // busy carriage, which nobody is going to hold a screen open for.
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (recording) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                if (recording) "Recording, screen or no screen" else "Leave it running",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (recording) {
+                    "Put the phone in a pocket. The count carries on in the notification, " +
+                        "and this screen picks up whatever it has whenever you open it."
+                } else {
+                    "The interesting answer here needs half an hour of a busy room, because " +
+                        "a fifteen minute timer has to come round at least once for anything " +
+                        "to be measured rather than assumed. Start a recording and put the " +
+                        "phone away."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(10.dp))
+            if (recording) {
+                OutlinedButton(
+                    onClick = { ScanService.stop(context, ScanService.Mode.ROTATION_LAB) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Stop recording, keep what it found") }
+            } else {
+                Button(
+                    onClick = { ScanService.start(context, ScanService.Mode.ROTATION_LAB) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Start recording") }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(14.dp))
     Headline(cohorts, tracks, room, elapsed)
 
     TakeawayButton(takeawayFrom(cohorts, room, elapsed))

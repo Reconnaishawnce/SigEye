@@ -241,7 +241,7 @@ with the labels beyond writing them to CSV. The app could fit the threshold to t
 after a few days and tell the user what it learned. The data is already being collected for
 a step that was never built.
 
-### 25. Rotation Lab cannot be left running
+### 25. Rotation Lab cannot be left running — *done*
 
 Its most interesting output needs half an hour of a busy room, and it only runs while its
 screen is open with `KeepScreenOn`. It should be a `ScanService.Mode` like Forensics and
@@ -314,7 +314,7 @@ exactly where it was.
 | 22. Faraday's noise floor | **Open.** Still a straight before-and-after with no idea what the room's own variance is. `FadingAnalysis` computes exactly the number needed and is not called. |
 | 23. Microwave's control band | **Done in turn 13.** Two radios pinned by BSSID and followed through both phases. 2.4 falling alone is the finding; both falling is a failed run and it says so. The unearned "5 GHz would have been untouched" line is gone. |
 | 24. Train Spotter's threshold | **Open.** The ground-truth button still only writes labels to CSV. Days of labelled data are being collected for a step nobody built. |
-| 25. Rotation Lab left running | **Open.** Not a `ScanService.Mode`, so its best output - half an hour of a busy carriage - still needs the screen awake and in your hand. |
+| 25. Rotation Lab left running | **Done.** A `ScanService.Mode` now, sharing the pattern Follow Me uses: the lab lives in `Recordings`, the service feeds and ticks it, and the screen reads it. The phone can be in a pocket on a train for half an hour, which is the measurement the paper needs. |
 | 26. Speed Estimator's cross-check | **Open.** No GPS comparison. |
 | 27. Bluetooth Explorer's rule about writes | **Done in turn 13.** On the screen, in the KDoc, and enforced by `GattWriteRuleTest`, which reads the source and fails the build on a mutating call. |
 | 28. Wall Penetration's floor plan | **Half.** Saved runs now carry a name you choose and the excess loss, which is most of the survey. The in-screen spot list still says "Spot 1, Spot 2" and is not ordered by loss. |

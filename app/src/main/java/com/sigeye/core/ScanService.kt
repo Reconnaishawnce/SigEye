@@ -56,6 +56,7 @@ class ScanService : Service() {
         PLACE("Place Profiler"),
         CONVOY("Journey"),
         FOLLOW("Follow Me"),
+        ROTATION_LAB("Rotation Lab"),
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -159,6 +160,8 @@ class ScanService : Service() {
             // Follow Me is the same: the screen owns the baseline, the pool and the probes,
             // and this only keeps the radio open and the session fed while the screen is
             // away - which for a follow is most of it.
+            Mode.ROTATION_LAB -> Recordings.startRotationLab(now)
+
             Mode.FORENSICS, Mode.PLACE, Mode.CONVOY, Mode.FOLLOW -> Unit
         }
 
@@ -185,7 +188,9 @@ class ScanService : Service() {
             // Place, Convoy and Follow keep whatever they have: stopping the service should
             // not throw away four hours of profile or half an hour of walking, and the
             // screen decides what to do with it.
-            Mode.PLACE, Mode.CONVOY, Mode.FOLLOW -> Unit
+            // The lab keeps what it has for the same reason: half an hour of a carriage is
+            // not something to throw away because somebody stopped the scan.
+            Mode.PLACE, Mode.CONVOY, Mode.FOLLOW, Mode.ROTATION_LAB -> Unit
         }
         publishModes()
         if (modes.isEmpty()) {
@@ -240,6 +245,7 @@ class ScanService : Service() {
                     trainSpotter?.tick(now)
                     trainSpotter?.publish(BleScanHub.health.value)
                     if (modes.contains(Mode.FOLLOW)) FollowRunner.tick(now)
+                    if (modes.contains(Mode.ROTATION_LAB)) Recordings.rotationLab.tick(now)
                     if (now - lastPrune > 10 * 60_000L) {
                         watch?.prune(now)
                         lastPrune = now
