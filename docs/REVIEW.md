@@ -25,7 +25,7 @@ This is the single biggest risk in the project, and the only one I cannot close.
 half-hour with the phone in a busy room would close most of it. **Polarization first** —
 its geometry got shipped backwards once already and was caught by reading, not by testing.
 
-### 2. `allowBackup="true"` sends the device book to Google
+### 2. `allowBackup="true"` sends the device book to Google — *done*
 
 The manifest allows backup and there is no `backup_rules.xml` or
 `data_extraction_rules.xml`. So every `SharedPreferences` file — including `devicebook`,
@@ -39,7 +39,7 @@ accounts, no network*. That is currently not true. Either set
 observations about other people and keep only the harmless ones (favorites, first-run).
 The second is better behavior and takes ten lines.
 
-### 3. Rotating the phone destroys an in-progress measurement
+### 3. Rotating the phone destroys an in-progress measurement — *done*
 
 No screen uses `rememberSaveable`, the activity declares no `configChanges`, and the
 manifest does not lock orientation. So turning the phone sideways during a Body Absorption
@@ -54,7 +54,7 @@ survives configuration change. The cheap fix, which is defensible for a measurem
 is `android:configChanges="orientation|screenSize|keyboardHidden"` on the activity so
 Android stops recreating it. Do the cheap one now and the proper one per screen over time.
 
-### 4. The device picker is copy-pasted into seven screens
+### 4. The device picker is copy-pasted into seven screens — *done*
 
 Absorption, Doppler, Explorer, Fading, Faraday, Motion and Polarization each declare their
 own `data class Candidate`, their own advert-collection loop, their own freshness filter
@@ -68,7 +68,7 @@ matters more than the strength" explanation. It would delete something like four
 lines and make every picker behave the same way, which is what the user asked for about the
 radar and is just as true here.
 
-### 5. Twenty `BleScanHub.acquire` sites and no leak guard
+### 5. Twenty `BleScanHub.acquire` sites and no leak guard — *done*
 
 Every screen acquires and releases the radio by a string tag in a `DisposableEffect`. That
 is the right shape, but nothing detects the failure mode: a tag acquired and never
@@ -79,7 +79,7 @@ Add a debug-only assertion that logs when a tag is acquired twice without a rele
 put the live claim tags into the home screen's radio card so a leak is visible rather than
 silent. `BleScanHub` already tracks `subscribers` — it just does not say who.
 
-### 6. Twelve screens have no diagnostics panel
+### 6. Twelve screens have no diagnostics panel — *mostly, 17 of 30 screens have one*
 
 The house rule is that an empty screen with no explanation is a bug. Beacons, Cells,
 Fading, Faraday, Inspector, Locate, Microwave, Motion, Population, Radar, Train Spotter and
@@ -139,7 +139,7 @@ experiment, grants nothing, and asserts the permission gate renders would catch 
 class of mistake — an unregistered id, a crash in a preview path, a stage machine that
 cannot reach its own result screen — that currently only a human with a phone can catch.
 
-### 12. No way to replay a capture
+### 12. No way to replay a capture — *done*
 
 Every experiment consumes `BleScanHub.adverts` live. There is no way to record a raw
 advert stream and feed it back in, which means a bug that happens on a train can only be
@@ -159,7 +159,7 @@ mechanism and use blurbs throughout.
 
 ## Reach and usability
 
-### 14. The app is not accessible
+### 14. The app is not accessible — *done*
 
 One `onClickLabel` in the entire codebase, on the favorites glyphs I added an hour ago.
 Sixteen `Canvas` charts with no semantics at all: to a screen reader the polar plot, the
@@ -188,20 +188,20 @@ instead*. "Only 12% coverage" should be followed by "keep turning"; "5 GHz too w
 "move closer or accept 2.4"; "no candidate matched" by "stand still for a minute". Some
 screens do this well — Doppler and Wall Penetration — and the rest could copy them.
 
-### 18. There is no way to compare two runs of the same experiment
+### 18. There is no way to compare two runs of the same experiment — *done for six of them*
 
 Forensics has history and comparison. Wall Penetration has saved spots. Everything else
 throws the previous run away. The generic version — save a run, name it, list past runs,
 diff two — would turn eight experiments from a live readout into a record, and it is one
 store plus one screen.
 
-### 19. No home-screen search
+### 19. No home-screen search — *done*
 
 Twenty-eight experiments in five categories plus a favorites list is now enough that
 finding "the one about the microwave" means scrolling. A filter field at the top matching
 title, blurb and `teaches` would cost twenty lines.
 
-### 20. The first-run experience still starts with permissions
+### 20. The first-run experience still starts with permissions — *done*
 
 The welcome card is good, but the first thing a new user meets after it is a permission
 wall on whichever experiment they tap. A "run this one now" button on the welcome card that
@@ -298,3 +298,84 @@ existing `CsvExport` plumbing is most of it.
    day and they touch nineteen screens between them.
 4. Item 12 — record-and-replay, because it makes everything after it cheaper to get right.
 5. The rest as appetite allows; items 21 to 28 are each a satisfying evening.
+
+---
+
+## Re-review, after turns 8 to 12
+
+Checked against the code rather than against memory. Items 21 to 30 were the per-experiment
+and engineering half of the list, and almost none of them have been touched - the work since
+went into the shared machinery instead, which was the right order but leaves this half
+exactly where it was.
+
+| # | Where it stands |
+|---|---|
+| 21. Crowd Counter's people factor | **Open.** `Environment.devicesPerPerson` is still a constant per environment, 1.5 to 2.5, with no way to correct it from a headcount somebody actually took. |
+| 22. Faraday's noise floor | **Open.** Still a straight before-and-after with no idea what the room's own variance is. `FadingAnalysis` computes exactly the number needed and is not called. |
+| 23. Microwave's control band | **Open**, and worse than open: the verdict text says a 5 GHz link would be fine, which the experiment has not measured and cannot know. Either measure it or stop saying it. |
+| 24. Train Spotter's threshold | **Open.** The ground-truth button still only writes labels to CSV. Days of labelled data are being collected for a step nobody built. |
+| 25. Rotation Lab left running | **Open.** Not a `ScanService.Mode`, so its best output - half an hour of a busy carriage - still needs the screen awake and in your hand. |
+| 26. Speed Estimator's cross-check | **Open.** No GPS comparison. |
+| 27. Bluetooth Explorer's rule about writes | **Open**, and it is twenty minutes of work. Nothing in the file or on the screen says it never writes and never pairs. |
+| 28. Wall Penetration's floor plan | **Half.** Saved runs now carry a name you choose and the excess loss, which is most of the survey. The in-screen spot list still says "Spot 1, Spot 2" and is not ordered by loss. |
+| 29. The shipped artifact | **Open.** `isMinifyEnabled = false` and CI still ships `app-debug.apk`. Fine as a decision, but the release block is dead code that reads as if it were used. |
+| 30. Crashes in the field | **Open.** No `Thread.setDefaultUncaughtExceptionHandler`. A crash on somebody else's phone is still invisible forever. |
+
+The honest summary: the shared work is largely done and the per-experiment work is largely
+not. Item 27 and item 23 are the two that bother me, because one is a safety statement that
+costs nothing and the other is the app claiming something it did not measure.
+
+---
+
+## Six more, about being easy to use and worth filming
+
+The app is now for two audiences: somebody trying an experiment, and somebody recording a
+demonstration to show other people how exposed they are. These serve both.
+
+### 31. A tutorial that runs on a recording rather than on the room
+
+Every experiment needs a room with something in it, and a first try in an empty flat at
+eleven at night shows nothing and teaches nothing. The replay machinery already exists.
+Bundle one ninety-second capture with the app, and let the first run of any experiment
+offer "watch this work on a recording first". No permissions, no waiting, no luck involved,
+and the result is real data rather than a mockup. It is also the only way a demo can be
+rehearsed before it is filmed.
+
+### 32. A presentation mode, because screen recordings are the deliverable
+
+People will record their screen. What the app should provide is a frame worth recording: a
+full-bleed result card with the headline number in enormous type, the denominator under it,
+no navigation, no diagnostics, no permissions banner. One tap from any finished experiment.
+Right now the most striking result in the app - a room narrowed to three devices - is a
+paragraph in the middle of a scrolling page.
+
+### 33. Animate the number when the number is the finding
+
+`CountUp` exists and is used on exactly one screen. The survivor count in Follow Me going
+from two hundred and fourteen to three is the most watchable thing this app does and it
+currently teleports between frames, which reads as a glitch rather than as an elimination.
+Animate every count that is a finding, and let eliminated rows fall out of the list rather
+than vanish between recompositions.
+
+### 34. One true sentence at the top of every screen
+
+Review item 16, still open and now across thirty screens. Every screen needs a line that is
+true before any measurement exists - "this measures how much of 2.4 GHz your building is
+eating" - above the fold, before the long-form explanation. Somebody standing in a corridor
+reads the heading, the number, and nothing else.
+
+### 35. Say what to do when a reading is bad, everywhere
+
+Review item 17, still open. Follow Me's guided flow now proves the pattern: it says "the
+target probably changed address partway through, walk another leg" instead of showing an
+empty list. One shared component that turns a verdict into a next action, and every screen
+with a verdict gets one.
+
+### 36. Build the caveat into the share, not next to it
+
+A screenshot of "3 devices still with you" with the denominator cropped off is exactly the
+overclaim this app's whole tone is written to avoid, and cropping is what happens to
+screenshots. Anything shareable should carry its denominator and its one-line limit baked
+into the image - "3 of 214, after two legs and 1.4 km" - so the honest version is the one
+that travels. This matters more than the other five, because the share is the part other
+people see.
