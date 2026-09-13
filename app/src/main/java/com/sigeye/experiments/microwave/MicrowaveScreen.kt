@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -398,7 +400,23 @@ private fun RateTrace(
     testColour: Color,
     background: Color,
 ) {
-    Canvas(Modifier.fillMaxWidth().height(120.dp)) {
+    val spoken = buildString {
+        append("Packet rate over time. ")
+        if (baseline.isEmpty()) {
+            append("No baseline yet.")
+        } else {
+            append("Baseline averaged ${"%.1f".format(java.util.Locale.US, baseline.average())} per second")
+            if (test.isEmpty()) {
+                append(", test not started.")
+            } else {
+                append(", test ${"%.1f".format(java.util.Locale.US, test.average())} per second.")
+            }
+        }
+    }
+
+    Canvas(
+        Modifier.fillMaxWidth().height(120.dp).semantics { contentDescription = spoken },
+    ) {
         drawRect(background)
         val all = baseline + test
         if (all.size < 2) return@Canvas

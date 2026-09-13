@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
@@ -56,7 +58,16 @@ fun CountdownRing(
     val filled = MaterialTheme.colorScheme.primary
     val done = fraction >= 1f
 
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    val spoken = if (done) {
+        label?.let { "$it, finished." } ?: "Finished."
+    } else {
+        label?.let { "$it, $remaining seconds left." } ?: "$remaining seconds left."
+    }
+
+    Column(
+        modifier.semantics { contentDescription = spoken },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box(
             Modifier.size(RING_SIZE.dp).aspectRatio(1f),
             contentAlignment = Alignment.Center,
@@ -139,7 +150,9 @@ fun CountdownBar(
     val track = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
     val filled = MaterialTheme.colorScheme.primary
 
-    Column(modifier) {
+    val spoken = label?.let { "$it, $remaining seconds left." } ?: "$remaining seconds left."
+
+    Column(modifier.semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxWidth().height(10.dp)) {
             drawRect(color = track, size = Size(size.width, size.height))
             drawRect(color = filled, size = Size(size.width * animated, size.height))

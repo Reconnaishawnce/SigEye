@@ -31,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
@@ -519,7 +521,14 @@ private fun Histogram(room: RoomRhythm) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(4.dp))
-    Box(Modifier.fillMaxWidth().height(90.dp)) {
+    val spoken = buildString {
+        append("Histogram of ${room.periodsMs.size} gaps between address changes, ")
+        append("across ${room.buckets.size} buckets. ")
+        room.medianPeriodMs?.let { append("Median gap ${it / 1000L} seconds. ") }
+        append("${room.tracksWithPhase} of ${room.tracksMeasured} devices have a usable phase.")
+    }
+
+    Box(Modifier.fillMaxWidth().height(90.dp).semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxSize()) {
             val width = size.width / room.buckets.size
             room.buckets.forEachIndexed { index, bucket ->

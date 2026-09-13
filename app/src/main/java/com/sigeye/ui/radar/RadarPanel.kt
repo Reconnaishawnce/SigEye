@@ -21,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,7 +73,31 @@ fun RadarPanel(
     val widestSpan = -(WIDEST_OUTER_DBM - INNER_DBM)
     val blipScale = (widestSpan / span).coerceIn(1f, 2.6f)
 
-    Column(modifier.fillMaxWidth()) {
+    // The radar, said out loud. Angle carries no information - one antenna cannot measure a
+    // bearing - so the description is about range and count, which is all the picture
+    // actually encodes.
+    val spoken = buildString {
+        if (targets.isEmpty()) {
+            append("Radar, nothing in range.")
+        } else {
+            val nearest = targets.maxByOrNull { it.smoothedRssi }
+            append("Radar with ${targets.size} device")
+            if (targets.size != 1) append("s")
+            append(" in range. ")
+            nearest?.let {
+                append("Nearest is ${it.label} at ${it.smoothedRssi.roundToInt()} dBm. ")
+            }
+            val watched = targets.count { it.watched }
+            if (watched > 0) append("$watched on your watchlist. ")
+            selected?.let { address ->
+                targets.firstOrNull { it.address == address }?.let {
+                    append("${it.label} is selected.")
+                }
+            }
+        }
+    }
+
+    Column(modifier.fillMaxWidth().semantics { contentDescription = spoken }) {
         RadarScene(
             targets = targets,
             outerDbm = outerDbm,

@@ -20,7 +20,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.sigeye.experiments.trainspotter.Bin
 import kotlin.math.max
 
@@ -34,6 +37,26 @@ fun Sparkline(
     baseline: Double,
     modifier: Modifier = Modifier,
 ) {
+    // The shape of the last half hour, said out loud: how many bursts, when the last one
+    // was, and what counts as normal here.
+    val spoken = buildString {
+        val bursts = bins.count { it.spike }
+        if (bins.isEmpty()) {
+            append("Activity chart, nothing recorded yet.")
+        } else {
+            append("Activity chart over the last ${bins.size} bins. ")
+            append(
+                when (bursts) {
+                    0 -> "No bursts."
+                    1 -> "One burst."
+                    else -> "$bursts bursts."
+                },
+            )
+            append(" Usual rate ${baseline.roundToInt()} new devices per bin.")
+            append(" Most recent ${bins.last().newCount}.")
+        }
+    }
+
     val line = MaterialTheme.colorScheme.primary
     val fillTop = line.copy(alpha = 0.35f)
     val fillBottom = line.copy(alpha = 0.02f)
@@ -46,7 +69,8 @@ fun Sparkline(
         modifier = modifier
             .fillMaxWidth()
             .height(190.dp)
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(RoundedCornerShape(16.dp))
+            .semantics { contentDescription = spoken },
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawRect(surface)

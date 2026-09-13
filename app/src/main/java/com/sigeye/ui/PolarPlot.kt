@@ -19,11 +19,14 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
 import com.sigeye.core.analysis.rf.Sector
 import com.sigeye.core.analysis.rf.SweepResult
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -65,7 +68,29 @@ fun PolarPlot(
     val needle = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
     val measurer = rememberTextMeasurer()
 
-    Box(modifier.fillMaxWidth().aspectRatio(1f)) {
+    // What the plot says, for anybody who cannot see it. The peak, the notch, the depth
+    // between them: the same three facts the caption underneath carries.
+    val spoken = buildString {
+        val peak = result.peakBearingDegrees
+        val notch = result.notchBearingDegrees
+        val depth = result.frontToBackDb
+        if (peak == null || notch == null || depth == null) {
+            append("Polar plot, not enough of the circle covered to read yet. ")
+            append("${(result.coverage * 100).roundToInt()} percent covered.")
+        } else {
+            append("Polar plot. Strongest at ${peak.roundToInt()} degrees, ")
+            append("weakest at ${notch.roundToInt()}, ")
+            append("${depth.roundToInt()} decibels between them. ")
+            append("${(result.coverage * 100).roundToInt()} percent of the circle covered.")
+        }
+    }
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .semantics { contentDescription = spoken },
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val maxRadius = size.minDimension / 2f * 0.78f

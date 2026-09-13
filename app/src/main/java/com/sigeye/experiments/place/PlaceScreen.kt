@@ -28,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
@@ -326,7 +328,14 @@ private fun ActivityChart(report: PlaceReport) {
     val churnColour = MaterialTheme.colorScheme.tertiary
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
 
-    Box(Modifier.fillMaxWidth().height(160.dp)) {
+    val spoken = buildString {
+        append("Devices per slice across ${report.buckets.size} slices. ")
+        report.busiest?.let { append("Busiest slice held ${it.devices} devices. ") }
+        report.quietest?.let { append("Quietest held ${it.devices}. ") }
+        report.mostChurn?.let { append("Most turnover was ${it.churn} in one slice.") }
+    }
+
+    Box(Modifier.fillMaxWidth().height(160.dp).semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxSize()) {
             val buckets = report.buckets
             if (buckets.isEmpty()) return@Canvas

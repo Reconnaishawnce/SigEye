@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -560,7 +562,13 @@ private fun FitChart(walk: List<WalkSample>, fit: PathLossResult) {
     val line = MaterialTheme.colorScheme.error
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
 
-    Box(Modifier.fillMaxWidth().height(180.dp)) {
+    val spoken = "Signal against distance on a log axis, ${fit.samples} readings over " +
+        "${"%.1f".format(java.util.Locale.US, fit.spanMetres)} metres. " +
+        "Fitted path loss exponent ${"%.2f".format(java.util.Locale.US, fit.exponent)}, " +
+        "R squared ${"%.2f".format(java.util.Locale.US, fit.rSquared)}, " +
+        "typical miss ${"%.1f".format(java.util.Locale.US, fit.residualDb)} dB."
+
+    Box(Modifier.fillMaxWidth().height(180.dp).semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxSize()) {
             val usable = walk.filter { it.meters >= PathLossFit.NEAR_FIELD_METRES }
             if (usable.size < 2) return@Canvas

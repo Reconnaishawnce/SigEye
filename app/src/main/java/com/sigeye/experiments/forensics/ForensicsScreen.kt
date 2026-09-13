@@ -33,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
@@ -802,7 +804,11 @@ private fun Timeline(track: Track) {
     val present = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
     val line = MaterialTheme.colorScheme.primary
 
-    Box(Modifier.fillMaxWidth().height(34.dp)) {
+    val audibleFor = ((track.exitFraction - track.entryFraction) * 100).toInt()
+    val spoken = "${track.label}, audible for $audibleFor percent of the recording, " +
+        "${track.packets} packets, ${track.floorRssi} to ${track.peakRssi} dBm."
+
+    Box(Modifier.fillMaxWidth().height(34.dp).semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxSize()) {
             drawRect(color = window, size = Size(size.width, size.height))
             if (track.pings.isEmpty()) return@Canvas

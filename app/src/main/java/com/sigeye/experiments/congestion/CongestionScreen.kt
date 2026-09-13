@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
@@ -378,7 +380,24 @@ private fun SpectrumChart(
     val lowMhz = 2395f
     val highMhz = 2495f
 
-    Box(Modifier.fillMaxWidth().height(190.dp)) {
+    val spoken = buildString {
+        append("Spectrum from 2400 to 2490 megahertz. ")
+        val loaded = channels.mapNotNull { load -> load.loadDbm?.let { load to it } }
+        loaded.maxByOrNull { it.second }?.let { (load, dbm) ->
+            append("Busiest is channel ${load.channel} at ${dbm.roundToInt()} dBm ")
+            append("with ${load.occupants} transmitter")
+            if (load.occupants != 1) append("s")
+            append(". ")
+        }
+        loaded.minByOrNull { it.second }?.let { (load, _) ->
+            append("Emptiest is channel ${load.channel}. ")
+        }
+        if (advertChannels.isNotEmpty()) {
+            append("Bluetooth advertising lanes are drawn on top.")
+        }
+    }
+
+    Box(Modifier.fillMaxWidth().height(190.dp).semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxSize()) {
             val plotHeight = size.height - 26f
             fun x(mhz: Float): Float = (mhz - lowMhz) / (highMhz - lowMhz) * size.width

@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -483,7 +485,14 @@ private fun FadeTrace(values: List<Int>, modifier: Modifier = Modifier) {
     val mean = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
 
-    Box(modifier.fillMaxWidth().height(140.dp)) {
+    val spoken = if (values.size < 2) {
+        "Signal trace, not enough readings yet."
+    } else {
+        "Signal trace, ${values.size} readings from ${values.min()} to ${values.max()} dBm, " +
+            "a spread of ${values.max() - values.min()} dB. Latest ${values.last()} dBm."
+    }
+
+    Box(modifier.fillMaxWidth().height(140.dp).semantics { contentDescription = spoken }) {
         Canvas(Modifier.fillMaxSize()) {
             if (values.size < 2) return@Canvas
             val highest = values.max()

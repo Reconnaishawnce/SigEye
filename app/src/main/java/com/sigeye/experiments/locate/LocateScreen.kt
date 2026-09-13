@@ -38,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -320,7 +322,14 @@ private fun StrengthDial(reading: ProximityReading, color: Color) {
     val animated by animateFloatAsState(fraction, tween(900), label = "strength")
     val track = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
 
-    Box(Modifier.fillMaxWidth().height(230.dp), contentAlignment = Alignment.Center) {
+    val spoken = "Signal strength ${reading.smoothedRssi.roundToInt()} dBm, " +
+        "roughly ${"%.1f".format(java.util.Locale.US, reading.meters)} metres away, " +
+        "${reading.zone.name.lowercase()}, ${reading.trend.name.lowercase()}."
+
+    Box(
+        Modifier.fillMaxWidth().height(230.dp).semantics { contentDescription = spoken },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val radius = size.minDimension / 2f * 0.82f
             val center = Offset(size.width / 2f, size.height / 2f)
@@ -359,7 +368,15 @@ private fun StrengthDial(reading: ProximityReading, color: Color) {
 @Composable
 private fun Trace(history: List<Double>, color: Color) {
     val track = MaterialTheme.colorScheme.surfaceVariant
-    Canvas(Modifier.fillMaxWidth().height(90.dp)) {
+    val spoken = if (history.size < 2) {
+        "Signal history, not enough readings yet."
+    } else {
+        "Signal history, ${history.size} readings from ${history.min().roundToInt()} to " +
+            "${history.max().roundToInt()} dBm."
+    }
+    Canvas(
+        Modifier.fillMaxWidth().height(90.dp).semantics { contentDescription = spoken },
+    ) {
         drawRect(track)
         if (history.size < 2) return@Canvas
         val high = history.max()

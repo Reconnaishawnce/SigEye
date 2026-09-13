@@ -35,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -718,7 +720,14 @@ private fun ScoreGauge(score: Double, threshold: Double, color: Color) {
     val track = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
     val markColour = MaterialTheme.colorScheme.onSurfaceVariant
 
-    Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+    val spoken = "Disturbance ${"%.1f".format(java.util.Locale.US, score)} against a trigger " +
+        "of ${"%.1f".format(java.util.Locale.US, threshold)}. " +
+        if (score >= threshold) "Over the line." else "Under the line."
+
+    Box(
+        Modifier.fillMaxWidth().height(190.dp).semantics { contentDescription = spoken },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val radius = size.minDimension / 2f * 0.80f
             val center = Offset(size.width / 2f, size.height / 2f)
@@ -778,7 +787,17 @@ private fun ScoreTrace(
     alert: Color,
     background: Color,
 ) {
-    Canvas(Modifier.fillMaxWidth().height(110.dp)) {
+    val spoken = if (history.size < 2) {
+        "Disturbance history, not enough readings yet."
+    } else {
+        "Disturbance history, ${history.size} readings, peak " +
+            "${"%.1f".format(java.util.Locale.US, history.max())}, " +
+            "${history.count { it >= threshold }} over the trigger."
+    }
+
+    Canvas(
+        Modifier.fillMaxWidth().height(110.dp).semantics { contentDescription = spoken },
+    ) {
         drawRect(background)
         if (history.size < 2) return@Canvas
         val ceiling = maxOf(history.max(), threshold * 1.6)

@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import kotlin.math.roundToInt
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -62,7 +65,25 @@ fun BodyDiagram(
     val labels = MaterialTheme.colorScheme.onSurfaceVariant
     val measurer = rememberTextMeasurer()
 
-    Box(modifier.fillMaxWidth().aspectRatio(1f)) {
+    // What the drawing is for, said plainly: which way you face, where the source is
+    // believed to be, and whether your own body is in the way right now.
+    val spoken = buildString {
+        append("Facing ${headingDegrees.roundToInt()} degrees. ")
+        if (sourceBearingDegrees == null) {
+            append("Source direction not known yet. ")
+        } else {
+            append("Source looks to be at ${sourceBearingDegrees.roundToInt()} degrees. ")
+            append(if (blocking) "Your body is in the way. " else "Line of sight is clear. ")
+        }
+        append("Signal strength ${(strength * 100).roundToInt()} percent of this sweep's range.")
+    }
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .semantics { contentDescription = spoken },
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension / 2f * 0.78f

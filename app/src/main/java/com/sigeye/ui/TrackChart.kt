@@ -17,6 +17,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -86,7 +88,24 @@ fun TrackChart(
     val strongest = -30f
     val weakest = -100f
 
-    Column(modifier) {
+    // The chart in words. The claim the picture makes is "this line carried on through
+    // the marker", so the description has to name the devices, the span and the markers.
+    val spoken = buildString {
+        append("Signal over ${(span / 1000L)} seconds for ${drawn.size} device")
+        if (drawn.size != 1) append("s")
+        append(". ")
+        drawn.forEach { track ->
+            val levels = track.points.map { it.second }
+            append("${track.label}, ${levels.min()} to ${levels.max()} dBm")
+            if (track.eventsMs.isNotEmpty()) {
+                append(", ${track.eventsMs.size} address change")
+                if (track.eventsMs.size != 1) append("s")
+            }
+            append(". ")
+        }
+    }
+
+    Column(modifier.semantics { contentDescription = spoken }) {
         Box(Modifier.fillMaxWidth().height(heightDp.dp)) {
             Canvas(Modifier.fillMaxSize()) {
                 val plotHeight = size.height - 16f
