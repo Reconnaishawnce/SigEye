@@ -38,14 +38,15 @@ import com.sigeye.core.cell.CellSample
 import com.sigeye.core.cell.CellStats
 import com.sigeye.core.cell.CellTracker
 import com.sigeye.core.cell.Handover
+import com.sigeye.ui.CountUp
 import com.sigeye.ui.DetailField
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private const val POLL_MS = 3_000L
 
@@ -142,12 +143,7 @@ private fun Live() {
     val snap = stats!!
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            snap.handovers.size.toString(),
-            fontSize = 88.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        CountUp(value = snap.handovers.size, fontSize = 88.sp)
         Text(
             "handovers in " + formatDuration(snap.observedForMs),
             style = MaterialTheme.typography.bodyMedium,

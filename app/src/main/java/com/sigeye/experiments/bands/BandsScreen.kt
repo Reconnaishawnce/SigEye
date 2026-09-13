@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Experiments
+import com.sigeye.core.Finding
 import com.sigeye.core.Permissions
 import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.BandPair
@@ -46,6 +47,7 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
+import com.sigeye.ui.FindingButton
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -335,6 +337,26 @@ private fun Live() {
         enabled = pairs.isNotEmpty(),
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Export the pairs") }
+
+    FindingButton(
+        typical?.takeIf { settled.isNotEmpty() }?.let { excess ->
+            Finding(
+                experiment = "Wall Penetration",
+                headline = String.format(Locale.US, "%.1f", excess),
+                unit = "dB of extra loss on 5 GHz",
+                denominator = "across ${settled.size} dual-band access points",
+                context = listOfNotNull(
+                    "${wifi.scans} scans",
+                    penetrations.count { !it.usable5 }
+                        .takeIf { it > 0 }
+                        ?.let { "$it no longer usable on 5 GHz" },
+                ),
+                limit = "Measured against a baseline you took somewhere else, so it is a " +
+                    "difference between two places rather than an absolute. Furniture and " +
+                    "people move, and so does this number.",
+            )
+        },
+    )
 
     Spacer(Modifier.height(12.dp))
     RunHistory(

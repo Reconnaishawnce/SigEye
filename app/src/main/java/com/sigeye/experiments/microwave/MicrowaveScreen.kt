@@ -50,6 +50,7 @@ import com.sigeye.core.analysis.rf.Significance
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.wifi.AccessPoint
 import com.sigeye.core.wifi.WifiScanHub
+import com.sigeye.ui.CountUpDecimal
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -201,10 +202,10 @@ private fun Live() {
 
     // Live rate, the thing the whole experiment watches.
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            String.format(Locale.US, "%.0f", liveRate),
+        CountUpDecimal(
+            value = liveRate,
+            decimals = 0,
             fontSize = 76.sp,
-            fontWeight = FontWeight.Bold,
             color = when (phase) {
                 AbComparison.Phase.TEST -> MaterialTheme.colorScheme.error
                 AbComparison.Phase.BASELINE -> MaterialTheme.colorScheme.primary

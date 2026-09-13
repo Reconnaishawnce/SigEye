@@ -31,10 +31,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
+import com.sigeye.core.Finding
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
 import com.sigeye.core.analysis.identity.FollowCandidate
@@ -48,12 +50,14 @@ import com.sigeye.core.analysis.identity.LiveAddress
 import com.sigeye.core.analysis.identity.RotationRhythm
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
+import com.sigeye.ui.CountUp
 import com.sigeye.ui.CountdownBar
 import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
+import com.sigeye.ui.FindingButton
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -645,15 +649,18 @@ private fun Walk(
     Spacer(Modifier.height(12.dp))
 
     if (running != null) {
+        // The survivor count is the big number here, not the stopwatch. Watching it fall
+        // from two hundred to three as you walk is the whole demonstration, and it was
+        // previously the small grey line under a timer nobody needed.
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            CountUp(value = state.survivors, fontSize = 88.sp)
             Text(
-                "${running.durationMs(nowMs) / 1000} s",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
+                "still with you, out of ${state.watching}",
+                style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                "${state.survivors} of ${state.watching} still with you",
-                style = MaterialTheme.typography.bodySmall,
+                "${running.durationMs(nowMs) / 1000} s into this leg",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -736,6 +743,37 @@ private fun Pick(
     OutlinedButton(onClick = onWalkMore, modifier = Modifier.fillMaxWidth()) {
         Text("Walk another leg")
     }
+
+    FindingButton(findingFrom(state))
+}
+
+/**
+ * The short list as something that can be shown big, or null when it is not worth showing.
+ *
+ * Refused while no leg involved walking, because the number would be "everything that was
+ * in the room" dressed up as "everything following you" - and a card is the one place that
+ * mistake travels furthest. The limit line is the same sentence the screen has always said
+ * and is the reason this experiment is defensible at all: co-presence is not identity.
+ */
+private fun findingFrom(state: FollowState): Finding? {
+    if (state.watching == 0) return null
+    val movingLegs = state.legs.count { it.moving && !it.running }
+    if (movingLegs == 0) return null
+
+    return Finding(
+        experiment = "Follow Me",
+        headline = "${state.survivors}",
+        unit = if (state.survivors == 1) "device stayed with you" else "devices stayed with you",
+        denominator = "out of ${state.watching} heard along the way",
+        context = listOfNotNull(
+            "$movingLegs walking leg" + if (movingLegs == 1) "" else "s",
+            "${state.legs.size} legs in total",
+            if (state.orbited) "${state.centred} survived the circle" else null,
+        ),
+        limit = "Co-presence is not identity. These devices were in range whenever you " +
+            "were - nothing here says any of them is a phone, or whose, and none of them " +
+            "was connected to.",
+    )
 }
 
 // ------------------------------------------------------------------------ small parts

@@ -31,16 +31,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
+import com.sigeye.core.Finding
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
@@ -57,22 +58,34 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
+import com.sigeye.ui.FindingButton
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
 import com.sigeye.ui.Track2D
 import com.sigeye.ui.TrackChart
-import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "rotationlab"
 private const val TICK_MS = 2_000L
 
 /** Lines the comparison chart will draw at once. More than four is a tangle. */
 private const val MAX_COMPARED = 4
+
+/**
+ * How long the room has to be listened to before a count of what never rotated means
+ * anything.
+ *
+ * Five minutes is a third of the usual fifteen minute default, which is enough that a room
+ * full of phones on that timer will mostly have changed at least once - and short enough
+ * that somebody standing in a cafe gets a result. It is a floor on the claim, not a
+ * guarantee, which is why the card carries the same caveat in words.
+ */
+private const val MIN_FOR_FINDING_MS = 5 * 60 * 1000L
 
 private enum class View(val label: String) {
     COHORTS("Who is here"),
@@ -168,6 +181,8 @@ private fun Live() {
     }
 
     Headline(cohorts, tracks, room, elapsed)
+
+    FindingButton(findingFrom(cohorts, room, elapsed))
 
     Spacer(Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -295,6 +310,44 @@ private fun Live() {
 }
 
 // -------------------------------------------------------------------------- headline
+
+/**
+ * How much of the room never bothers to change address, as a card.
+ *
+ * The number worth showing is the fixed count rather than the rotating one, because a fixed
+ * address is a permanent name and the point of the demonstration is how many things in an
+ * ordinary room carry one.
+ *
+ * Nothing is offered until the room has been watched for a while. A device on a fifteen
+ * minute timer that has been listened to for ninety seconds has not "failed to rotate", and
+ * a card claiming it did would be wrong in the most quotable possible way. That caveat is
+ * also the limit line, because it never stops being true - it only gets weaker.
+ */
+private fun findingFrom(cohorts: List<Cohort>, room: RoomRhythm, elapsedMs: Long): Finding? {
+    val watched = cohorts.sumOf { it.size }
+    if (watched == 0 || elapsedMs < MIN_FOR_FINDING_MS) return null
+    val fixed = cohorts.sumOf { it.fixed }
+    val minutes = elapsedMs / 60_000L
+
+    return Finding(
+        experiment = "Rotation Lab",
+        headline = "$fixed",
+        unit = if (fixed == 1) {
+            "device never changed its address"
+        } else {
+            "devices never changed their address"
+        },
+        denominator = "out of $watched in this room",
+        context = listOfNotNull(
+            "watched for $minutes minute" + if (minutes == 1L) "" else "s",
+            room.medianPeriodMs?.let { "median gap ${it / 1000L} s between changes" },
+            "${room.tracksWithPhase} of ${room.tracksMeasured} held a usable phase",
+        ),
+        limit = "A device on a long timer may simply not have rotated yet in $minutes " +
+            "minutes. This counts what was observed, not what is impossible - and a fixed " +
+            "address is normal for a beacon or a car kit.",
+    )
+}
 
 @Composable
 private fun Headline(

@@ -1,5 +1,6 @@
 package com.sigeye.experiments.population
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -39,8 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
-import com.sigeye.core.IgnoreList
 import com.sigeye.core.Experiments
+import com.sigeye.core.IgnoreList
 import com.sigeye.core.Permissions
 import com.sigeye.core.SettingsStore
 import com.sigeye.core.Vendors
@@ -50,18 +50,19 @@ import com.sigeye.core.analysis.presence.PopulationSnapshot
 import com.sigeye.core.analysis.presence.PopulationTracker
 import com.sigeye.core.analysis.presence.TrackedDevice
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.CountUp
 import com.sigeye.ui.DetailField
 import com.sigeye.ui.DeviceActions
-import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.radar.RadarPanel
 import com.sigeye.ui.radar.RadarTarget
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 /** The two readings of the same measurement. */
 enum class PopulationMode { DWELL, CROWD }
@@ -207,15 +208,9 @@ private fun Live(dwell: Boolean) {
         Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            if (dwell) {
-                snap.devices.size.toString()
-            } else {
-                snap.estimatedPeople.roundToInt().toString()
-            },
+        CountUp(
+            value = if (dwell) snap.devices.size else snap.estimatedPeople.roundToInt(),
             fontSize = 88.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
         )
         Text(
             if (dwell) "devices seen in the last hour" else "people, roughly",
