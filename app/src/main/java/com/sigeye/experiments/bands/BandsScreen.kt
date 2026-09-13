@@ -55,10 +55,13 @@ import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
 import com.sigeye.ui.KeepScreenOn
+import com.sigeye.ui.NextStep
+import com.sigeye.ui.NextStepCard
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.RunHistory
 import com.sigeye.ui.Section
+import com.sigeye.ui.StepTone
 import com.sigeye.ui.TakeawayButton
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -244,20 +247,59 @@ private fun Live() {
         }
     }
 
+    // Every way this screen can come up empty, with the thing to do about it. It used
+    // to state the problem and stop, which leaves somebody holding a phone that says no
+    // and no idea whether to wait, move, or give up.
     Spacer(Modifier.height(14.dp))
-    if (pairs.isEmpty()) {
-        Text(
-            if (wifi.scans == 0) {
-                "Waiting for the first scan. Wi-Fi has to be switched on to scan - being " +
-                    "connected is not required, being enabled is."
-            } else {
-                "No dual-band access point in range. This needs one box broadcasting on " +
-                    "both 2.4 and 5 GHz, which most routers of the last ten years do."
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    } else {
+    NextStepCard(
+        when {
+            wifi.scans == 0 -> NextStep(
+                problem = "Nothing scanned yet",
+                doThis = "Wi-Fi has to be switched on for the phone to scan at all. Being " +
+                    "connected to a network is not required, being enabled is. If it is " +
+                    "already on, the first scan takes a few seconds.",
+            )
+
+            pairs.isEmpty() -> NextStep(
+                problem = "No dual-band access point in range",
+                doThis = "This measurement is a difference between two radios in one box, " +
+                    "so it needs a router broadcasting on both 2.4 and 5 GHz - most of the " +
+                    "last ten years do. If you are outside, move closer to a building. If " +
+                    "you are inside, the router may be far enough away that its 5 GHz side " +
+                    "is already gone, which is itself the answer.",
+            )
+
+            settled.isEmpty() -> NextStep(
+                problem = "Still settling",
+                doThis = "Each radio needs ${DualBand.MIN_SCANS} scans before its level is " +
+                    "worth averaging, and scans are about six seconds apart. Stand still " +
+                    "for half a minute.",
+                tone = StepTone.SHAKY,
+            )
+
+            baseline == null -> NextStep(
+                problem = "No baseline, so there is no measurement yet",
+                doThis = "The gap between the two bands right now is mostly frequency, " +
+                    "transmit power and this phone - none of which is the building. Stand " +
+                    "where you can see the router with nothing in the way and set the " +
+                    "baseline. Everything after that is the walls.",
+                tone = StepTone.SHAKY,
+            )
+
+            typical != null && !DualBand.meaningful(typical) && spots.isEmpty() -> NextStep(
+                problem = "Nothing between you and the baseline yet",
+                doThis = "Under ${DualBand.NOTHING_IN_THE_WAY.toInt()} dB of excess is " +
+                    "scan noise rather than a building. Walk somewhere with a wall, a " +
+                    "floor or a room between you and the router, and read it again.",
+                tone = StepTone.BETTER,
+            )
+
+            else -> null
+        },
+    )
+
+    if (pairs.isNotEmpty()) {
+        Spacer(Modifier.height(14.dp))
         Text(
             "Dual-band access points in range",
             style = MaterialTheme.typography.titleSmall,
