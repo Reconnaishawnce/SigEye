@@ -195,9 +195,13 @@ class WalkByTest {
         val centred = OrbitScore(8, 8, 60, -55.0, 4.0)
         val passed = WalkByScore(40, -80.0, -45.0, midMs, -79.0, midMs, walkMs)
 
+        val walkedPast = listOf(CandidateWalkBy(probeIndex = 0, score = passed, trail = emptyList()))
+        val circled = listOf(CandidateOrbit(probeIndex = 0, score = centred))
+
         assertTrue(passed.passed)
         assertTrue(
-            base.copy(walkBy = passed).weight(now) > base.copy(orbit = centred).weight(now),
+            base.copy(walkBys = walkedPast).weight(now) >
+                base.copy(orbits = circled).weight(now),
         )
     }
 }

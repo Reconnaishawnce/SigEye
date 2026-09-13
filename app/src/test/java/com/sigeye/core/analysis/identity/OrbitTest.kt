@@ -173,9 +173,10 @@ class OrbitTest {
             arcsHeard = 8, arcsTotal = 8, packets = 60, meanRssi = -55.0, spreadDb = 4.0,
         )
 
+        val lap = listOf(CandidateOrbit(probeIndex = 0, score = centred))
         val stayed = base
-        val stayedAndCentred = base.copy(orbit = centred)
-        val droppedButCentred = base.copy(droppedAtMs = start + 60_000L, orbit = centred)
+        val stayedAndCentred = base.copy(orbits = lap)
+        val droppedButCentred = base.copy(droppedAtMs = start + 60_000L, orbits = lap)
         val dropped = base.copy(droppedAtMs = start + 60_000L)
 
         assertTrue(stayedAndCentred.weight(now) > stayed.weight(now))
