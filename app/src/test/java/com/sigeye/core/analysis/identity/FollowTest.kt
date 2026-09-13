@@ -376,6 +376,95 @@ class FollowTest {
 
     // ------------------------------------------------------------------ the export
 
+    // ------------------------------------------------------------------ your own kit
+
+    @Test
+    fun `something that never moves relative to you is called yours`() {
+        // The case that made this necessary: four empty blocks, nobody else about, and five
+        // devices come with you - because five of the things in your own pockets came with
+        // you. They survive every test by construction and nothing in the elimination can
+        // remove them.
+        val session = following("5A:01", "5A:02")
+        var at = start + 30_000L
+        repeat(40) {
+            at += 10_000L
+            // In your bag: fixed geometry, so only fading moves it.
+            session.observe("5A:01", -62 + (it % 3), at, null, null, true)
+            // Walking beside you: the distance changes as you drift apart and back.
+            session.observe("5A:02", -55 - (it % 25), at, null, null, true)
+        }
+
+        val byAddress = session.state(at).candidates.associateBy { it.address }
+        val tuning = FollowTuning.DEFAULT
+
+        assertTrue(byAddress.getValue("5A:01").neverMoved(tuning))
+        assertFalse(byAddress.getValue("5A:02").neverMoved(tuning))
+        assertEquals(listOf("5A:01"), session.state(at).carried.map { it.address })
+    }
+
+    @Test
+    fun `steadiness needs time before it means anything`() {
+        // Thirty seconds of not moving is every device in a room. The claim is about a
+        // walk, so it needs the walk to have happened.
+        val session = following("5A:01")
+        var at = start + 30_000L
+        repeat(40) {
+            at += 1_000L
+            session.observe("5A:01", -62, at, null, null, true)
+        }
+
+        val candidate = session.state(at).candidates.single()
+
+        assertFalse("forty seconds is not four blocks", candidate.neverMoved(FollowTuning.DEFAULT))
+    }
+
+    @Test
+    fun `saying a device is yours removes it from everything`() {
+        val session = following("5A:01", "5A:02")
+        assertEquals(2, session.state(start + 35_000L).stillIn.size)
+
+        session.ignored = setOf("5A:01")
+        val state = session.state(start + 35_000L)
+
+        assertEquals(listOf("5A:02"), state.stillIn.map { it.address })
+        assertEquals("and out of the denominator it is judged against", 1, state.poolSize)
+    }
+
+    // ------------------------------------------------------------------ arrivals rank
+
+    @Test
+    fun `walking in after the baseline outranks having been there all along`() {
+        // The whole reason for taking a baseline without them. An arrival used to be worth
+        // one point, which put it level with the lamp posts.
+        val session = FollowSession()
+        session.startBaseline(start)
+        session.hear("5A:01", start)
+        session.endBaseline(start + 30_000L)
+        session.hear("5A:07", start + 60_000L)
+        session.startFollowing(start + 65_000L)
+
+        var at = start + 65_000L
+        repeat(10) {
+            at += 30_000L
+            session.hear("5A:01", at)
+            session.hear("5A:07", at)
+        }
+
+        val state = session.state(at)
+
+        assertTrue(state.waitedForArrival)
+        assertEquals("5A:07", state.stillIn.first().address)
+        assertEquals(listOf("5A:07"), state.stillInArrived.map { it.address })
+        assertEquals(listOf("5A:01"), state.stillInAlreadyHere.map { it.address })
+    }
+
+    @Test
+    fun `a baseline taken with them in the room does not split the list`() {
+        val session = following("5A:01", "5A:02")
+
+        assertFalse(session.state(start + 35_000L).waitedForArrival)
+    }
+
     // ------------------------------------------------------------------ picking it up
 
     @Test

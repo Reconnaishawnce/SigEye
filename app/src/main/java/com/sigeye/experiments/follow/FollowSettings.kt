@@ -32,6 +32,8 @@ class FollowSettings(context: Context) {
             minPackets = prefs.getInt(KEY_MIN_PACKETS, d.minPackets),
             lostAfterMs = prefs.getLong(KEY_LOST, d.lostAfterMs),
             carriedDbm = prefs.getInt(KEY_CARRIED, d.carriedDbm),
+            carriedSpreadDb = prefs.getFloat(KEY_SPREAD, d.carriedSpreadDb.toFloat()).toDouble(),
+            carriedAfterMs = prefs.getLong(KEY_CARRIED_AFTER, d.carriedAfterMs),
         )
     }
 
@@ -46,6 +48,8 @@ class FollowSettings(context: Context) {
             .putInt(KEY_MIN_PACKETS, tuning.minPackets)
             .putLong(KEY_LOST, tuning.lostAfterMs)
             .putInt(KEY_CARRIED, tuning.carriedDbm)
+            .putFloat(KEY_SPREAD, tuning.carriedSpreadDb.toFloat())
+            .putLong(KEY_CARRIED_AFTER, tuning.carriedAfterMs)
             .apply()
     }
 
@@ -61,5 +65,7 @@ class FollowSettings(context: Context) {
         const val KEY_MIN_PACKETS = "min_packets"
         const val KEY_LOST = "lost_after_ms"
         const val KEY_CARRIED = "carried_dbm"
+        const val KEY_SPREAD = "carried_spread_db"
+        const val KEY_CARRIED_AFTER = "carried_after_ms"
     }
 }

@@ -125,6 +125,24 @@ data class FollowTuning(
      * is their own kit would end the follow.
      */
     val carriedDbm: Int = -55,
+
+    /**
+     * How steady a device has to be across a whole follow to be called yours.
+     *
+     * This is the better half of the test and the absolute level is the weaker one. Walk
+     * four blocks with something in your own bag and the geometry between it and the phone
+     * never changes, so its level barely moves - a handful of decibels, all of it fading
+     * rather than distance. Two people walking together do not manage that: you drift apart
+     * and back, you turn corners at slightly different radii, your own arm passes between
+     * the two of you, and that is fifteen or twenty decibels over a few minutes.
+     *
+     * So a device that has been with you for minutes *and* has barely moved is almost
+     * certainly on you rather than on them.
+     */
+    val carriedSpreadDb: Double = 9.0,
+
+    /** How long a device has to have been around before its steadiness means anything. */
+    val carriedAfterMs: Long = 3 * 60_000L,
 ) {
     companion object {
         val DEFAULT = FollowTuning()
@@ -236,6 +254,18 @@ private const val CARRIED_MIN_PACKETS = 30
 private const val CARRIED_FRACTION = 0.85
 
 /**
+ * What walking in after the baseline is worth.
+ *
+ * Large, because when the baseline was taken without the person it is the strongest single
+ * thing the follow knows - much stronger than having survived a few more minutes than
+ * something else. It was one point, which put an arrival level with the lamp posts.
+ */
+private const val ARRIVAL_WEIGHT = 10
+
+/** How many levels are kept per device before the list is halved. */
+private const val LEVELS_CAP = 512
+
+/**
  * How many readings of each trail survive being saved.
  *
  * Four hundred is well over a minute at one a second, which is longer than any probe, so in
@@ -262,6 +292,13 @@ data class FollowCandidate(
     val recentRssi: Double,
     /** What fraction of its readings were loud enough to be in your own pocket. */
     val closeFraction: Double,
+    /**
+     * Tenth to ninetieth percentile of every reading of this device, in dB.
+     *
+     * The one number that separates something in your own bag from something in somebody
+     * else's pocket. Yours cannot move relative to you; theirs cannot help it.
+     */
+    val spreadDb: Double,
     val firstSeenMs: Long,
     val lastSeenMs: Long,
     /** Addresses this device has worn during the follow, oldest first. */
@@ -306,18 +343,50 @@ data class FollowCandidate(
     /**
      * Almost certainly something you are carrying rather than something they are.
      *
-     * The device that sits in the innermost ring the entire time and never moves is the one
-     * in your own bag. It survives every test by construction - it goes everywhere you go -
-     * so without saying so it would sit at the top of the short list for the whole follow
-     * and never be eliminated by anything.
+     * This is the biggest single source of wrong answers in a real follow, and it shows up
+     * hardest in the case that ought to be easiest: walk four empty blocks alone and five
+     * devices come with you, because five of the things in your own pockets came with you.
+     * They survive every test by construction - they go everywhere you go - so nothing in
+     * the elimination can ever remove them.
      *
-     * Needs both: loud on average across the follow, and loud right now. A device that was
-     * in your pocket and has since been left behind should fall out like anything else.
+     * Two ways in, because they catch different things.
+     *
+     * **It never moved.** The strong one. Something in your own bag keeps a fixed geometry
+     * with the phone, so its level barely wanders across a whole walk. Somebody walking
+     * beside you cannot manage that: you drift apart and back, you round corners at
+     * different radii, an arm passes between you. That is worth fifteen or twenty decibels
+     * over a few minutes against a handful for your own kit.
+     *
+     * **It is in your pocket.** The weaker one, kept because it is fast - a device sitting
+     * at pocket level from the first minute does not need three minutes of steadiness to be
+     * obvious, and waiting for them would leave it at the top of the list meanwhile.
+     *
+     * Neither is proof, which is why this flags rather than removes. The one thing that is
+     * proof is you saying so, and that is what the ignore list is for.
      */
     fun carried(tuning: FollowTuning): Boolean =
+        neverMoved(tuning) || inYourPocket(tuning)
+
+    /** Steady enough, for long enough, to have a fixed geometry with this phone. */
+    fun neverMoved(tuning: FollowTuning): Boolean =
+        packets >= CARRIED_MIN_PACKETS &&
+            heldForMs(lastSeenMs) >= tuning.carriedAfterMs &&
+            spreadDb <= tuning.carriedSpreadDb
+
+    /** Loud enough, often enough, to be on your person right now. */
+    fun inYourPocket(tuning: FollowTuning): Boolean =
         packets >= CARRIED_MIN_PACKETS &&
             closeFraction >= CARRIED_FRACTION &&
             recentRssi >= tuning.carriedDbm
+
+    /** Why it was flagged, so the screen can say rather than assert. */
+    fun carriedReason(tuning: FollowTuning): String? = when {
+        neverMoved(tuning) -> "moved ${spreadDb.toInt()} dB in " +
+            "${heldForMs(lastSeenMs) / 60_000} minutes, which is a fixed distance from you"
+        inYourPocket(tuning) -> "pocket-loud for " +
+            "${(closeFraction * 100).toInt()}% of the follow"
+        else -> null
+    }
 
     val rotations: Int get() = (addresses.size - 1).coerceAtLeast(0)
 
@@ -338,7 +407,12 @@ data class FollowCandidate(
             (if (stillIn) 3 else 0) +
             (if (passedAnyOrbit) 1 else 0) +
             (if (passedAnyWalkBy) 2 else 0) +
-            (if (arrived) 1 else 0)
+            // Heavy, and it used to be worth one point. When the baseline was taken before
+            // the person arrived, walking in *is* the finding - the whole reason for taking
+            // a baseline without them is that whoever turns up afterwards is a far shorter
+            // list than the building. Ranking an arrival level with the furniture threw
+            // that away at the last step.
+            (if (arrived) ARRIVAL_WEIGHT else 0)
 
     fun describe(): String = buildString {
         if (arrived) append("arrived after the baseline, ")
@@ -401,6 +475,23 @@ data class FollowState(
     val returned: List<FollowCandidate> get() = candidates.filter { it.returnedAtMs != null }
 
     val arrivals: List<FollowCandidate> get() = candidates.filter { it.arrived }
+
+    /**
+     * Still with you, split by whether they walked in after the baseline.
+     *
+     * Two different strengths of claim and they should not be one list. If the baseline was
+     * taken before the person arrived, everything in the first group was in range at a
+     * moment they were not, and everything in the second was already part of the furniture.
+     */
+    val stillInArrived: List<FollowCandidate> get() = stillIn.filter { it.arrived }
+
+    val stillInAlreadyHere: List<FollowCandidate> get() = stillIn.filterNot { it.arrived }
+
+    /** True when the baseline was taken with the target out of the room. */
+    val waitedForArrival: Boolean
+        get() = baselineEndedAtMs != null &&
+            followStartedAtMs != null &&
+            followStartedAtMs > baselineEndedAtMs + 1_000L
 
     /** Still with you because it is in your own bag, rather than because it is on them. */
     val carried: List<FollowCandidate> get() = stillIn.filter { it.carried(tuning) }
@@ -515,6 +606,31 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         var rssiTotal: Double = 0.0
         var recentRssi: Double = 0.0
         var closeReadings: Int = 0
+
+        /**
+         * Every level this device has been heard at, thinned once it gets long.
+         *
+         * Kept because the spread across the whole follow is the best single thing that
+         * separates your own kit from theirs, and a spread needs the distribution rather
+         * than a running mean. Thinned by halving rather than by dropping the oldest, so
+         * what survives still covers the whole walk instead of only the end of it.
+         */
+        val levels: MutableList<Int> = mutableListOf()
+
+        fun record(rssi: Int) {
+            levels.add(rssi)
+            if (levels.size > LEVELS_CAP) {
+                val thinned = levels.filterIndexed { index, _ -> index % 2 == 0 }
+                levels.clear()
+                levels.addAll(thinned)
+            }
+        }
+
+        fun spreadDb(): Double {
+            if (levels.size < CARRIED_MIN_PACKETS) return Double.MAX_VALUE
+            val sorted = levels.map { it.toDouble() }.sorted()
+            return Stats.percentile(sorted, 0.9) - Stats.percentile(sorted, 0.1)
+        }
         val addresses: MutableList<String> = mutableListOf()
 
         var inPool: Boolean = false
@@ -537,6 +653,17 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     private var targetKey: String? = null
     private val targetChanges = mutableListOf<Long>()
+
+    /**
+     * Addresses the person running this has said are their own.
+     *
+     * The app cannot work out which devices you own and should stop trying past a certain
+     * point: every heuristic for it is a guess, and a wrong guess either leaves your earbuds
+     * at the top of the short list forever or quietly removes the target. You saying so is
+     * the only thing here that is not a guess, so once you have said it the device is gone
+     * from the pool - in this follow and every one after it.
+     */
+    var ignored: Set<String> = emptySet()
 
     private var baselineStartedAtMs: Long? = null
     private var baselineEndedAtMs: Long? = null
@@ -593,6 +720,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             entry.recentRssi * (1 - RECENT_ALPHA) + rssi * RECENT_ALPHA
         }
         if (rssi >= tuning.carriedDbm) entry.closeReadings++
+        entry.record(rssi)
 
         probes.lastOrNull()?.takeIf { it.running }?.let { probe ->
             when (probe.kind) {
@@ -826,6 +954,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
         return tracked.entries
             .filter { it.value.packets >= tuning.minPackets }
+            .filterNot { ignored.contains(it.key) }
             .map { (address, entry) ->
                 FollowCandidate(
                     address = address,
@@ -840,6 +969,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                     } else {
                         entry.closeReadings.toDouble() / entry.packets
                     },
+                    spreadDb = entry.spreadDb(),
                     firstSeenMs = entry.firstSeenMs,
                     lastSeenMs = entry.lastSeenMs,
                     addresses = entry.addresses.toList(),
@@ -1010,6 +1140,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                     .put("rssiTotal", entry.rssiTotal)
                     .put("recent", entry.recentRssi)
                     .put("close", entry.closeReadings)
+                    .put("levels", JSONArray(entry.levels.takeLast(TRAIL_CAP)))
                     .put("pool", entry.inPool)
                     .put("dropped", entry.droppedAtMs ?: JSONObject.NULL)
                     .put("returned", entry.returnedAtMs ?: JSONObject.NULL)
@@ -1104,6 +1235,8 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             entry.rssiTotal = device.optDouble("rssiTotal", 0.0)
             entry.recentRssi = device.optDouble("recent", -127.0)
             entry.closeReadings = device.optInt("close")
+            val levels = device.optJSONArray("levels") ?: JSONArray()
+            (0 until levels.length()).forEach { entry.levels.add(levels.getInt(it)) }
             entry.inPool = device.optBoolean("pool")
             entry.droppedAtMs = device.optLongOrNull("dropped")
             entry.returnedAtMs = device.optLongOrNull("returned")

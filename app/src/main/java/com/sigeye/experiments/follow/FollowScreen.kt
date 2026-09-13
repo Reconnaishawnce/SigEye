@@ -43,6 +43,7 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.FollowLead
 import com.sigeye.core.FollowLibrary
+import com.sigeye.core.IgnoreList
 import com.sigeye.core.Permissions
 import com.sigeye.core.SavedFollow
 import com.sigeye.core.SweepExport
@@ -183,6 +184,7 @@ private fun Live(onLocate: (String) -> Unit) {
     val library = remember { FollowLibrary.get(context) }
     val targetStore = remember { TargetStore.get(context) }
     val settings = remember { FollowSettings(context) }
+    val ignoreList = remember { IgnoreList.get(context) }
     val feedback = remember { Feedback(context) }
     val live = remember { LinkedHashMap<String, LiveAddress>() }
 
@@ -215,6 +217,7 @@ private fun Live(onLocate: (String) -> Unit) {
     val bars = remember { mutableStateListOf<Float>() }
     var lastWatched by remember { mutableStateOf(0) }
 
+    val ignored by ignoreList.addresses.collectAsStateWithLifecycle()
     val follows by library.follows.collectAsStateWithLifecycle()
     val targets by targetStore.targets.collectAsStateWithLifecycle()
     val latest by rememberUpdatedState(state)
@@ -316,6 +319,12 @@ private fun Live(onLocate: (String) -> Unit) {
             entry.observe(advert.rssi, advert.atMs)
             targetStore.heard(key, advert.atMs)
         }
+    }
+
+    // Kept on the session rather than filtered in the screen, so a device you have said is
+    // yours never reaches the pool, the radar, the short list or the export.
+    LaunchedEffect(ignored, session) {
+        session.ignored = ignored
     }
 
     LaunchedEffect(Unit) {
@@ -514,6 +523,7 @@ private fun Live(onLocate: (String) -> Unit) {
             },
             onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
             onKeep = { keeping = it },
+            onMine = { ignoreList.add(it.address) },
             onTargets = { goTo(Step.TARGETS) },
             onSettings = { showSettings = true },
             onFinish = {
@@ -1039,6 +1049,7 @@ private fun Following(
     onHold: (FollowCandidate) -> Unit,
     onPromote: (FollowCandidate) -> Unit,
     onKeep: (FollowCandidate) -> Unit,
+    onMine: (FollowCandidate) -> Unit,
     onTargets: () -> Unit,
     onSettings: () -> Unit,
     onFinish: () -> Unit,
@@ -1149,8 +1160,29 @@ private fun Following(
                 state.carried.forEach { candidate ->
                     Field(
                         candidate.label ?: candidate.vendor ?: candidate.address,
-                        "${candidate.recentRssi.roundToInt()} dBm, " +
-                            "${(candidate.closeFraction * 100).roundToInt()}% of the time",
+                        candidate.carriedReason(state.tuning) ?: "",
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Say so once and they are gone from every follow after this, not just " +
+                        "this one. Nothing here can work out which devices are yours, and " +
+                        "every guess at it either leaves your earbuds at the top of the " +
+                        "list forever or quietly removes the target.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { state.carried.forEach(onMine) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        if (state.carried.size == 1) {
+                            "That one is mine, ignore it"
+                        } else {
+                            "Those ${state.carried.size} are mine, ignore them"
+                        },
                     )
                 }
             }
@@ -1199,33 +1231,80 @@ private fun Following(
     }
 
     if (state.listable) {
+        val arrivedFirst = state.stillInArrived
+        val wasAlreadyHere = state.stillInAlreadyHere
+
+        @Composable
+        fun list(candidates: List<FollowCandidate>) {
+            candidates.forEach { candidate ->
+                val already = targets.any { it.address.equals(candidate.address, true) }
+                CandidateCard(
+                    candidate = candidate,
+                    nowMs = nowMs,
+                    tuning = state.tuning,
+                    onClick = { onHold(candidate) },
+                    action = "Name and list",
+                    onAction = { onKeep(candidate) },
+                    secondary = if (already) null else "Target",
+                    onSecondary = { onPromote(candidate) },
+                    tertiary = "Mine",
+                    onTertiary = { onMine(candidate) },
+                )
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
-        Text(
-            if (state.narrowed) "Short list" else "Still with them",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            if (state.narrowed) {
-                "Tap one to hold onto it, or add it to your targets to use it elsewhere."
-            } else {
-                "Short enough to look down. Add anything worth keeping to your targets."
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(6.dp))
-        state.stillIn.forEach { candidate ->
-            val already = targets.any { it.address.equals(candidate.address, true) }
-            CandidateCard(
-                candidate = candidate,
-                nowMs = nowMs,
-                onClick = { onHold(candidate) },
-                action = "Name and list",
-                onAction = { onKeep(candidate) },
-                secondary = if (already) null else "Add to targets",
-                onSecondary = { onPromote(candidate) },
+
+        // Two strengths of claim, and they were one list. When the baseline was taken
+        // before the person arrived, everything in the first group was in range at a
+        // moment they were not - which is the whole reason for taking a baseline that way,
+        // and it was being thrown away by showing them all together.
+        if (state.waitedForArrival && arrivedFirst.isNotEmpty()) {
+            Text(
+                "Arrived after the baseline",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
             )
+            Text(
+                "None of these were here before them. That is the strongest thing this " +
+                    "follow knows, so they are first.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            list(arrivedFirst)
+
+            if (wasAlreadyHere.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Was already here",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Part of the furniture when you took the baseline, and still with you. " +
+                        "Possible, but a weaker claim than the ones above.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                list(wasAlreadyHere)
+            }
+        } else {
+            Text(
+                if (state.narrowed) "Short list" else "Still with them",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Tap one to hold onto it. Name it and put it on a list to use it in the " +
+                    "other experiments, or say it is yours and it leaves for good.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            list(state.stillIn)
         }
     }
 
@@ -1767,10 +1846,13 @@ private fun CandidateCard(
     candidate: FollowCandidate,
     nowMs: Long,
     onClick: (() -> Unit)?,
+    tuning: FollowTuning = FollowTuning.DEFAULT,
     action: String? = null,
     onAction: () -> Unit = {},
     secondary: String? = null,
     onSecondary: () -> Unit = {},
+    tertiary: String? = null,
+    onTertiary: () -> Unit = {},
 ) {
     Card(
         Modifier
@@ -1800,6 +1882,14 @@ private fun CandidateCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    candidate.carriedReason(tuning)?.let {
+                        Text(
+                            "probably yours: $it",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -1813,11 +1903,30 @@ private fun CandidateCard(
                     )
                 }
             }
-            if (action != null || secondary != null) {
+            // Address type and a steadiness figure, because "AA:BB:.." and a percentage is
+            // not enough to recognise anything by. A random address that has never changed
+            // is a different thing from a fixed one, and a device that has not moved a
+            // decibel in ten minutes is a different thing again.
+            Spacer(Modifier.height(4.dp))
+            Text(
+                buildString {
+                    append(if (candidate.isRandom) "random address" else "fixed address")
+                    append(" · ${candidate.packets} packets")
+                    if (candidate.spreadDb < 1_000) {
+                        append(" · moved ${candidate.spreadDb.roundToInt()} dB")
+                    }
+                    if (candidate.rotations > 0) append(" · ${candidate.rotations} rotations")
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (action != null || secondary != null || tertiary != null) {
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     action?.let { TextButton(onClick = onAction) { Text(it) } }
                     secondary?.let { TextButton(onClick = onSecondary) { Text(it) } }
+                    tertiary?.let { TextButton(onClick = onTertiary) { Text(it) } }
                 }
             }
         }

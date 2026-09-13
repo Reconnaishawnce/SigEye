@@ -45,6 +45,7 @@ fun FollowSettingsDialog(
     var rebaselineMinutes by remember { mutableFloatStateOf(initial.rebaselineAfterMs / 60_000f) }
     var minPackets by remember { mutableFloatStateOf(initial.minPackets.toFloat()) }
     var carriedDbm by remember { mutableFloatStateOf(initial.carriedDbm.toFloat()) }
+    var carriedSpread by remember { mutableFloatStateOf(initial.carriedSpreadDb.toFloat()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -141,6 +142,18 @@ fun FollowSettingsDialog(
                         "and up if it is flagging theirs - which is the worse mistake of " +
                         "the two.",
                 ) { carriedDbm = it }
+
+                Setting(
+                    label = "Yours if it moves less than",
+                    value = carriedSpread,
+                    range = 4f..20f,
+                    steps = 15,
+                    display = carriedSpread.roundToInt().toString() + " dB",
+                    detail = "Something in your own bag keeps a fixed distance from this " +
+                        "phone, so its level barely wanders over a whole walk. Somebody " +
+                        "walking beside you cannot manage that. Lower is stricter; if your " +
+                        "own kit keeps surviving a long walk, raise it.",
+                ) { carriedSpread = it }
             }
         },
         confirmButton = {
@@ -157,6 +170,8 @@ fun FollowSettingsDialog(
                             minPackets = minPackets.roundToInt(),
                             lostAfterMs = initial.lostAfterMs,
                             carriedDbm = carriedDbm.roundToInt(),
+                            carriedSpreadDb = carriedSpread.toDouble(),
+                            carriedAfterMs = initial.carriedAfterMs,
                         ),
                     )
                 },
