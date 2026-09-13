@@ -94,6 +94,7 @@ object Experiments {
     const val VULNERABILITY = "vulnerability"
     const val FOLLOWING = "following"
     const val ROTATION_LAB = "rotationlab"
+    const val FOLLOW = "follow"
 
     val all: List<Experiment> = listOf(
 
@@ -824,6 +825,45 @@ object Experiments {
 
         // ----------------------------------------------------------- privacy
         Experiment(
+            id = FOLLOW,
+            title = "Follow Me",
+            blurb = "Narrow a whole street down to the one device travelling with you.",
+            teaches = "Following somebody by their phone needs no prior knowledge of it " +
+                "and no special hardware. It is done by elimination: walk together and " +
+                "everything that stayed behind drops out, which is nearly everything.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.BETA,
+            needs = "Two people who both agree to this, one of them carrying a phone you " +
+                "own, and somewhere to walk. Twenty minutes and a mile is plenty.",
+            howTo = listOf(
+                "Agree with the other person first. This is a demonstration of following " +
+                    "somebody, and running it on a stranger is the thing it exists to " +
+                    "warn about.",
+                "Start a standing leg where you meet. It cuts whatever walks past while " +
+                    "you are both still.",
+                "Start a moving leg and travel together. This is the one that does the " +
+                    "work - the shops, the parked cars and the other passengers all fall " +
+                    "out of range and out of the list.",
+                "Do that two or three times. Watch the survivor count against the number " +
+                    "of devices heard: that ratio is the whole finding.",
+                "Lock onto the survivor and let it rotate. If it changes address it will " +
+                    "be picked up again only when the evidence is unambiguous.",
+                "Check it by walking apart. If the thing you locked onto fades as the " +
+                    "other person leaves, you had the right one.",
+            ),
+            reading = "The honest answer is the short list and its denominator, never a " +
+                "name. Two survivors out of two hundred after three miles is a strong " +
+                "claim; forty out of two hundred after standing in a lobby is no claim at " +
+                "all. Moving legs count for far more than standing ones, because staying " +
+                "in range across a mile of city is something very few things can do.",
+            limits = "A device only survives a leg if it was heard during it, so a tunnel " +
+                "or a pocket costs you the target. Rotation is handled by the same " +
+                "machinery as Persistent Tracking and refuses just as readily - two " +
+                "equally good candidates stop it rather than one being picked. And a " +
+                "survivor is a hypothesis: the other person walking away from you is the " +
+                "only real test, which is why the walkthrough ends with it.",
+        ),
+        Experiment(
             id = ROTATION_LAB,
             title = "Rotation Lab",
             blurb = "A whole room's address privacy, grouped by maker and measured by clock.",
@@ -1043,6 +1083,7 @@ object Experiments {
         FARADAY to "Settle the argument about whether a crisp packet blocks anything.",
         MICROWAVE to "Watch a microwave flatten the band your Wi-Fi is on.",
         CELLS to "See how often your phone hands you to a different tower.",
+        FOLLOW to "Narrow a street down to the one phone that is coming with you.",
     )
 
     /**

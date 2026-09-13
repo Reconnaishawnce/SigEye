@@ -32,6 +32,7 @@ import com.sigeye.experiments.doppler.DopplerScreen
 import com.sigeye.experiments.polarisation.PolarisationScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
+import com.sigeye.experiments.follow.FollowScreen
 import com.sigeye.experiments.following.FollowingScreen
 import com.sigeye.experiments.faraday.FaradayScreen
 import com.sigeye.experiments.forensics.ForensicsScreen
@@ -191,6 +192,12 @@ private fun SigEyeApp() {
 
             Experiments.ROTATION_LAB ->
                 RotationLabScreen(onBack = goBack, modifier = inset)
+
+            Experiments.FOLLOW -> FollowScreen(
+                onBack = goBack,
+                onLocate = openLocate,
+                modifier = inset,
+            )
 
             SETTINGS ->
                 SettingsScreen(onBack = goBack, modifier = inset)
