@@ -198,8 +198,9 @@ class FollowTest {
 
         session.hear("5B:02", start + 130_000)
         session.reacquire("5B:02", start + 130_000)
+        session.endLeg(start + 140_000)
 
-        val target = session.state(start + 135_000).target!!
+        val target = session.state(start + 145_000).target!!
         assertEquals("5B:02", target.address)
         assertEquals(listOf("5A:01", "5B:02"), target.addresses)
         assertEquals(1, target.rotations)

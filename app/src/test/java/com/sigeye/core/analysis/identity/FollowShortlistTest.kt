@@ -69,6 +69,7 @@ class FollowShortlistTest {
         val session = FollowSession()
         session.beginLeg("walk", LegKind.TOGETHER, start)
         repeat(12) { session.hear("AA:BB:CC:DD:EE:%02d".format(it), start) }
+        session.endLeg(start + 10_000L)
 
         val state = session.state(start + 10_000L)
 
@@ -84,6 +85,7 @@ class FollowShortlistTest {
         repeat(FollowSession.SHORTLIST_MAX) {
             session.hear("AA:BB:CC:DD:EE:%02d".format(it), start)
         }
+        session.endLeg(start + 10_000L)
 
         val state = session.state(start + 10_000L)
 
@@ -100,6 +102,7 @@ class FollowShortlistTest {
         session.hear("AA:BB:CC:DD:EE:02", start)
         session.beginLeg("two", LegKind.TOGETHER, start + 60_000L)
         session.hear("AA:BB:CC:DD:EE:01", start + 60_000L)
+        session.endLeg(start + 120_000L)
 
         val state = session.state(start + 120_000L)
 
@@ -117,8 +120,9 @@ class FollowShortlistTest {
         repeat(12) { session.hear("AA:BB:CC:DD:EE:%02d".format(it), start) }
         session.beginLeg("walk", LegKind.TOGETHER, start + 60_000L)
         repeat(12) { session.hear("AA:BB:CC:DD:EE:%02d".format(it), start + 60_000L) }
+        session.endLeg(start + 90_000L)
 
-        assertFalse(session.state(start + 60_000L).shouldRebaseline)
+        assertFalse(session.state(start + 90_000L).shouldRebaseline)
         assertTrue(session.state(start + FollowSession.REBASELINE_AFTER_MS + 1_000L).shouldRebaseline)
     }
 
@@ -128,6 +132,7 @@ class FollowShortlistTest {
         session.beginLeg("baseline", LegKind.BASELINE, start)
         session.beginLeg("walk", LegKind.TOGETHER, start + 60_000L)
         session.hear("AA:BB:CC:DD:EE:01", start + 60_000L)
+        session.endLeg(start + 90_000L)
 
         val late = session.state(start + FollowSession.REBASELINE_AFTER_MS + 1_000L)
 
@@ -143,6 +148,7 @@ class FollowShortlistTest {
         session.hear("AA:BB:CC:DD:EE:02", start)
         session.beginLeg("walk", LegKind.TOGETHER, start + 60_000L)
         session.hear("AA:BB:CC:DD:EE:01", start + 60_000L)
+        session.endLeg(start + 90_000L)
 
         // Before: one survivor, because the other missed the walk.
         assertEquals(1, session.state(start + 90_000L).survivors)

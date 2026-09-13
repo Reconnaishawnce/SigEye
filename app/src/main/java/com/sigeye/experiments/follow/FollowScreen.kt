@@ -524,7 +524,8 @@ private fun Live(onLocate: (String) -> Unit) {
         DiagnosticsPanel(
             title = "What this is seeing",
             diagnostics = listOf(
-                Diagnostic("In range", "${state.watching}", "addresses heard"),
+                Diagnostic("Heard", "${state.watching}", "addresses, ever"),
+                Diagnostic("Audible now", "${state.stillHere.size}", "still answering"),
                 Diagnostic("Still in", "${state.survivors}", "survived every test"),
                 Diagnostic(
                     "Tests",
@@ -907,7 +908,7 @@ private fun Hub(
     onFinish: () -> Unit,
 ) {
     val running = state.legs.lastOrNull()?.takeIf { it.running && it.kind != LegKind.BASELINE }
-    val tested = state.legs.any { it.kind != LegKind.BASELINE }
+    val tested = state.testsDone > 0
 
     Card(
         Modifier.fillMaxWidth(),
@@ -920,12 +921,23 @@ private fun Hub(
         ),
     ) {
         Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            CountUp(value = if (tested) state.survivors else state.watching, fontSize = 64.sp)
+            // Three different numbers, because they answer three different questions and
+            // showing the wrong one is how this screen lied. A test still running has
+            // eliminated nobody, so its verdict is not the thing to watch - what is still
+            // answering is.
+            CountUp(
+                value = when {
+                    running != null -> state.stillHere.size
+                    tested -> state.survivors
+                    else -> state.watching
+                },
+                fontSize = 64.sp,
+            )
             Text(
-                if (tested) {
-                    "still in the running, out of ${state.watching}"
-                } else {
-                    "audible from here, and nothing ruled out yet"
+                when {
+                    running != null -> "still answering right now, of ${state.watching} heard"
+                    tested -> "still in the running, out of ${state.watching} heard"
+                    else -> "audible from here, and nothing ruled out yet"
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -1160,7 +1172,7 @@ private fun WalkByStep(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            "${state.watching} in range",
+            "${state.watching} heard so far",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1197,9 +1209,12 @@ private fun Mobile(state: FollowState, nowMs: Long, onStop: () -> Unit) {
 
     Spacer(Modifier.height(18.dp))
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        CountUp(value = state.survivors, fontSize = 96.sp)
+        // Still audible, not "survived every test". The survivor count is a verdict on
+        // finished legs and cannot move until this one ends, so watching it during a walk
+        // shows a flat number - and before this was fixed it showed a climbing one.
+        CountUp(value = state.stillHere.size, fontSize = 96.sp)
         Text(
-            "still with you, out of ${state.watching}",
+            "still with you right now, of ${state.watching} heard so far",
             style = MaterialTheme.typography.bodyMedium,
         )
         running?.let {

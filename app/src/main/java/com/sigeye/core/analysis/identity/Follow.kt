@@ -244,8 +244,45 @@ data class FollowState(
      * otherwise going to derive the same deadline separately and drift apart.
      */
     val rotationChangesAtMs: List<Long> = emptyList(),
+    /** When this snapshot was taken, so "still audible" means something. */
+    val atMs: Long = 0L,
 ) {
     val survivors: Int get() = candidates.count { it.survivedAll }
+
+    /** Tests that have finished. Nothing has been eliminated by the one still running. */
+    val testsDone: Int get() = legs.count { it.kind != LegKind.BASELINE && !it.running }
+
+    /**
+     * What is still plausible *and* still being heard, which is the number to watch while
+     * walking.
+     *
+     * The survivor count cannot fall during a leg - it is a verdict on finished legs, and a
+     * leg only delivers its verdict when it ends. Watching it during a three minute walk
+     * shows a flat number, and the thing people actually want to see is the room emptying
+     * out behind them as they go.
+     *
+     * This is that, honestly: everything that has survived every finished test and has been
+     * heard in the last little while. A device that stops answering because it is half a
+     * street back stops being counted within seconds rather than at the end of the leg. It
+     * can flicker back up if something is heard again after a gap, which is correct - it is
+     * still with you - but the trend across a walk is downwards and steep.
+     */
+    val stillHere: List<FollowCandidate>
+        get() {
+            val legStart = legs.lastOrNull { it.running }?.startedAtMs ?: 0L
+            return candidates.filter { candidate ->
+                val plausible = if (testsDone > 0) {
+                    candidate.survivedAll
+                } else {
+                    // Before any test has finished, the honest set is what was already
+                    // known when this leg began. Something first heard halfway down the
+                    // street is not a device that came with you, and letting it in is how
+                    // this number climbs instead of falling.
+                    candidate.firstSeenMs <= legStart
+                }
+                plausible && atMs - candidate.lastSeenMs <= FollowSession.AUDIBLE_MS
+            }
+        }
 
     /** True once a circle has been walked, so the screen knows whether to report one. */
     val orbited: Boolean get() = legs.any { it.kind == LegKind.ORBIT }
@@ -510,7 +547,16 @@ class FollowSession {
      * the elimination works at all.
      */
     fun candidates(nowMs: Long, minPackets: Int = MIN_PACKETS): List<FollowCandidate> {
-        val possible = legs.count { it.kind != LegKind.BASELINE }
+        // Only finished legs. A leg still running has eliminated nobody yet - a device that
+        // has not been heard in the last thirty seconds may well be heard in the next
+        // thirty - so counting it makes every candidate start the leg as a failure and
+        // become a survivor the moment it is next heard. The survivor count then climbs
+        // through the whole leg, which is the exact opposite of what the leg is doing, and
+        // it is the number people watch while they walk.
+        val possible = legs.count { it.kind != LegKind.BASELINE && !it.running }
+        val finished = legs.filter { it.kind != LegKind.BASELINE && !it.running }
+            .map { it.index }
+            .toSet()
         val orbitLeg = legs.firstOrNull { it.kind == LegKind.ORBIT }
         val arcs = orbitLeg?.let { arcsIn(it.durationMs(nowMs)) } ?: 0
         val walkLeg = legs.firstOrNull { it.kind == LegKind.WALK_BY }
@@ -526,9 +572,9 @@ class FollowSession {
                     label = entry.label,
                     vendor = entry.vendor,
                     isRandom = entry.isRandom,
-                    legsSeen = entry.legs.size,
+                    legsSeen = entry.legs.count { it in finished },
                     legsPossible = possible,
-                    movingLegsSeen = entry.movingLegs.size,
+                    movingLegsSeen = entry.movingLegs.count { it in finished },
                     packets = entry.packets,
                     meanRssi = entry.meanRssi,
                     lastSeenMs = entry.lastSeenMs,
@@ -668,6 +714,7 @@ class FollowSession {
             expectedReturnMs = expectedReturn(rhythm),
             runningForMs = if (startedAtMs == 0L) 0L else nowMs - startedAtMs,
             rotationChangesAtMs = targetChanges.toList(),
+            atMs = nowMs,
         )
     }
 
@@ -740,6 +787,17 @@ class FollowSession {
          * suggestion arrives while starting again is still cheap.
          */
         const val REBASELINE_AFTER_MS = 5 * 60 * 1000L
+
+        /**
+         * How recently a device has to have been heard to count as still with you.
+         *
+         * Long enough to ride out a device that advertises every couple of seconds and
+         * misses a few, short enough that walking away from something registers while you
+         * are still walking. Twenty seconds is also what [Following] waits before it will
+         * consider an address gone, and having the two agree means a device does not read
+         * as present here and missing there.
+         */
+        const val AUDIBLE_MS = 20_000L
 
         /**
          * Silence after which the target counts as lost rather than quiet.
