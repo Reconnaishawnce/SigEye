@@ -80,7 +80,8 @@ jobs:
           SUBJECT="$(git log -1 --pretty=%s)"
 
           NOTES="${SUBJECT}"
-          NOTES="${NOTES}"$'\n\n'"Build ${TAG} from ${SHA_SHORT}."
+          NOTES="${NOTES}"$'\n\n'"Build ${TAG} from ${SHA_SHORT}, version 0.1.${GITHUB_RUN_NUMBER}."
+          NOTES="${NOTES}"$'\n'"New to this? docs/RELEASE_NOTES.md says what to try first."
           if [ -n "$SIGNING_KEYSTORE_PASSWORD" ]; then
             NOTES="${NOTES} Installs over the previous version; settings and CSV logs are kept."
           else

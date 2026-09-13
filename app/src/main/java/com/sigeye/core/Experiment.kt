@@ -111,7 +111,7 @@ object Experiments {
                 "quarter of an hour, so the thing you named comes back a stranger. This " +
                 "follows it across, and says so loudly when it cannot be sure.",
             category = Experiment.Category.TOOLS,
-            status = Experiment.Status.BETA,
+            status = Experiment.Status.ACTIVE,
             needs = "At least one named device on a list, made in Device Inspector. " +
                 "Something has to be scanning: this is a passenger, never a scan of its " +
                 "own.",
@@ -518,7 +518,7 @@ object Experiments {
                 "wrist. How deep that null goes tells you how much of the signal reached " +
                 "you without bouncing off anything on the way.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.BETA,
+            status = Experiment.Status.ACTIVE,
             needs = "One chatty transmitter a few meters away, and an accelerometer - " +
                 "which every phone has. No compass, so nothing to calibrate.",
             howTo = listOf(
@@ -553,7 +553,7 @@ object Experiments {
                 "Wi-Fi channels 1, 6 and 11. Park an access point anywhere else and it " +
                 "lands right on top of them. This shows you both halves at once.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.BETA,
+            status = Experiment.Status.ACTIVE,
             needs = "Wi-Fi switched on - being connected is not required, being enabled " +
                 "is. Scan throttling off helps the chart keep up.",
             howTo = listOf(
@@ -590,7 +590,7 @@ object Experiments {
                 "the gap itself is not the measurement. How the gap changes when you " +
                 "walk is the measurement. What is left over is the building.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.BETA,
+            status = Experiment.Status.ACTIVE,
             needs = "A dual-band access point broadcasting on both 2.4 and 5 GHz, which " +
                 "most routers of the last ten years do, and Wi-Fi switched on.",
             howTo = listOf(
@@ -876,7 +876,7 @@ object Experiments {
                 "and it runs from the last change rather than from a clock. That offset " +
                 "is an identifier every rotation carries across intact.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.BETA,
+            status = Experiment.Status.ACTIVE,
             needs = "A room with people in it. A cafe, a train, an office - somewhere with " +
                 "more than a handful of phones, and time to sit still.",
             howTo = listOf(
@@ -917,7 +917,7 @@ object Experiments {
                 "protection, a permanent address, somebody's name. You can read all of " +
                 "it without connecting to a thing.",
             category = Experiment.Category.PRIVACY,
-            status = Experiment.Status.BETA,
+            status = Experiment.Status.ACTIVE,
             needs = "Wi-Fi switched on to scan, which does not require being connected.",
             howTo = listOf(
                 "Open it and let both scans run. Findings are grouped by device, worst " +

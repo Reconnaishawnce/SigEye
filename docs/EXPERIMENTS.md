@@ -1,6 +1,6 @@
 # What shapes the experiments
 
-This was a roadmap for twenty planned experiments. Twenty-eight of them now exist, and the
+This was a roadmap for twenty planned experiments. Thirty-four of them now exist, and the
 list of them lives in two places that cannot go stale: `core/Experiment.kt`, which is what
 the app reads, and the README, which is a snapshot of it. `docs/ROADMAP.md` has what is
 still to come.

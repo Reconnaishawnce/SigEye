@@ -2,12 +2,25 @@
 
 Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
 
-Twenty-eight of them, from *how many dB does a crisp packet block* to *follow one phone
+Thirty-four of them, from *how many dB does a crisp packet block* to *follow one phone
 through the address changes designed to stop you*. Everything runs on the phone. No
 network code, no accounts, no analytics, nothing leaves the device.
 
+**Version 0.1** — the first one anybody other than its author has been asked to use.
+[What is in it, and what to try first](docs/RELEASE_NOTES.md).
+
 **Install:** [latest release](https://github.com/Reconnaishawnce/SigEye/releases/latest) —
 a plain public APK download, no login and no zip. See [INSTALL.md](INSTALL.md).
+
+Every experiment carries one of three states, and the home screen shows it.
+
+- **Active** — run on real hardware, in the real world, and behaved.
+  27 of them are.
+- **Beta** — complete and tested, but never yet run anywhere but a build server.
+  2 of them are, marked *(beta)* below.
+- **In development** — described and not built, and tapping one does nothing.
+  5 of them are, marked *(soon)* below. They are listed on purpose: a list of what is
+  planned is more honest than a list that pretends the app is finished.
 
 ---
 
@@ -15,7 +28,9 @@ a plain public APK download, no login and no zip. See [INSTALL.md](INSTALL.md).
 
 Starred favorites sit at the top of the home screen and can be rearranged; everything
 else is grouped by what it is for. `app/src/main/java/com/sigeye/core/Experiment.kt` is
-the authoritative list — the table below is a snapshot of it.
+the authoritative list — the table below is a snapshot of it, and a test fails the build
+if the two stop agreeing. *Beta* and *soon* below carry the same meaning they do on the
+home screen.
 
 ### Tools — see and name what is around you
 
@@ -38,12 +53,13 @@ the authoritative list — the table below is a snapshot of it.
 | **Dwell Time** | Who is passing through, and who lives here. |
 | **RF Motion Detector** | Notices someone crossing a radio path. |
 | **Place Profiler** | Leave the phone somewhere for hours and see the shape of the place. |
+| **Daily Rhythm** *(soon)* | The same corner, every day, and what changes. |
 
 ### RF physics — how radio actually behaves in your rooms
 
 | | |
 |---|---|
-| **Doppler Walk** | Walk away counting your steps, and measure the number everything guesses. |
+| **Doppler Walk** *(beta)* | Walk away counting your steps, and measure the number everything guesses. |
 | **Rotational Polarization** | Roll the phone over and watch the signal die. |
 | **Channel Congestion** | Who is using the 2.4 GHz band, and whether Bluetooth has room to shout. |
 | **Wall Penetration** | Measure how much more the building takes from 5 GHz than from 2.4. |
@@ -51,6 +67,8 @@ the authoritative list — the table below is a snapshot of it.
 | **Body Absorption** | Turn slowly in a circle and find your own shadow. |
 | **Faraday Cage Test** | How many dB does a tin, a fridge or a crisp packet really block? |
 | **Microwave Interference** | Watch a microwave flatten the 2.4 GHz band. |
+| **True Ranging (Wi-Fi RTT)** *(soon)* | Distance by time of flight, where the hardware allows it. |
+| **Two-Phone Link Budget** *(soon)* | Two phones, a known distance, and what the link actually costs. |
 
 ### What is being broadcast
 
@@ -63,12 +81,15 @@ the authoritative list — the table below is a snapshot of it.
 | **Bluetooth Explorer** | Ask a device what it has, and learn what the answers mean. |
 | **Beacon Decoder** | Reads the beacon formats hiding in the noise. |
 | **Traveling Companions** | Record here, then there, then somewhere else. What appears in all of it? |
+| **Follow Me** *(beta)* | Narrow a room down to the device travelling with somebody. |
 
 ### Mapping
 
 | | |
 |---|---|
 | **Cell Handovers** | How often your phone changes tower. |
+| **Dead Zone Heatmap** *(soon)* | Walk a building and map where the signal dies. |
+| **Route Logger** *(soon)* | A journey, and what was in range along it. |
 
 ---
 

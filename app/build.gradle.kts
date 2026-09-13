@@ -30,7 +30,13 @@ android {
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         // Monotonic on purpose. A git SHA has no ordering, so anything comparing APK
         // versions rather than release tags cannot tell which build is newer.
-        versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0") +
+        //
+        // The leading 0.1 replaces a placeholder 1.0 that never meant anything. It reads
+        // as going backwards and is not: Android orders updates by versionCode, which is
+        // the run number and still only ever climbs. What the name now says is true, which
+        // is that this is the first version anybody other than its author has been asked
+        // to use.
+        versionName = "0.1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0") +
             (System.getenv("GITHUB_SHA")?.take(7)?.let { " ($it)" } ?: " (dev)")
     }
 
