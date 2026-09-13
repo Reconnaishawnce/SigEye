@@ -2,6 +2,7 @@ package com.sigeye.experiments.follow
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -68,6 +70,7 @@ import com.sigeye.core.analysis.identity.Stitch
 import com.sigeye.core.analysis.identity.Probe
 import com.sigeye.core.analysis.identity.ProbeRun
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.ble.DeviceKind
 import com.sigeye.core.ble.shape
 import com.sigeye.ui.CountUp
 import com.sigeye.ui.CountdownRing
@@ -75,6 +78,7 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
+import com.sigeye.ui.GeigerBar
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.LiveBars
 import com.sigeye.ui.PermissionGate
@@ -262,6 +266,12 @@ private fun Live(
     /** Which rotation question is on screen, and which have been put off. */
     var asking by remember { mutableStateOf<String?>(null) }
     val deferred = remember { mutableStateListOf<String>() }
+
+    /** Kinds of device the list is narrowed to, or empty for all of them. */
+    val kindFilter = remember { mutableStateListOf<DeviceKind>() }
+
+    /** Whether the pocket is pulsing, and at what. */
+    var geiger by remember { mutableStateOf(false) }
 
     /** Where the person is with the question of which devices are their own. */
     var ownKit by remember { mutableStateOf(OwnKit.UNASKED) }
@@ -649,6 +659,10 @@ private fun Live(
         Step.FOLLOWING -> Following(
             state = state,
             scores = scores,
+            kindFilter = kindFilter.toList(),
+            onKindFilter = { kind ->
+                if (kind in kindFilter) kindFilter.remove(kind) else kindFilter.add(kind)
+            },
             ownKit = ownKit,
             onOwnKit = { ownKit = it },
             onAutoMute = { level ->
@@ -744,6 +758,9 @@ private fun Live(
         Step.HOLD -> Holding(
             state = state,
             log = log,
+            geiger = geiger,
+            onGeiger = { geiger = it },
+            feedback = feedback,
             onUnlock = {
                 session().unlock()
                 goTo(Step.FOLLOWING)
@@ -1161,6 +1178,8 @@ private fun Following(
     targets: List<TargetDevice>,
     nowMs: Long,
     scores: Map<String, CandidateScore>,
+    kindFilter: List<DeviceKind>,
+    onKindFilter: (DeviceKind) -> Unit,
     ownKit: OwnKit,
     onOwnKit: (OwnKit) -> Unit,
     onAutoMute: (Int) -> Unit,
@@ -1414,8 +1433,53 @@ private fun Following(
     }
 
     if (state.listable) {
-        val arrivedFirst = state.stillInArrived
-        val wasAlreadyHere = state.stillInAlreadyHere
+        // Only the kinds actually in front of you. Offering "Speaker or TV" when nothing
+        // here is one produces an empty list that reads as a broken radio.
+        val present = state.stillIn.map { it.kind }.toSet()
+            .filter { it in DeviceKind.FILTERABLE }
+        if (present.size > 1) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Narrow by what they are",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                present.forEach { kind ->
+                    val on = kind in kindFilter
+                    FilterChip(
+                        selected = on,
+                        onClick = { onKindFilter(kind) },
+                        label = {
+                            Text(
+                                "${kind.emoji} ${kind.label} " +
+                                    "${state.stillIn.count { it.kind == kind }}",
+                            )
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "What a device is comes from what it broadcasts, and most of it is a guess. " +
+                    "An iPhone and an Apple Watch in a pocket send the same messages under " +
+                    "the same company id with the bodies randomized, so both read as " +
+                    "\"Apple device\" rather than as one or the other - calling either a " +
+                    "phone would invent the fact you are here to establish.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        fun narrow(list: List<FollowCandidate>) =
+            if (kindFilter.isEmpty()) list else list.filter { it.kind in kindFilter }
+
+        val arrivedFirst = narrow(state.stillInArrived)
+        val wasAlreadyHere = narrow(state.stillInAlreadyHere)
 
         @Composable
         fun list(candidates: List<FollowCandidate>) {
@@ -2127,6 +2191,15 @@ private fun CandidateCard(
             Spacer(Modifier.height(4.dp))
             Text(
                 buildString {
+                    if (candidate.kind != DeviceKind.UNKNOWN) {
+                        append(candidate.kind.emoji)
+                        append(" ")
+                        append(candidate.kind.label)
+                        // A guess and a declaration look identical unless one of them says
+                        // so, and this one is about to be used to pick a person.
+                        if (!candidate.kindCertain) append("?")
+                        append(" · ")
+                    }
                     append(if (candidate.isRandom) "random address" else "fixed address")
                     append(" · ${candidate.packets} packets")
                     if (candidate.spreadDb < 1_000) {
@@ -2223,6 +2296,9 @@ private fun takeawayFrom(state: FollowState): Takeaway? {
 private fun Holding(
     state: FollowState,
     log: List<String>,
+    geiger: Boolean,
+    onGeiger: (Boolean) -> Unit,
+    feedback: Feedback,
     onUnlock: () -> Unit,
     onLocate: () -> Unit,
 ) {
@@ -2240,6 +2316,17 @@ private fun Holding(
     Field("Evidence", target.describe())
     Field("Signal", "${target.meanRssi.roundToInt()} dBm average")
     Field("With you for", "${target.heldForMs(state.atMs) / 60_000} min")
+
+    // The whole point of having committed to one device: you can stop looking at this.
+    Spacer(Modifier.height(12.dp))
+    GeigerBar(
+        recentRssi = target.recentRssi.takeIf { it > -127 },
+        silentForMs = state.silentForMs,
+        label = target.label ?: target.vendor,
+        running = geiger,
+        onToggle = onGeiger,
+        feedback = feedback,
+    )
 
     if (state.phase == FollowPhase.LOST) {
         Spacer(Modifier.height(12.dp))

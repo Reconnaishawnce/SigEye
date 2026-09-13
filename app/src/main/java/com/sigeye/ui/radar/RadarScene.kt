@@ -231,6 +231,7 @@ fun RadarScene(
 
                 drawBlip(
                     scale = blipScale.coerceIn(1f, 2.6f),
+                    trails = blips.size <= TRAIL_LIMIT || blip.address == selectedAddress,
                     blip = blip,
                     center = center,
                     maxRadius = maxRadius,
@@ -285,6 +286,14 @@ private fun positionOf(blip: Blip, center: Offset, maxRadius: Float): Offset {
     return Offset(center.x + radius * cos(radians), center.y + radius * sin(radians))
 }
 
+/**
+ * Above this many blips, trails are drawn only for whatever is selected.
+ *
+ * A trail is for watching one thing move. Forty of them overlapping is fog across the
+ * rings, and the rings are the actual measurement.
+ */
+private const val TRAIL_LIMIT = 12
+
 private fun DrawScope.drawBlip(
     blip: Blip,
     center: Offset,
@@ -294,6 +303,8 @@ private fun DrawScope.drawBlip(
     color: Color,
     measurer: TextMeasurer,
     scale: Float,
+    /** False in a crowd, where fourteen dots each becomes a smear rather than a trail. */
+    trails: Boolean,
 ) {
     val position = positionOf(blip, center, maxRadius)
     val radians = (blip.angleDegrees - 90f) * PI.toFloat() / 180f
@@ -315,8 +326,10 @@ private fun DrawScope.drawBlip(
         return
     }
 
-    // Comet trail along the radius it travelled.
-    blip.trail.forEachIndexed { index, fraction ->
+    // Comet trail along the radius it travelled. The whole value of it is seeing one
+    // thing move; on a concourse with forty blips it is just fog over the rings, and the
+    // rings are the measurement.
+    if (trails) blip.trail.forEachIndexed { index, fraction ->
         val alpha = (index + 1).toFloat() / blip.trail.size * 0.20f
         val radius = maxRadius * fraction.coerceIn(0.06f, 1.06f)
         drawCircle(

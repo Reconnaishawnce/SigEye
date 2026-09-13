@@ -1,6 +1,8 @@
 package com.sigeye.core.analysis.identity
 
 import com.sigeye.core.analysis.Stats
+import com.sigeye.core.ble.DeviceKind
+import com.sigeye.core.ble.DeviceKinds
 import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
@@ -341,6 +343,13 @@ data class FollowCandidate(
     val label: String?,
     val vendor: String?,
     val isRandom: Boolean,
+    /**
+     * What sort of thing this is, worked out from the whole advertisement rather than one
+     * packet. Only ever a guess, and [kindCertain] says how much of one.
+     */
+    val kind: DeviceKind = DeviceKind.UNKNOWN,
+    /** True only when the device declared its own kind in the field made for it. */
+    val kindCertain: Boolean = false,
     val packets: Int,
     val meanRssi: Double,
     /**
@@ -1125,6 +1134,10 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             .filter { it.value.packets >= tuning.minPackets }
             .filterNot { ignored.contains(it.key) }
             .map { (address, entry) ->
+                // From the shape accumulated over the whole follow rather than one packet:
+                // a device does not send every Continuity message in every advertisement,
+                // and the one that identifies it may be the one that arrived last.
+                val guess = DeviceKinds.of(entry.shape)
                 FollowCandidate(
                     address = address,
                     label = entry.label,
@@ -1132,6 +1145,8 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                     isRandom = entry.isRandom,
                     packets = entry.packets,
                     meanRssi = entry.meanRssi,
+                    kind = guess.kind,
+                    kindCertain = guess.certain,
                     recentRssi = entry.recentRssi,
                     closeFraction = if (entry.packets == 0) {
                         0.0
