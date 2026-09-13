@@ -14,3 +14,6 @@ captures/
 *.jks
 *.keystore
 SigEye-signing/
+
+# Kotlin compiler scratch, written into the project root by local builds.
+.kotlin/
