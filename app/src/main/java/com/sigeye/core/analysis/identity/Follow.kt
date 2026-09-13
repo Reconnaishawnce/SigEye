@@ -106,6 +106,18 @@ data class FollowTuning(
     /** At or below this, the list is short enough to be worth saving somewhere. */
     val listableAt: Int = 15,
 
+    /**
+     * At or below this many survivors, start following them through their rotations.
+     *
+     * Not a battery decision. The scan is already running and the stitching is arithmetic
+     * on packets that have already arrived, so it would cost nothing to do this from the
+     * first second. The cost is statistical: every device being watched for a rotation is
+     * another chance to link two strangers, and doing it across a whole food court would
+     * produce a confident tangle. Fifteen is the point where the survivors are few enough
+     * that a wrong link would be visible rather than buried.
+     */
+    val bridgeAtOrBelow: Int = 15,
+
     /** How long to let a follow flounder before suggesting a fresh baseline. */
     val rebaselineAfterMs: Long = 5 * 60_000L,
 
@@ -266,6 +278,27 @@ private const val ARRIVAL_WEIGHT = 10
 private const val LEVELS_CAP = 512
 
 /**
+ * How many recent readings to keep per device, in time order.
+ *
+ * Only the closing twenty seconds are ever read, and packets arrive as often as six a
+ * second, so a couple of hundred covers it several times over without holding a whole
+ * half-hour walk in memory for every device on a concourse.
+ */
+private const val RECENT_CAP = 200
+
+/** Gaps kept per device, which is plenty for a low-percentile interval estimate. */
+private const val GAPS_CAP = 120
+
+/**
+ * Gaps longer than this are not one advertising interval.
+ *
+ * Everything advertises faster than two seconds when it is advertising at all. A longer gap
+ * is a packet the scanner missed, or a corner, and letting those into the estimate measures
+ * the scanner rather than the device.
+ */
+private const val GAP_CAP_MS = 2_000L
+
+/**
  * How many readings of each trail survive being saved.
  *
  * Four hundred is well over a minute at one a second, which is longer than any probe, so in
@@ -275,6 +308,15 @@ private const val LEVELS_CAP = 512
 private const val TRAIL_CAP = 400
 
 /** One device a follow is considering. */
+/** One rotation followed, and whether the app or a person decided it. */
+data class Stitch(
+    val fromAddress: String,
+    val toAddress: String,
+    val atMs: Long,
+    /** True when somebody picked it out of the options rather than the app taking it. */
+    val byHand: Boolean,
+)
+
 data class FollowCandidate(
     val address: String,
     val label: String?,
@@ -452,6 +494,21 @@ data class FollowState(
     val tuning: FollowTuning = FollowTuning.DEFAULT,
     /** How long this follow spent not listening, so the screen can admit to the gap. */
     val blindMs: Long = 0L,
+
+    /**
+     * Devices that went quiet in a way that looks like a rotation, where the app is not
+     * willing to pick the successor on its own.
+     *
+     * These are the moments a follow is won or lost, and the operator is standing there
+     * watching the person while the app is looking at packets. Asking is not a failure.
+     */
+    val questions: List<Handoff.Ask> = emptyList(),
+
+    /** Whether the survivors are few enough to be followed through their rotations. */
+    val bridging: Boolean = false,
+
+    /** How many rotations have been followed so far this session. */
+    val stitches: Int = 0,
 ) {
     /** How many were in range when the follow started. The number that falls from here. */
     val poolSize: Int get() = candidates.count { it.inPool }
@@ -606,6 +663,34 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         var rssiTotal: Double = 0.0
         var recentRssi: Double = 0.0
         var closeReadings: Int = 0
+        var bestRssi: Int = -127
+
+        /**
+         * The structure of what it broadcasts, which is what survives a rotation.
+         *
+         * The most distinctive one ever seen rather than the latest. Advertisements
+         * alternate: the same device sends a full packet carrying a name and services, and
+         * then a bare one carrying almost nothing, and fingerprinting against whichever
+         * arrived last would compare a device's rich packet to another's empty one.
+         */
+        var shape: AdvertShape = AdvertShape()
+
+        /**
+         * Gaps between consecutive packets, for the advertising interval.
+         *
+         * The interval is a firmware constant that no privacy scheme touches, which makes
+         * it one of the few things that reads the same either side of a rotation.
+         */
+        val gaps: MutableList<Long> = mutableListOf()
+
+        /**
+         * Time and level over the last little while, for reading how it ended.
+         *
+         * Separate from [levels], which is the whole follow thinned for a spread. This one
+         * has to stay dense and in order, because the question it answers is whether the
+         * last twenty seconds were flat or falling.
+         */
+        val recent: MutableList<Pair<Long, Int>> = mutableListOf()
 
         /**
          * Every level this device has been heard at, thinned once it gets long.
@@ -617,7 +702,10 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
          */
         val levels: MutableList<Int> = mutableListOf()
 
-        fun record(rssi: Int) {
+        fun record(atMs: Long, rssi: Int) {
+            recent.add(atMs to rssi)
+            // Only the closing window is ever read, and a follow is thirty minutes long.
+            while (recent.size > RECENT_CAP) recent.removeAt(0)
             levels.add(rssi)
             if (levels.size > LEVELS_CAP) {
                 val thinned = levels.filterIndexed { index, _ -> index % 2 == 0 }
@@ -646,6 +734,24 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         val walkByTrail: MutableMap<Int, MutableList<Pair<Long, Int>>> = mutableMapOf()
 
         val meanRssi: Double get() = if (packets == 0) -127.0 else rssiTotal / packets
+
+        /** What this device looks like to the fingerprinter, right now. */
+        fun identity(address: String): Identity {
+            val base = Fingerprint.baseIntervalMs(gaps)
+            return Identity(
+                address = address,
+                shape = shape,
+                isRandom = isRandom,
+                firstSeenMs = firstSeenMs,
+                lastSeenMs = lastSeenMs,
+                packets = packets,
+                medianGapMs = base,
+                recentRssi = recentRssi,
+                bestRssi = bestRssi,
+                intervalJitter = Fingerprint.intervalJitter(gaps, base),
+                rssiSpread = spreadDb().takeIf { it != Double.MAX_VALUE } ?: 0.0,
+            )
+        }
     }
 
     private val tracked = LinkedHashMap<String, Tracked>()
@@ -664,6 +770,27 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * from the pool - in this follow and every one after it.
      */
     var ignored: Set<String> = emptySet()
+
+    /** Open questions, keyed by the address that went quiet. */
+    private val pending = mutableMapOf<String, Handoff.Ask>()
+
+    /** Devices somebody has said were not any of the options. Not asked about again. */
+    private val refused = mutableSetOf<String>()
+
+    /** Every rotation followed during this session, in order. */
+    private val stitched = mutableListOf<Stitch>()
+
+    /**
+     * Addresses that inherited a mute by being the far side of a rotation.
+     *
+     * Muting your own earbuds is worthless if it lasts fifteen minutes. The mute has to
+     * travel with the device, and it can only travel along a link this session actually
+     * made - never to anything that merely looks similar, which would mute a stranger's
+     * identical earbuds and quietly delete them from the evidence.
+     *
+     * Drained by the caller, because the shared ignore list is Android and this is not.
+     */
+    private val inheritedMutes = mutableListOf<String>()
 
     private var baselineStartedAtMs: Long? = null
     private var baselineEndedAtMs: Long? = null
@@ -697,6 +824,10 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         label: String?,
         vendor: String?,
         isRandom: Boolean,
+        /** The advertisement's structure, without which nothing can be followed through a
+         *  rotation. Defaulted so older callers still compile, but a caller that does not
+         *  supply it has turned the rotation bridge off for that device. */
+        shape: AdvertShape = AdvertShape(),
     ) {
         val key = address.uppercase(Locale.US)
         val entry = tracked.getOrPut(key) {
@@ -720,7 +851,18 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             entry.recentRssi * (1 - RECENT_ALPHA) + rssi * RECENT_ALPHA
         }
         if (rssi >= tuning.carriedDbm) entry.closeReadings++
-        entry.record(rssi)
+        if (rssi > entry.bestRssi) entry.bestRssi = rssi
+        if (shape.distinctiveness > entry.shape.distinctiveness) entry.shape = shape
+        // Gaps only from packets that arrived in order and close together. A gap spanning
+        // a walk round a corner is a measure of the scanner, not of the device.
+        entry.recent.lastOrNull()?.let { (previousMs, _) ->
+            val gap = atMs - previousMs
+            if (gap in 1L..GAP_CAP_MS) {
+                entry.gaps.add(gap)
+                while (entry.gaps.size > GAPS_CAP) entry.gaps.removeAt(0)
+            }
+        }
+        entry.record(atMs, rssi)
 
         probes.lastOrNull()?.takeIf { it.running }?.let { probe ->
             when (probe.kind) {
@@ -931,6 +1073,9 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         entry.droppedAtMs = null
         entry.returnedAtMs = previous.returnedAtMs
 
+        // A mute follows the device, not the address it happened to be wearing.
+        if (ignored.contains(old)) inheritedMutes.add(key)
+
         // The old address is dropped rather than left behind. Leaving it would put the same
         // device on the list twice, once as a ghost that stopped answering, and a short list
         // with a ghost on it is one shorter than it looks.
@@ -1004,8 +1149,128 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             )
     }
 
+    /**
+     * Every device that has gone quiet and needs somebody to say where it went.
+     *
+     * Drained rather than read: an answered question does not come back, and one the caller
+     * has already been shown is not shown again until the situation changes.
+     */
+    fun questions(): List<Handoff.Ask> = pending.values.toList()
+
+    /** Rotations taken without asking, newest last, for a screen that wants to show them. */
+    fun stitches(): List<Stitch> = stitched.toList()
+
+    /** Takes the inherited mutes away, so the caller can apply them to the shared list. */
+    fun drainInheritedMutes(): List<String> {
+        if (inheritedMutes.isEmpty()) return emptyList()
+        val taken = inheritedMutes.toList()
+        inheritedMutes.clear()
+        return taken
+    }
+
+    /**
+     * Answers one of the open questions, or dismisses it.
+     *
+     * @param toAddress null to say none of the options were it, which drops the device
+     *   rather than leaving the question open forever.
+     */
+    fun answer(oldAddress: String, toAddress: String?, nowMs: Long): Boolean {
+        val key = oldAddress.uppercase(Locale.US)
+        pending.remove(key) ?: return false
+        if (toAddress == null) {
+            refused.add(key)
+            return false
+        }
+        val moved = reacquire(key, toAddress, nowMs)
+        if (moved) {
+            stitched.add(Stitch(key, toAddress.uppercase(Locale.US), nowMs, byHand = true))
+        }
+        return moved
+    }
+
+    /**
+     * Follows the survivors through their address changes.
+     *
+     * This is what makes a half-hour follow possible. Without it a phone rotating every
+     * fifteen minutes is lost twice on the way from a food court to an office, and each
+     * loss looks exactly like the target having walked off - the count drops by one and
+     * nothing says why.
+     *
+     * Run from [state] so nothing has to remember to call it, and gated on the survivor
+     * count so a whole concourse is never being stitched at once.
+     */
+    private fun bridge(nowMs: Long) {
+        val started = followStartedAtMs ?: return
+
+        val living = tracked.entries.count { (key, entry) ->
+            entry.inPool && entry.droppedAtMs == null && !ignored.contains(key)
+        }
+        if (living > tuning.bridgeAtOrBelow) return
+
+        // Successors are by definition addresses that did not exist when the follow began,
+        // so the pool members are the ones being followed and everything else is a
+        // possible destination.
+        val arrivals = tracked.entries
+            .filter { (key, entry) ->
+                !entry.inPool &&
+                    entry.isRandom &&
+                    entry.firstSeenMs > started &&
+                    entry.packets >= Handoffs.MIN_TRAIL &&
+                    nowMs - entry.lastSeenMs <= Handoffs.SILENCE_MS
+            }
+            .map { (key, entry) -> entry.identity(key) }
+
+        val claimed = mutableSetOf<String>()
+
+        tracked.entries
+            .filter { (key, entry) ->
+                entry.inPool &&
+                    entry.droppedAtMs == null &&
+                    !ignored.contains(key) &&
+                    !refused.contains(key) &&
+                    !pending.containsKey(key) &&
+                    entry.packets >= Handoffs.MIN_TRAIL &&
+                    nowMs - entry.lastSeenMs >= Handoffs.SILENCE_MS
+            }
+            // Oldest silence first, so the device that went quiet earliest gets first claim
+            // on a successor rather than whichever the map happened to iterate to.
+            .sortedBy { it.value.lastSeenMs }
+            .forEach { (key, entry) ->
+                val departure = Handoffs.classify(key, entry.recent.toList(), entry.bestRssi)
+                when (
+                    val handoff = Handoffs.decide(
+                        previous = entry.identity(key),
+                        departure = departure,
+                        candidates = arrivals,
+                        nowMs = nowMs,
+                        taken = claimed,
+                    )
+                ) {
+                    is Handoff.Rotated -> {
+                        claimed.add(handoff.to.address)
+                        if (reacquire(key, handoff.to.address, nowMs)) {
+                            stitched.add(
+                                Stitch(key, handoff.to.address, nowMs, byHand = false),
+                            )
+                        }
+                    }
+
+                    is Handoff.Ask -> {
+                        handoff.options.forEach { claimed.add(it.address) }
+                        pending[key] = handoff
+                    }
+
+                    // Nothing to do. The ordinary drop-off will retire it, which is the
+                    // right outcome for a device that walked away.
+                    is Handoff.Gone -> Unit
+                    Handoff.Waiting -> Unit
+                }
+            }
+    }
+
     fun state(nowMs: Long): FollowState {
         sweep(nowMs)
+        bridge(nowMs)
 
         val candidates = candidates(nowMs)
         val target = targetKey?.let { key -> candidates.firstOrNull { it.address == key } }
@@ -1032,6 +1297,10 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             rotationChangesAtMs = targetChanges.toList(),
             tuning = tuning,
             blindMs = followStartedAtMs?.let { blindMsBetween(it, nowMs) } ?: 0L,
+            questions = pending.values.toList(),
+            bridging = followStartedAtMs != null && candidates.count { it.stillIn } <=
+                tuning.bridgeAtOrBelow,
+            stitches = stitched.size,
         )
     }
 

@@ -368,7 +368,7 @@ private fun Live(
             // Ticked here as well as on the service, so the screen is live even in the
             // moment before the service has attached. Recomputing the state twice is
             // harmless: it is derived from the session rather than accumulated.
-            FollowRunner.tick(now)
+            FollowRunner.tick(now, ignoreList)
             val next = FollowRunner.state.value
 
             // One bar a second, of whatever the screen is about at the time.

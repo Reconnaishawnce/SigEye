@@ -4,6 +4,7 @@ import com.sigeye.core.analysis.identity.FollowSession
 import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.FollowTuning
 import com.sigeye.core.ble.Advert
+import com.sigeye.core.ble.shape
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
@@ -68,11 +69,25 @@ object FollowRunner {
             label = book?.nicknameOf(advert.address) ?: advert.name,
             vendor = advert.vendor,
             isRandom = advert.isRandomAddress,
+            // Without this the session has nothing to recognize a device by once it puts
+            // on a new address, and a half-hour follow ends at the first rotation.
+            shape = advert.shape(),
         )
     }
 
-    fun tick(nowMs: Long) {
+    /**
+     * @param ignoreList given so a mute can travel with a device through a rotation. Muting
+     *   your own earbuds is worthless if it expires every fifteen minutes.
+     */
+    fun tick(nowMs: Long, ignoreList: IgnoreList? = null) {
         _state.value = session.state(nowMs)
+        if (ignoreList != null) {
+            val inherited = session.drainInheritedMutes()
+            if (inherited.isNotEmpty()) {
+                inherited.forEach(ignoreList::add)
+                session.ignored = ignoreList.addresses.value
+            }
+        }
     }
 
     /** One line for the ongoing notification, which is the only view of this with the screen off. */

@@ -244,7 +244,7 @@ class ScanService : Service() {
                     val now = System.currentTimeMillis()
                     trainSpotter?.tick(now)
                     trainSpotter?.publish(BleScanHub.health.value)
-                    if (modes.contains(Mode.FOLLOW)) FollowRunner.tick(now)
+                    if (modes.contains(Mode.FOLLOW)) FollowRunner.tick(now, IgnoreList.get(this@ScanService))
                     if (modes.contains(Mode.ROTATION_LAB)) Recordings.rotationLab.tick(now)
                     if (now - lastPrune > 10 * 60_000L) {
                         watch?.prune(now)
