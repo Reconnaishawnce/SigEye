@@ -132,7 +132,17 @@ object Preflight {
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE)
             as? WifiManager
         val enabled = runCatching { wifi?.isWifiEnabled == true }.getOrDefault(false)
-        val scanAlways = runCatching { wifi?.isScanAlwaysAvailable == true }.getOrDefault(false)
+        // Deprecated, and not merely noisily: from Android 13 the platform stopped
+        // answering this and always returns false, because the setting became the user's
+        // rather than something an app may read. Consulting it there would report scanning
+        // as unavailable on a phone that is scanning perfectly well, so it is only asked
+        // where it can still answer.
+        val scanAlways = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            @Suppress("DEPRECATION")
+            runCatching { wifi?.isScanAlwaysAvailable == true }.getOrDefault(false)
+        } else {
+            false
+        }
         return Check(
             title = "Wi-Fi on",
             passing = enabled || scanAlways,

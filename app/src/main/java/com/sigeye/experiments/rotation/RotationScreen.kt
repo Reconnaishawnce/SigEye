@@ -50,6 +50,8 @@ import com.sigeye.core.analysis.identity.Rotation
 import com.sigeye.core.analysis.identity.RotationHunt
 import com.sigeye.core.ble.AddressType
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.ble.DeviceKind
+import com.sigeye.core.ble.DeviceKinds
 import com.sigeye.core.ble.Phy
 import com.sigeye.core.ble.shape
 import com.sigeye.experiments.watchlist.MatchKind
@@ -554,6 +556,18 @@ private fun Pick(
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
+                    // What sort of thing it is, which is most of how somebody decides what
+                    // is worth following. A watch rotating is a far more interesting
+                    // subject than a fridge that never will.
+                    val guess = DeviceKinds.of(candidate.shape)
+                    if (guess.kind != DeviceKind.UNKNOWN) {
+                        Text(
+                            guess.kind.emoji + " " + guess.kind.label +
+                                if (guess.certain) "" else "?",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(

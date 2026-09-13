@@ -728,6 +728,9 @@ private fun Live(
             scores = scores,
             kindFilter = kindFilter.toList(),
             journal = journal,
+            geiger = geiger,
+            onGeiger = { geiger = it },
+            feedback = feedback,
             guidance = remember(state.atMs, journal.size, walk.stillForMs) {
                 Guide.of(state, journal.counts(), walk.stillForMs.takeIf { walk.available })
             },
@@ -1275,6 +1278,9 @@ private fun Following(
     onKindFilter: (DeviceKind) -> Unit,
     journal: Journal,
     guidance: Guidance?,
+    geiger: Boolean,
+    onGeiger: (Boolean) -> Unit,
+    feedback: Feedback,
     details: Boolean,
     onDetails: (Boolean) -> Unit,
     marks: Int,
@@ -1376,6 +1382,30 @@ private fun Following(
     // The instruction, and the one thing to do about it. This is what somebody standing
     // on a street actually needs, and it used to be nowhere: a number with no context, a
     // still count that reads as a broken app, and eleven cards to work it out from.
+    // Following by feel does not have to wait for a commitment. Once the list is short
+    // the strongest candidate is worth carrying in a pocket, and waiting until somebody
+    // had picked one meant the mode only appeared after the part it would have helped
+    // with was over.
+    val leader = if (state.stillIn.size <= state.tuning.listableAt) {
+        state.target ?: scores.values
+            .filter { it.points > 0 }
+            .maxByOrNull { it.points }
+            ?.let { best -> state.stillIn.firstOrNull { it.address == best.address } }
+    } else {
+        null
+    }
+    if (leader != null) {
+        Spacer(Modifier.height(12.dp))
+        GeigerBar(
+            recentRssi = leader.recentRssi.takeIf { it > -127 },
+            silentForMs = (state.atMs - leader.lastSeenMs).coerceAtLeast(0L),
+            label = leader.label ?: leader.vendor ?: "strongest case",
+            running = geiger,
+            onToggle = onGeiger,
+            feedback = feedback,
+        )
+    }
+
     guidance?.let { advice ->
         Spacer(Modifier.height(12.dp))
         Card(
