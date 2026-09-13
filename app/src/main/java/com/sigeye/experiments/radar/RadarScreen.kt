@@ -40,6 +40,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
+import com.sigeye.core.analysis.identity.DeviceQuery
 import com.sigeye.core.analysis.rf.ProximityEstimator
 import com.sigeye.core.analysis.rf.ProximityReading
 import com.sigeye.core.ble.Advert
@@ -50,13 +51,12 @@ import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
-import com.sigeye.ui.radar.RadarPanel
-import com.sigeye.core.analysis.identity.DeviceQuery
 import com.sigeye.ui.QuickFilter
+import com.sigeye.ui.radar.RadarPanel
 import com.sigeye.ui.radar.RadarTarget
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "radar"
 
@@ -90,6 +90,15 @@ fun RadarScreen(
     onBack: () -> Unit,
     onLocate: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * A filter to open with, for arriving here from somewhere that already knows which
+     * device you mean.
+     *
+     * Pre-filled rather than pre-selected on purpose. The filter is visible and editable,
+     * so it is obvious why the radar has one blip on it and it takes one gesture to widen
+     * again - whereas a selection made on your behalf looks like the radar is broken.
+     */
+    initialQuery: String = "",
 ) {
     Column(
         modifier = modifier
@@ -118,14 +127,14 @@ fun RadarScreen(
             footnote = "Distance is inferred from signal strength, which is a rough " +
                 "instrument. Direction is not measured at all.",
         ) {
-            Live(onLocate)
+            Live(onLocate, initialQuery)
         }
         Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun Live(onLocate: (String) -> Unit) {
+private fun Live(onLocate: (String) -> Unit, initialQuery: String) {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val watchStore = remember { WatchStore.get(context) }
@@ -144,7 +153,7 @@ private fun Live(onLocate: (String) -> Unit) {
     var selected by remember { mutableStateOf<String?>(null) }
     var showList by remember { mutableStateOf(false) }
     var showNewList by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(initialQuery) }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)

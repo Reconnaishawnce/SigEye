@@ -146,6 +146,10 @@ fun FollowScreen(
     onBack: () -> Unit,
     onLocate: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Opens the radar with this device already filtered for. */
+    onRadar: (String) -> Unit = {},
+    /** Opens Defeating Randomization already tracking it. */
+    onRotation: (String) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -171,14 +175,18 @@ fun FollowScreen(
                 "carrying it. It is built to show what is possible, and what is possible " +
                 "is following somebody.",
         ) {
-            Live(onLocate)
+            Live(onLocate, onRadar, onRotation)
         }
         Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun Live(onLocate: (String) -> Unit) {
+private fun Live(
+    onLocate: (String) -> Unit,
+    onRadar: (String) -> Unit,
+    onRotation: (String) -> Unit,
+) {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val library = remember { FollowLibrary.get(context) }
@@ -202,6 +210,7 @@ private fun Live(onLocate: (String) -> Unit) {
     var dismissedRebaseline by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var keeping by remember { mutableStateOf<FollowCandidate?>(null) }
+    var acting by remember { mutableStateOf<FollowCandidate?>(null) }
     var expandedWalkBy by remember { mutableStateOf<Int?>(null) }
     var announcedShortlist by remember { mutableStateOf(false) }
     var resumable by remember { mutableStateOf(library.loadInProgress() != null) }
@@ -406,6 +415,39 @@ private fun Live(onLocate: (String) -> Unit) {
         }
     }
 
+    acting?.let { candidate ->
+        DeviceActionsDialog(
+            candidate = candidate,
+            tuning = tuning,
+            onDismiss = { acting = null },
+            onKeep = {
+                acting = null
+                keeping = candidate
+            },
+            onMine = {
+                acting = null
+                ignoreList.add(candidate.address)
+            },
+            onRadar = {
+                acting = null
+                onRadar(candidate.address)
+            },
+            onRotation = {
+                acting = null
+                onRotation(candidate.address)
+            },
+            onLocate = {
+                acting = null
+                onLocate(candidate.address)
+            },
+            onHold = {
+                acting = null
+                session.lock(candidate.address)
+                goTo(Step.HOLD)
+            },
+        )
+    }
+
     keeping?.let { candidate ->
         DeviceListDialog(
             address = candidate.address,
@@ -517,10 +559,7 @@ private fun Live(onLocate: (String) -> Unit) {
                 goTo(Step.WALK_BY)
             },
             onReview = { goTo(Step.REVIEW) },
-            onHold = {
-                session.lock(it.address)
-                goTo(Step.HOLD)
-            },
+            onHold = { acting = it },
             onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
             onKeep = { keeping = it },
             onMine = { ignoreList.add(it.address) },
@@ -565,10 +604,7 @@ private fun Live(onLocate: (String) -> Unit) {
             onExpand = { expandedWalkBy = it },
             onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
             onKeep = { keeping = it },
-            onHold = {
-                session.lock(it.address)
-                goTo(Step.HOLD)
-            },
+            onHold = { acting = it },
             onNewWalkBy = {
                 levelMarked = false
                 session.beginProbe(Probe.WALK_BY, System.currentTimeMillis())

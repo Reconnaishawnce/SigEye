@@ -12,35 +12,34 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.sigeye.core.Experiments
 import com.sigeye.core.OuiRegistry
 import com.sigeye.core.Recordings
 import com.sigeye.experiments.absorption.AbsorptionScreen
+import com.sigeye.experiments.bands.BandsScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.cells.CellScreen
+import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.convoy.ConvoyScreen
 import com.sigeye.experiments.discovery.DiscoveryScreen
-import com.sigeye.experiments.bands.BandsScreen
-import com.sigeye.experiments.vulnerability.VulnerabilityScreen
-import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.doppler.DopplerScreen
-import com.sigeye.experiments.polarization.PolarizationScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
+import com.sigeye.experiments.faraday.FaradayScreen
 import com.sigeye.experiments.follow.FollowScreen
 import com.sigeye.experiments.following.FollowingScreen
-import com.sigeye.experiments.faraday.FaradayScreen
 import com.sigeye.experiments.forensics.ForensicsScreen
 import com.sigeye.experiments.inspector.InspectorScreen
 import com.sigeye.experiments.locate.LocateScreen
 import com.sigeye.experiments.microwave.MicrowaveScreen
 import com.sigeye.experiments.motion.MotionScreen
 import com.sigeye.experiments.place.PlaceScreen
+import com.sigeye.experiments.polarization.PolarizationScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
@@ -49,6 +48,7 @@ import com.sigeye.experiments.rotationlab.RotationLabScreen
 import com.sigeye.experiments.settings.SettingsScreen
 import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
+import com.sigeye.experiments.vulnerability.VulnerabilityScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
 import com.sigeye.experiments.wifi.WifiScreen
 import com.sigeye.home.HomeScreen
@@ -81,7 +81,17 @@ class MainActivity : ComponentActivity() {
  * A route is an experiment id, optionally with an argument after a colon - which only
  * Locate needs, and only ever an address.
  */
+/**
+ * Routes that carry a device with them.
+ *
+ * Finding the right phone and then having nothing to do with it was the gap: a follow ends
+ * with an address and every other experiment starts by asking you to pick one out of forty.
+ * These hand it over, so "open this on the radar" is one tap rather than a hunt through a
+ * picker for a name you have to remember.
+ */
 private const val LOCATE_PREFIX = "locate:"
+private const val RADAR_PREFIX = "radar:"
+private const val ROTATION_PREFIX = "rotation:"
 
 /** Not an experiment, so it is routed by a reserved id rather than through the registry. */
 private const val SETTINGS = "settings"
@@ -114,6 +124,25 @@ private fun SigEyeApp() {
         }
 
         val openLocate: (String) -> Unit = { address -> open(LOCATE_PREFIX + address) }
+
+        if (current != null && current.startsWith(RADAR_PREFIX)) {
+            RadarScreen(
+                onBack = goBack,
+                onLocate = openLocate,
+                initialQuery = current.removePrefix(RADAR_PREFIX),
+                modifier = inset,
+            )
+            return@Scaffold
+        }
+
+        if (current != null && current.startsWith(ROTATION_PREFIX)) {
+            RotationScreen(
+                onBack = goBack,
+                initialAddress = current.removePrefix(ROTATION_PREFIX),
+                modifier = inset,
+            )
+            return@Scaffold
+        }
 
         when (current) {
             null -> HomeScreen(onOpen = open, modifier = inset)
@@ -196,6 +225,8 @@ private fun SigEyeApp() {
             Experiments.FOLLOW -> FollowScreen(
                 onBack = goBack,
                 onLocate = openLocate,
+                onRadar = { address -> open(RADAR_PREFIX + address) },
+                onRotation = { address -> open(ROTATION_PREFIX + address) },
                 modifier = inset,
             )
 

@@ -71,7 +71,12 @@ private const val HUB_TAG = "rotation"
 private const val TICK_MS = 1_000L
 
 @Composable
-fun RotationScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun RotationScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** A device to start on, for arriving from a follow that already found one. */
+    initialAddress: String = "",
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -94,14 +99,14 @@ fun RotationScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             ),
             footnote = "Nothing is transmitted. Use your own phone - that is the point.",
         ) {
-            Live()
+            Live(initialAddress)
         }
         Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun Live() {
+private fun Live(initialAddress: String) {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val feedback = remember { Feedback(context) }
@@ -188,6 +193,16 @@ private fun Live() {
         hunt.reset()
         walkNote = null
         state = hunt.state(System.currentTimeMillis())
+    }
+
+    // Arriving with a device already chosen skips the picker, which is the whole point of
+    // arriving with one. Once, and only while it is still the address the follow found -
+    // a rotation past this point is exactly what the experiment is here to watch.
+    LaunchedEffect(initialAddress) {
+        if (initialAddress.isNotBlank() && state.stage == HuntStage.PICK) {
+            hunt.track(initialAddress, System.currentTimeMillis())
+            state = hunt.state(System.currentTimeMillis())
+        }
     }
 
     when (state.stage) {
