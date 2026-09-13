@@ -206,7 +206,11 @@ private fun Live(
     // anybody demonstrating this would do. The service keeps feeding it while the screen is
     // away; the screen reads what it says.
     val state by FollowRunner.state.collectAsStateWithLifecycle()
-    val session: FollowSession get() = FollowRunner.session()
+
+    // A function rather than a value, because the runner hands out a different session
+    // after a reset and anything holding the old one would be writing into a follow nobody
+    // is reading. A local val cannot have a getter, which is what I reached for first.
+    fun session(): FollowSession = FollowRunner.session()
 
     var step by remember { mutableStateOf(Step.LIBRARY) }
     var stepStartedMs by remember { mutableStateOf(0L) }
@@ -306,11 +310,11 @@ private fun Live(
         BleScanHub.acquire(HUB_TAG)
         onDispose {
             val now = System.currentTimeMillis()
-            if (session.state(now).followStartedAtMs != null) {
+            if (session().state(now).followStartedAtMs != null) {
                 // The service is still listening, so the clock keeps running - only the
                 // screen has gone. Written down anyway, because a killed process would
                 // otherwise take half an hour of walking with it.
-                library.saveInProgress(session.snapshot().toString())
+                library.saveInProgress(session().snapshot().toString())
             } else {
                 // Nothing worth keeping the radio open for.
                 ScanService.stop(context, ScanService.Mode.FOLLOW)
@@ -340,7 +344,7 @@ private fun Live(
     // Kept on the session rather than filtered in the screen, so a device you have said is
     // yours never reaches the pool, the radar, the short list or the export.
     LaunchedEffect(ignored, state.atMs) {
-        session.ignored = ignored
+        session().ignored = ignored
     }
 
     LaunchedEffect(Unit) {
@@ -379,13 +383,13 @@ private fun Live(
             while (bars.size > BARS) bars.removeAt(0)
 
             if (currentStep == Step.BASELINE && now - stepStarted >= currentTuning.baselineMs) {
-                session.endBaseline(now)
+                session().endBaseline(now)
                 feedback.alert(AlertStyle.BOTH, urgent = false)
                 when (hereAnswer) {
                     null -> step = Step.ASK_HERE
 
                     true -> {
-                        session.startFollowing(now)
+                        session().startFollowing(now)
                         ScanService.start(context, ScanService.Mode.FOLLOW)
                         bars.clear()
                         step = Step.FOLLOWING
@@ -397,7 +401,7 @@ private fun Live(
             }
 
             if (currentStep == Step.CIRCLE && now - stepStarted >= currentTuning.circleMs) {
-                session.endProbe(now)
+                session().endProbe(now)
                 feedback.alert(AlertStyle.BOTH, urgent = false)
                 step = Step.FOLLOWING
                 stepStartedMs = now
@@ -421,7 +425,7 @@ private fun Live(
             // Kept up to date rather than only written on the way out, because the way out
             // is not always graceful - a killed process would otherwise take the follow.
             if (next.followStartedAtMs != null && next.atMs / 1000 % SAVE_EVERY_S == 0L) {
-                library.saveInProgress(session.snapshot().toString())
+                library.saveInProgress(session().snapshot().toString())
             }
         }
     }
@@ -453,7 +457,7 @@ private fun Live(
             },
             onHold = {
                 acting = null
-                session.lock(candidate.address)
+                session().lock(candidate.address)
                 goTo(Step.HOLD)
             },
         )
@@ -474,7 +478,7 @@ private fun Live(
             onSave = {
                 settings.save(it)
                 tuning = it
-                session.tuning = it
+                session().tuning = it
                 showSettings = false
             },
         )
@@ -503,7 +507,7 @@ private fun Live(
             onStart = {
                 val now = System.currentTimeMillis()
                 startedAtMs = now
-                session.startBaseline(now)
+                session().startBaseline(now)
                 tests += "baseline"
                 goTo(Step.BASELINE)
             },
@@ -524,7 +528,7 @@ private fun Live(
             onAnswer = { here ->
                 theyAreHere = here
                 if (here) {
-                    session.startFollowing(System.currentTimeMillis())
+                    session().startFollowing(System.currentTimeMillis())
                     ScanService.start(context, ScanService.Mode.FOLLOW)
                     bars.clear()
                     goTo(Step.FOLLOWING)
@@ -538,7 +542,7 @@ private fun Live(
             state = state,
             onArrived = {
                 theyAreHere = true
-                session.startFollowing(System.currentTimeMillis())
+                session().startFollowing(System.currentTimeMillis())
                 ScanService.start(context, ScanService.Mode.FOLLOW)
                 bars.clear()
                 goTo(Step.FOLLOWING)
@@ -554,20 +558,20 @@ private fun Live(
             onDismissRebaseline = { dismissedRebaseline = true },
             onRebaseline = {
                 val now = System.currentTimeMillis()
-                session.rebaseline(now)
+                session().rebaseline(now)
                 bars.clear()
                 tests += "re-baseline"
                 dismissedRebaseline = false
                 goTo(Step.BASELINE)
             },
             onCircle = {
-                session.beginProbe(Probe.ORBIT, System.currentTimeMillis())
+                session().beginProbe(Probe.ORBIT, System.currentTimeMillis())
                 tests += "circled them"
                 goTo(Step.CIRCLE)
             },
             onWalkBy = {
                 levelMarked = false
-                session.beginProbe(Probe.WALK_BY, System.currentTimeMillis())
+                session().beginProbe(Probe.WALK_BY, System.currentTimeMillis())
                 tests += "walked past them"
                 goTo(Step.WALK_BY)
             },
@@ -602,12 +606,12 @@ private fun Live(
             elapsedMs = nowMs - stepStartedMs,
             marked = levelMarked,
             onLevel = {
-                session.markClosest(System.currentTimeMillis())
+                session().markClosest(System.currentTimeMillis())
                 levelMarked = true
                 feedback.alert(AlertStyle.BOTH, urgent = false)
             },
             onDone = {
-                session.endProbe(System.currentTimeMillis())
+                session().endProbe(System.currentTimeMillis())
                 goTo(if (levelMarked) Step.REVIEW else Step.FOLLOWING)
             },
         )
@@ -622,7 +626,7 @@ private fun Live(
             onHold = { acting = it },
             onNewWalkBy = {
                 levelMarked = false
-                session.beginProbe(Probe.WALK_BY, System.currentTimeMillis())
+                session().beginProbe(Probe.WALK_BY, System.currentTimeMillis())
                 tests += "walked past them"
                 goTo(Step.WALK_BY)
             },
@@ -633,7 +637,7 @@ private fun Live(
             state = state,
             log = log,
             onUnlock = {
-                session.unlock()
+                session().unlock()
                 goTo(Step.FOLLOWING)
             },
             onLocate = { state.target?.let { onLocate(it.address) } },
@@ -658,7 +662,7 @@ private fun Live(
                 val directory = File(context.getExternalFilesDir(null), "follow")
                 directory.mkdirs()
                 val file = File(directory, "follow-${System.currentTimeMillis()}.csv")
-                runCatching { file.writeText(session.csv()) }
+                runCatching { file.writeText(session().csv()) }
                 SweepExport.share(context, file)
             },
             enabled = state.watching > 0,
@@ -726,7 +730,7 @@ private fun watchForRotations(
 
         val decision = Following.decide(previous, successors, nowMs)
         if (decision is FollowDecision.Reacquired) {
-            if (session.reacquire(candidate.address, decision.address, nowMs)) {
+            if (session().reacquire(candidate.address, decision.address, nowMs)) {
                 onMoved(
                     candidate.address,
                     decision.address,
