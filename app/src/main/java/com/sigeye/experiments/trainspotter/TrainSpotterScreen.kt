@@ -45,6 +45,9 @@ import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
 import com.sigeye.ui.CountUp
+import com.sigeye.ui.TileColumn
+import com.sigeye.ui.tile
+import com.sigeye.ui.tiles
 import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.Sparkline
 import java.io.File
@@ -95,6 +98,7 @@ private fun Monitor() {
     val context = LocalContext.current
     val state by PulseState.state.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
+    var arranging by remember { mutableStateOf(false) }
 
     state.error?.let { message ->
         Card(
@@ -135,6 +139,7 @@ private fun Monitor() {
         }
     }
 
+    val countAndChart: @Composable () -> Unit = {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -169,6 +174,7 @@ private fun Monitor() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    }
 
     // Bins grouped into passes. A train takes longer than one bin, so the raw spike count
     // has never had much to do with the number of things that actually went by.
@@ -179,7 +185,7 @@ private fun Monitor() {
         log.passes()
     }
 
-    Spacer(Modifier.height(16.dp))
+    val passesCard: @Composable () -> Unit = {
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -239,18 +245,46 @@ private fun Monitor() {
     }
 
 
-    Spacer(Modifier.height(16.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        Stat("Active", state.activeUnique.toString(), "in " + state.config.windowMinutes + " min")
-        Stat("Usual", format1(state.baseline), "new per bin")
-        Stat("Rate", format1(state.advertsPerSecond), "ads per sec")
     }
 
+    val stats: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Stat(
+                "Active",
+                state.activeUnique.toString(),
+                "in " + state.config.windowMinutes + " min",
+            )
+            Stat("Usual", format1(state.baseline), "new per bin")
+            Stat("Rate", format1(state.advertsPerSecond), "ads per sec")
+        }
+    }
 
-    Spacer(Modifier.height(20.dp))
+    // Arranged how you want them, and remembered. The count and the chart are one tile
+    // rather than two: they are a single picture and separating them would let somebody
+    // put the chart somewhere the number is not.
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = { arranging = !arranging }) {
+            Text(if (arranging) "Done" else "Arrange")
+        }
+    }
+
+    TileColumn(
+        screen = Experiments.TRAIN_SPOTTER,
+        arranging = arranging,
+        tiles = tiles {
+            tile("count", "Count and chart", countAndChart)
+            tile("passes", "Passes", passesCard)
+            tile("stats", "Numbers", stats)
+        },
+    )
+
     if (state.running) {
         Button(
             onClick = { ScanService.stop(context, ScanService.Mode.TRAIN_SPOTTER) },
