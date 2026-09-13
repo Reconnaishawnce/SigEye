@@ -1,14 +1,14 @@
 package com.sigeye.core
 
 import android.content.Context
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** One device a follow was still considering when it finished. */
 data class FollowLead(
@@ -62,9 +62,28 @@ data class SavedFollow(
 class FollowLibrary private constructor(context: Context) {
 
     private val file = File(context.applicationContext.filesDir, FILE)
+    private val inProgress = File(context.applicationContext.filesDir, IN_PROGRESS)
 
     private val _follows = MutableStateFlow(load())
     val follows: StateFlow<List<SavedFollow>> = _follows
+
+    /**
+     * The follow that is still going, kept so closing the screen is not giving up.
+     *
+     * One slot, overwritten. Two half-finished follows at once is not a thing anybody is
+     * doing, and offering a choice of which to resume would be a menu nobody wants.
+     */
+    fun saveInProgress(json: String) {
+        runCatching { inProgress.writeText(json) }
+    }
+
+    fun loadInProgress(): String? = runCatching {
+        if (inProgress.exists()) inProgress.readText().takeIf { it.isNotBlank() } else null
+    }.getOrNull()
+
+    fun clearInProgress() {
+        runCatching { inProgress.delete() }
+    }
 
     fun save(follow: SavedFollow) {
         _follows.value = (listOf(follow) + _follows.value.filterNot { it.id == follow.id })
@@ -144,6 +163,7 @@ class FollowLibrary private constructor(context: Context) {
         const val MAX = 30
 
         private const val FILE = "follows.json"
+        private const val IN_PROGRESS = "follow-in-progress.json"
 
         @Volatile
         private var instance: FollowLibrary? = null

@@ -376,6 +376,101 @@ class FollowTest {
 
     // ------------------------------------------------------------------ the export
 
+    // ------------------------------------------------------------------ picking it up
+
+    @Test
+    fun `time nobody was listening does not count against anybody`() {
+        // The worst thing this could get wrong. Put the phone away for five minutes and
+        // every device in the pool goes silent at once - not because they left but because
+        // nothing was listening - and coming back to an empty list would be the most
+        // confidently wrong the app could be.
+        val session = following("5A:01", "5A:02")
+        session.hear("5A:01", start + 40_000L)
+        session.hear("5A:02", start + 40_000L)
+
+        session.pause(start + 45_000L)
+        session.resume(start + 5 * minute)
+
+        // Five minutes of wall clock has passed and five seconds of listening.
+        assertEquals(2, session.state(start + 5 * minute).stillIn.size)
+
+        // And the drop-off still works once it is listening again.
+        session.hear("5A:01", start + 5 * minute + 1_000L)
+        assertEquals(1, session.state(start + 6 * minute + 10_000L).stillIn.size)
+    }
+
+    @Test
+    fun `a follow survives being written down and read back`() {
+        val session = following("5A:01", "5A:02")
+        session.hear("5A:01", start + 40_000L)
+        session.beginProbe(Probe.WALK_BY, start + 50_000L)
+        session.hear("5A:01", start + 55_000L)
+        session.markClosest(start + 58_000L)
+        session.endProbe(start + 65_000L)
+        val before = session.state(start + 70_000L)
+
+        val restored = FollowSession()
+        restored.restore(session.snapshot())
+        val after = restored.state(start + 70_000L)
+
+        assertEquals(before.watching, after.watching)
+        assertEquals(before.poolSize, after.poolSize)
+        assertEquals(before.stillIn.map { it.address }, after.stillIn.map { it.address })
+        assertEquals(1, after.walkBys.size)
+        assertEquals(
+            "the trace comes back too, or a saved walk-by cannot be checked",
+            before.walkByResults(0).first().second.trail,
+            after.walkByResults(0).first().second.trail,
+        )
+    }
+
+    // ------------------------------------------------------------------ several probes
+
+    @Test
+    fun `a second walk-by is a second walk-by, not a refusal`() {
+        val session = following("5A:01")
+
+        session.beginProbe(Probe.WALK_BY, start + 40_000L)
+        session.hear("5A:01", start + 45_000L)
+        session.markClosest(start + 48_000L)
+        session.endProbe(start + 55_000L)
+
+        session.beginProbe(Probe.WALK_BY, start + 70_000L)
+        session.hear("5A:01", start + 75_000L)
+        session.markClosest(start + 78_000L)
+        session.endProbe(start + 85_000L)
+
+        val state = session.state(start + 90_000L)
+
+        assertEquals(2, state.walkBys.size)
+        assertEquals(2, state.candidates.first().walkBys.size)
+        // Each keeps its own readings, or the second would be drawn from the first's trace.
+        assertEquals(listOf(0, 1), state.candidates.first().walkBys.map { it.probeIndex })
+    }
+
+    @Test
+    fun `the headline result is the latest, not the best`() {
+        // A second walk-by is usually done because the first was unconvincing. Quietly
+        // reporting whichever came out better would turn "try it again" into "keep trying
+        // until it passes".
+        val session = following("5A:01")
+
+        session.beginProbe(Probe.WALK_BY, start + 40_000L)
+        repeat(20) { session.observe("5A:01", if (it in 8..11) -40 else -85, start + 40_000L + it * 1_000L, null, null, true) }
+        session.markClosest(start + 50_000L)
+        session.endProbe(start + 60_000L)
+        assertTrue("the first one passed", session.state(start + 61_000L).candidates.first().walkBy!!.passed)
+
+        session.beginProbe(Probe.WALK_BY, start + 70_000L)
+        repeat(20) { session.observe("5A:01", -70, start + 70_000L + it * 1_000L, null, null, true) }
+        session.markClosest(start + 80_000L)
+        session.endProbe(start + 90_000L)
+
+        val candidate = session.state(start + 91_000L).candidates.first()
+        assertFalse("and the headline is now the flat second one", candidate.walkBy!!.passed)
+        assertTrue("but passing one of them still counts for something", candidate.passedAnyWalkBy)
+    }
+
     @Test
     fun `the export carries the tuning, the probes and the verdicts`() {
         val session = following("5A:01")

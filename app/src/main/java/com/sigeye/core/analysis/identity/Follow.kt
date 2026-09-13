@@ -2,6 +2,8 @@ package com.sigeye.core.analysis.identity
 
 import com.sigeye.core.analysis.Stats
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** Where a follow has got to. */
 enum class FollowPhase(val label: String) {
@@ -38,8 +40,18 @@ enum class Probe(val label: String) {
     WALK_BY("Walk past them"),
 }
 
-/** One run of a probe. */
+/**
+ * One run of a probe.
+ *
+ * Numbered, because you can do several. The first version allowed one of each on the
+ * grounds that two laps at different radii are not the same measurement - which is true,
+ * and the mistake was merging them rather than running them. Scored separately they are two
+ * measurements, and two is better than one: a walk-by that came out ambiguous is worth
+ * repeating from the other direction, and the honest thing to do with both results is show
+ * both.
+ */
 data class ProbeRun(
+    val index: Int,
     val kind: Probe,
     val startedAtMs: Long,
     val endedAtMs: Long? = null,
@@ -48,8 +60,22 @@ data class ProbeRun(
 ) {
     val running: Boolean get() = endedAtMs == null
 
+    /** Scored only once it is over and, for a walk-by, only once the middle was marked. */
+    val complete: Boolean
+        get() = endedAtMs != null && (kind != Probe.WALK_BY || midAtMs != null)
+
     fun durationMs(nowMs: Long): Long = (endedAtMs ?: nowMs) - startedAtMs
 }
+
+/** What one circle said about one device. */
+data class CandidateOrbit(val probeIndex: Int, val score: OrbitScore)
+
+/** What one walk-by said about one device, and the readings it said it from. */
+data class CandidateWalkBy(
+    val probeIndex: Int,
+    val score: WalkByScore,
+    val trail: List<Pair<Long, Int>>,
+)
 
 /**
  * Every number a follow is allowed to be argued with about.
@@ -196,6 +222,10 @@ data class OrbitScore(
     }
 }
 
+/** Reads a nullable long, treating JSON null and a missing key the same way. */
+private fun JSONObject.optLongOrNull(key: String): Long? =
+    if (isNull(key)) null else optLong(key)
+
 /** How much of a new reading goes into the smoothed level. */
 private const val RECENT_ALPHA = 0.3
 
@@ -204,6 +234,15 @@ private const val CARRIED_MIN_PACKETS = 30
 
 /** How much of the time a device has to be pocket-loud before it is called yours. */
 private const val CARRIED_FRACTION = 0.85
+
+/**
+ * How many readings of each trail survive being saved.
+ *
+ * Four hundred is well over a minute at one a second, which is longer than any probe, so in
+ * practice nothing is lost. The cap exists so that a circle walked in a busy station with
+ * forty devices in range cannot turn one saved follow into a file worth megabytes.
+ */
+private const val TRAIL_CAP = 400
 
 /** One device a follow is considering. */
 data class FollowCandidate(
@@ -241,12 +280,28 @@ data class FollowCandidate(
     val returnedAtMs: Long? = null,
     /** True when it was not audible during the baseline and turned up afterwards. */
     val arrived: Boolean = false,
-    val orbit: OrbitScore? = null,
-    val walkBy: WalkByScore? = null,
-    /** Every reading taken during the walk-by, for drawing it. */
-    val walkByTrail: List<Pair<Long, Int>> = emptyList(),
+    /** Every circle walked, oldest first. */
+    val orbits: List<CandidateOrbit> = emptyList(),
+    /** Every walk-by done, oldest first. */
+    val walkBys: List<CandidateWalkBy> = emptyList(),
 ) {
     val stillIn: Boolean get() = inPool && droppedAtMs == null
+
+    /**
+     * The most recent result of each kind, for everywhere that wants one number.
+     *
+     * The newest rather than the best, deliberately. A second walk-by is usually done
+     * because the first was unconvincing, and quietly reporting whichever came out better
+     * would turn "try it again" into "keep trying until it passes".
+     */
+    val orbit: OrbitScore? get() = orbits.lastOrNull()?.score
+
+    val walkBy: WalkByScore? get() = walkBys.lastOrNull()?.score
+
+    /** Passed at least one of however many were run. */
+    val passedAnyWalkBy: Boolean get() = walkBys.any { it.score.passed }
+
+    val passedAnyOrbit: Boolean get() = orbits.any { it.score.centred }
 
     /**
      * Almost certainly something you are carrying rather than something they are.
@@ -281,8 +336,8 @@ data class FollowCandidate(
     fun weight(nowMs: Long): Int =
         (heldForMs(nowMs) / 60_000L).toInt() +
             (if (stillIn) 3 else 0) +
-            (if (orbit?.centred == true) 1 else 0) +
-            (if (walkBy?.passed == true) 2 else 0) +
+            (if (passedAnyOrbit) 1 else 0) +
+            (if (passedAnyWalkBy) 2 else 0) +
             (if (arrived) 1 else 0)
 
     fun describe(): String = buildString {
@@ -321,6 +376,8 @@ data class FollowState(
     val expectedReturnMs: Long? = null,
     val rotationChangesAtMs: List<Long> = emptyList(),
     val tuning: FollowTuning = FollowTuning.DEFAULT,
+    /** How long this follow spent not listening, so the screen can admit to the gap. */
+    val blindMs: Long = 0L,
 ) {
     /** How many were in range when the follow started. The number that falls from here. */
     val poolSize: Int get() = candidates.count { it.inPool }
@@ -348,17 +405,34 @@ data class FollowState(
     /** Still with you because it is in your own bag, rather than because it is on them. */
     val carried: List<FollowCandidate> get() = stillIn.filter { it.carried(tuning) }
 
-    val orbited: Boolean get() = probes.any { it.kind == Probe.ORBIT && !it.running }
+    val orbits: List<ProbeRun> get() = probes.filter { it.kind == Probe.ORBIT && it.complete }
 
-    val walkedBy: Boolean get() = probes.any { it.kind == Probe.WALK_BY && !it.running }
+    val walkBys: List<ProbeRun> get() = probes.filter { it.kind == Probe.WALK_BY && it.complete }
+
+    val orbited: Boolean get() = orbits.isNotEmpty()
+
+    val walkedBy: Boolean get() = walkBys.isNotEmpty()
 
     val runningProbe: ProbeRun? get() = probes.lastOrNull { it.running }
 
-    /** Still with you, and the circle agreed. */
+    /** Still with you, and the latest circle agreed. */
     val centred: Int get() = stillIn.count { it.orbit?.centred == true }
 
-    /** Still with you, and the walk-by picked it out. */
+    /** Still with you, and the latest walk-by picked it out. */
     val passed: Int get() = stillIn.count { it.walkBy?.passed == true }
+
+    /** What one particular walk-by said, ranked, for reviewing it. */
+    fun walkByResults(probeIndex: Int): List<Pair<FollowCandidate, CandidateWalkBy>> =
+        candidates
+            .mapNotNull { candidate ->
+                candidate.walkBys.firstOrNull { it.probeIndex == probeIndex }
+                    ?.let { candidate to it }
+            }
+            .sortedWith(
+                compareByDescending<Pair<FollowCandidate, CandidateWalkBy>> {
+                    it.second.score.passed
+                }.thenByDescending { it.second.score.riseDb },
+            )
 
     /** Short enough to watch each one for an address change. */
     val shortlist: List<FollowCandidate>
@@ -371,6 +445,9 @@ data class FollowState(
 
     val runningForMs: Long
         get() = followStartedAtMs?.let { (atMs - it).coerceAtLeast(0L) } ?: 0L
+
+    /** Time actually spent listening, which is what the elimination is measured in. */
+    val listeningForMs: Long get() = (runningForMs - blindMs).coerceAtLeast(0L)
 
     /**
      * True when this has been running a while and has not got anywhere.
@@ -445,12 +522,12 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         var returnedAtMs: Long? = null
         var arrived: Boolean = false
 
-        /** Arcs of the circle this device was heard in, and the levels it was heard at. */
-        val orbitArcs: MutableSet<Int> = mutableSetOf()
-        val orbitRssi: MutableList<Int> = mutableListOf()
+        /** Per circle: which arcs this device was heard in, and at what level. */
+        val orbitArcs: MutableMap<Int, MutableSet<Int>> = mutableMapOf()
+        val orbitRssi: MutableMap<Int, MutableList<Int>> = mutableMapOf()
 
-        /** Every reading during the walk-by, in time order. */
-        val walkByTrail: MutableList<Pair<Long, Int>> = mutableListOf()
+        /** Per walk-by: every reading, in time order. */
+        val walkByTrail: MutableMap<Int, MutableList<Pair<Long, Int>>> = mutableMapOf()
 
         val meanRssi: Double get() = if (packets == 0) -127.0 else rssiTotal / packets
     }
@@ -464,6 +541,22 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     private var baselineStartedAtMs: Long? = null
     private var baselineEndedAtMs: Long? = null
     private var followStartedAtMs: Long? = null
+
+    /**
+     * Stretches where nothing was being listened to, so they do not count against anybody.
+     *
+     * The elimination is "has not been heard for a minute", and that is only a statement
+     * about a device if the radio was on. Put the phone away for five minutes and every
+     * device in the pool goes silent at once - not because they left but because nobody was
+     * listening - and coming back to an empty list would be the most confidently wrong this
+     * app could be.
+     *
+     * So silence is measured in listening time. A gap is recorded when the session is put
+     * down and closed when it is picked up, and the sweep subtracts whatever part of a
+     * device's silence overlaps one.
+     */
+    private val blind = mutableListOf<LongRange>()
+    private var blindSince: Long? = null
 
     var phase: FollowPhase = FollowPhase.IDLE
         private set
@@ -504,14 +597,51 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         probes.lastOrNull()?.takeIf { it.running }?.let { probe ->
             when (probe.kind) {
                 Probe.ORBIT -> {
-                    entry.orbitArcs.add(arcOf(probe, atMs))
-                    entry.orbitRssi.add(rssi)
+                    entry.orbitArcs.getOrPut(probe.index) { mutableSetOf() }
+                        .add(arcOf(probe, atMs))
+                    entry.orbitRssi.getOrPut(probe.index) { mutableListOf() }.add(rssi)
                 }
 
-                Probe.WALK_BY -> entry.walkByTrail.add(atMs to rssi)
+                Probe.WALK_BY -> entry.walkByTrail
+                    .getOrPut(probe.index) { mutableListOf() }
+                    .add(atMs to rssi)
             }
         }
     }
+
+    /**
+     * Stops the clock. Call when the radio is no longer feeding this session.
+     *
+     * Idempotent: pausing an already-paused session does nothing, because the gap started
+     * when it was first put down and has not ended.
+     */
+    fun pause(atMs: Long) {
+        if (blindSince == null) blindSince = atMs
+    }
+
+    /** Starts the clock again, and remembers how long it was stopped for. */
+    fun resume(atMs: Long) {
+        val since = blindSince ?: return
+        blindSince = null
+        if (atMs > since) blind.add(since..atMs)
+    }
+
+    val paused: Boolean get() = blindSince != null
+
+    /** How long nothing was being listened to, between two moments. */
+    fun blindMsBetween(fromMs: Long, toMs: Long): Long {
+        if (toMs <= fromMs) return 0L
+        val open = blindSince?.let { listOf(it..maxOf(it, toMs)) }.orEmpty()
+        return (blind + open).sumOf { gap ->
+            val from = maxOf(gap.first, fromMs)
+            val to = minOf(gap.last, toMs)
+            (to - from).coerceAtLeast(0L)
+        }
+    }
+
+    /** How long a device has been silent, not counting time nobody was listening. */
+    fun silenceMs(lastSeenMs: Long, nowMs: Long): Long =
+        (nowMs - lastSeenMs - blindMsBetween(lastSeenMs, nowMs)).coerceAtLeast(0L)
 
     // ---------------------------------------------------------------------- stages
 
@@ -559,6 +689,8 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      */
     fun rebaseline(atMs: Long) {
         probes.clear()
+        blind.clear()
+        blindSince = null
         targetKey = null
         targetChanges.clear()
         baselineStartedAtMs = atMs
@@ -578,11 +710,15 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     // ---------------------------------------------------------------------- probes
 
-    /** A second run of the same probe is refused; see [Probe]. */
+    /**
+     * Starts another probe. As many as you like, each scored on its own.
+     *
+     * Only one runs at a time - starting one ends whatever was running - because the two
+     * are different walks and a device cannot be doing both.
+     */
     fun beginProbe(kind: Probe, atMs: Long) {
-        if (probes.any { it.kind == kind }) return
         endProbe(atMs)
-        probes.add(ProbeRun(kind, atMs))
+        probes.add(ProbeRun(probes.size, kind, atMs))
     }
 
     /**
@@ -649,9 +785,15 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         entry.addresses.add(key)
         entry.label = entry.label ?: previous.label
         entry.vendor = entry.vendor ?: previous.vendor
-        entry.orbitArcs.addAll(previous.orbitArcs)
-        entry.orbitRssi.addAll(previous.orbitRssi)
-        entry.walkByTrail.addAll(previous.walkByTrail)
+        previous.orbitArcs.forEach { (index, arcs) ->
+            entry.orbitArcs.getOrPut(index) { mutableSetOf() }.addAll(arcs)
+        }
+        previous.orbitRssi.forEach { (index, levels) ->
+            entry.orbitRssi.getOrPut(index) { mutableListOf() }.addAll(levels)
+        }
+        previous.walkByTrail.forEach { (index, trail) ->
+            entry.walkByTrail.getOrPut(index) { mutableListOf() }.addAll(trail)
+        }
         entry.closeReadings += previous.closeReadings
         entry.arrived = previous.arrived
         // The new address inherits the old one's place in the pool. A rotation is the one
@@ -677,13 +819,10 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     // ----------------------------------------------------------------- the finding
 
     fun candidates(nowMs: Long): List<FollowCandidate> {
-        val orbit = probes.firstOrNull { it.kind == Probe.ORBIT }
-        val arcs = orbit?.let { arcsIn(it.durationMs(nowMs)) } ?: 0
-        val walk = probes.firstOrNull { it.kind == Probe.WALK_BY }
-        // Scored only once the walk is over and the middle was marked. A walk-by with no
-        // middle is a handful of readings and a guess, and half a walk has no far end.
-        val walkMid = walk?.midAtMs
-        val walkEnd = walk?.endedAtMs
+        // A running circle is scored live, because the screen shows a count during the lap.
+        // A running walk-by is not, because half a walk has no far end to compare against.
+        val orbitRuns = probes.filter { it.kind == Probe.ORBIT }
+        val walkRuns = probes.filter { it.kind == Probe.WALK_BY && it.complete }
 
         return tracked.entries
             .filter { it.value.packets >= tuning.minPackets }
@@ -708,18 +847,25 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                     droppedAtMs = entry.droppedAtMs,
                     returnedAtMs = entry.returnedAtMs,
                     arrived = entry.arrived,
-                    orbit = if (orbit == null) null else scoreOrbit(entry, arcs),
-                    walkBy = if (walk == null || walkMid == null || walkEnd == null) {
-                        null
-                    } else {
-                        WalkBy.score(
-                            readings = entry.walkByTrail,
-                            startMs = walk.startedAtMs,
-                            midMs = walkMid,
-                            endMs = walkEnd,
+                    orbits = orbitRuns.map { run ->
+                        CandidateOrbit(
+                            probeIndex = run.index,
+                            score = scoreOrbit(entry, run, arcsIn(run.durationMs(nowMs))),
                         )
                     },
-                    walkByTrail = entry.walkByTrail.toList(),
+                    walkBys = walkRuns.map { run ->
+                        val trail = entry.walkByTrail[run.index].orEmpty().toList()
+                        CandidateWalkBy(
+                            probeIndex = run.index,
+                            score = WalkBy.score(
+                                readings = trail,
+                                startMs = run.startedAtMs,
+                                midMs = run.midAtMs ?: run.startedAtMs,
+                                endMs = run.endedAtMs ?: nowMs,
+                            ),
+                            trail = trail,
+                        )
+                    },
                 )
             }
             .sortedWith(
@@ -755,6 +901,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             expectedReturnMs = expectedReturn(rhythm),
             rotationChangesAtMs = targetChanges.toList(),
             tuning = tuning,
+            blindMs = followStartedAtMs?.let { blindMsBetween(it, nowMs) } ?: 0L,
         )
     }
 
@@ -772,8 +919,9 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             val dropped = entry.droppedAtMs
             if (dropped == null) {
                 val silentSince = maxOf(entry.lastSeenMs, started)
-                if (nowMs - silentSince > tuning.dropAfterMs) {
-                    entry.droppedAtMs = silentSince + tuning.dropAfterMs
+                if (silenceMs(silentSince, nowMs) > tuning.dropAfterMs) {
+                    entry.droppedAtMs =
+                        silentSince + tuning.dropAfterMs + blindMsBetween(silentSince, nowMs)
                 }
             } else if (entry.lastSeenMs > dropped && entry.returnedAtMs == null) {
                 entry.returnedAtMs = entry.lastSeenMs
@@ -801,11 +949,11 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     private fun arcsIn(durationMs: Long): Int =
         ((durationMs + OrbitScore.ARC_MS - 1) / OrbitScore.ARC_MS).toInt().coerceAtLeast(0)
 
-    /** What the circle said about one device. */
-    private fun scoreOrbit(entry: Tracked, arcs: Int): OrbitScore {
-        val levels = entry.orbitRssi.map { it.toDouble() }.sorted()
+    /** What one circle said about one device. */
+    private fun scoreOrbit(entry: Tracked, run: ProbeRun, arcs: Int): OrbitScore {
+        val levels = entry.orbitRssi[run.index].orEmpty().map { it.toDouble() }.sorted()
         return OrbitScore(
-            arcsHeard = entry.orbitArcs.size,
+            arcsHeard = entry.orbitArcs[run.index].orEmpty().size,
             arcsTotal = arcs,
             packets = levels.size,
             meanRssi = if (levels.isEmpty()) -127.0 else levels.average(),
@@ -831,6 +979,209 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         val period = rhythm?.takeIf { it.measurable && it.regular }?.medianPeriodMs
             ?: RotationRhythm.SPEC_DEFAULT_MS
         return lastChange + period
+    }
+
+    // -------------------------------------------------------------------- keeping it
+
+    /**
+     * The whole follow as JSON, so leaving the screen is not the same as giving up.
+     *
+     * A follow is half an hour of walking. Losing it because somebody checked a message was
+     * the single worst thing about this experiment, and it was not a small bug - it made
+     * the app unusable for the thing it exists to do.
+     *
+     * Trails are capped rather than dropped. A walk-by's readings are what its chart is
+     * drawn from and losing them would make a saved follow unreviewable, but a long circle
+     * with forty devices in range is thousands of pairs, so each keeps its most recent
+     * [TRAIL_CAP] - which is more than any of them needs at one reading a second.
+     */
+    fun snapshot(): JSONObject {
+        val devices = JSONArray()
+        tracked.forEach { (address, entry) ->
+            devices.put(
+                JSONObject()
+                    .put("a", address)
+                    .put("label", entry.label ?: JSONObject.NULL)
+                    .put("vendor", entry.vendor ?: JSONObject.NULL)
+                    .put("random", entry.isRandom)
+                    .put("first", entry.firstSeenMs)
+                    .put("last", entry.lastSeenMs)
+                    .put("packets", entry.packets)
+                    .put("rssiTotal", entry.rssiTotal)
+                    .put("recent", entry.recentRssi)
+                    .put("close", entry.closeReadings)
+                    .put("pool", entry.inPool)
+                    .put("dropped", entry.droppedAtMs ?: JSONObject.NULL)
+                    .put("returned", entry.returnedAtMs ?: JSONObject.NULL)
+                    .put("arrived", entry.arrived)
+                    .put("addresses", JSONArray(entry.addresses))
+                    .put("orbitArcs", encodeIntSets(entry.orbitArcs))
+                    .put("orbitRssi", encodeIntLists(entry.orbitRssi))
+                    .put("trails", encodeTrails(entry.walkByTrail)),
+            )
+        }
+
+        val probeArray = JSONArray()
+        probes.forEach { probe ->
+            probeArray.put(
+                JSONObject()
+                    .put("i", probe.index)
+                    .put("kind", probe.kind.name)
+                    .put("start", probe.startedAtMs)
+                    .put("end", probe.endedAtMs ?: JSONObject.NULL)
+                    .put("mid", probe.midAtMs ?: JSONObject.NULL),
+            )
+        }
+
+        val gaps = JSONArray()
+        blind.forEach { gaps.put(JSONArray(listOf(it.first, it.last))) }
+
+        return JSONObject()
+            .put("phase", phase.name)
+            .put("baselineStarted", baselineStartedAtMs ?: JSONObject.NULL)
+            .put("baselineEnded", baselineEndedAtMs ?: JSONObject.NULL)
+            .put("followStarted", followStartedAtMs ?: JSONObject.NULL)
+            .put("target", targetKey ?: JSONObject.NULL)
+            .put("changes", JSONArray(targetChanges))
+            .put("blind", gaps)
+            .put("blindSince", blindSince ?: JSONObject.NULL)
+            .put("probes", probeArray)
+            .put("devices", devices)
+    }
+
+    /** Puts a snapshot back. Anything unreadable is skipped rather than failing the load. */
+    fun restore(json: JSONObject) {
+        tracked.clear()
+        probes.clear()
+        blind.clear()
+        targetChanges.clear()
+
+        phase = runCatching { FollowPhase.valueOf(json.optString("phase")) }
+            .getOrDefault(FollowPhase.IDLE)
+        baselineStartedAtMs = json.optLongOrNull("baselineStarted")
+        baselineEndedAtMs = json.optLongOrNull("baselineEnded")
+        followStartedAtMs = json.optLongOrNull("followStarted")
+        targetKey = json.optString("target").takeIf { it.isNotBlank() && it != "null" }
+        blindSince = json.optLongOrNull("blindSince")
+
+        val changes = json.optJSONArray("changes") ?: JSONArray()
+        (0 until changes.length()).forEach { targetChanges.add(changes.getLong(it)) }
+
+        val gaps = json.optJSONArray("blind") ?: JSONArray()
+        (0 until gaps.length()).forEach { index ->
+            val gap = gaps.optJSONArray(index) ?: return@forEach
+            if (gap.length() == 2) blind.add(gap.getLong(0)..gap.getLong(1))
+        }
+
+        val probeArray = json.optJSONArray("probes") ?: JSONArray()
+        (0 until probeArray.length()).forEach { index ->
+            val probe = probeArray.getJSONObject(index)
+            val kind = runCatching { Probe.valueOf(probe.optString("kind")) }.getOrNull()
+                ?: return@forEach
+            probes.add(
+                ProbeRun(
+                    index = probe.optInt("i", index),
+                    kind = kind,
+                    startedAtMs = probe.optLong("start"),
+                    endedAtMs = probe.optLongOrNull("end"),
+                    midAtMs = probe.optLongOrNull("mid"),
+                ),
+            )
+        }
+
+        val devices = json.optJSONArray("devices") ?: JSONArray()
+        (0 until devices.length()).forEach { index ->
+            val device = devices.getJSONObject(index)
+            val address = device.optString("a").takeIf { it.isNotBlank() } ?: return@forEach
+            val entry = Tracked(
+                label = device.optString("label").takeIf { it.isNotBlank() && it != "null" },
+                vendor = device.optString("vendor").takeIf { it.isNotBlank() && it != "null" },
+                isRandom = device.optBoolean("random", true),
+                firstSeenMs = device.optLong("first"),
+            )
+            entry.lastSeenMs = device.optLong("last", entry.firstSeenMs)
+            entry.packets = device.optInt("packets")
+            entry.rssiTotal = device.optDouble("rssiTotal", 0.0)
+            entry.recentRssi = device.optDouble("recent", -127.0)
+            entry.closeReadings = device.optInt("close")
+            entry.inPool = device.optBoolean("pool")
+            entry.droppedAtMs = device.optLongOrNull("dropped")
+            entry.returnedAtMs = device.optLongOrNull("returned")
+            entry.arrived = device.optBoolean("arrived")
+
+            val worn = device.optJSONArray("addresses") ?: JSONArray()
+            (0 until worn.length()).forEach { entry.addresses.add(worn.getString(it)) }
+            if (entry.addresses.isEmpty()) entry.addresses.add(address)
+
+            decodeIntSets(device.optJSONObject("orbitArcs"), entry.orbitArcs)
+            decodeIntLists(device.optJSONObject("orbitRssi"), entry.orbitRssi)
+            decodeTrails(device.optJSONObject("trails"), entry.walkByTrail)
+
+            tracked[address] = entry
+        }
+    }
+
+    private fun encodeIntSets(source: Map<Int, MutableSet<Int>>): JSONObject {
+        val json = JSONObject()
+        source.forEach { (index, values) -> json.put(index.toString(), JSONArray(values.toList())) }
+        return json
+    }
+
+    private fun encodeIntLists(source: Map<Int, MutableList<Int>>): JSONObject {
+        val json = JSONObject()
+        source.forEach { (index, values) ->
+            json.put(index.toString(), JSONArray(values.takeLast(TRAIL_CAP)))
+        }
+        return json
+    }
+
+    private fun encodeTrails(source: Map<Int, MutableList<Pair<Long, Int>>>): JSONObject {
+        val json = JSONObject()
+        source.forEach { (index, trail) ->
+            val flat = JSONArray()
+            trail.takeLast(TRAIL_CAP).forEach { (atMs, rssi) ->
+                flat.put(atMs)
+                flat.put(rssi)
+            }
+            json.put(index.toString(), flat)
+        }
+        return json
+    }
+
+    private fun decodeIntSets(json: JSONObject?, into: MutableMap<Int, MutableSet<Int>>) {
+        json ?: return
+        json.keys().forEach { key ->
+            val index = key.toIntOrNull() ?: return@forEach
+            val values = json.optJSONArray(key) ?: return@forEach
+            into[index] = (0 until values.length()).map { values.getInt(it) }.toMutableSet()
+        }
+    }
+
+    private fun decodeIntLists(json: JSONObject?, into: MutableMap<Int, MutableList<Int>>) {
+        json ?: return
+        json.keys().forEach { key ->
+            val index = key.toIntOrNull() ?: return@forEach
+            val values = json.optJSONArray(key) ?: return@forEach
+            into[index] = (0 until values.length()).map { values.getInt(it) }.toMutableList()
+        }
+    }
+
+    private fun decodeTrails(
+        json: JSONObject?,
+        into: MutableMap<Int, MutableList<Pair<Long, Int>>>,
+    ) {
+        json ?: return
+        json.keys().forEach { key ->
+            val index = key.toIntOrNull() ?: return@forEach
+            val flat = json.optJSONArray(key) ?: return@forEach
+            val trail = mutableListOf<Pair<Long, Int>>()
+            var at = 0
+            while (at + 1 < flat.length()) {
+                trail.add(flat.getLong(at) to flat.getInt(at + 1))
+                at += 2
+            }
+            into[index] = trail
+        }
     }
 
     fun csv(): String = buildString {

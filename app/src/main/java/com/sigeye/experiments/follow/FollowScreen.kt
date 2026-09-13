@@ -49,6 +49,7 @@ import com.sigeye.core.SweepExport
 import com.sigeye.core.Takeaway
 import com.sigeye.core.TargetDevice
 import com.sigeye.core.TargetStore
+import com.sigeye.core.analysis.identity.CandidateWalkBy
 import com.sigeye.core.analysis.identity.FollowCandidate
 import com.sigeye.core.analysis.identity.FollowDecision
 import com.sigeye.core.analysis.identity.FollowPhase
@@ -58,6 +59,7 @@ import com.sigeye.core.analysis.identity.FollowTuning
 import com.sigeye.core.analysis.identity.Following
 import com.sigeye.core.analysis.identity.LiveAddress
 import com.sigeye.core.analysis.identity.Probe
+import com.sigeye.core.analysis.identity.ProbeRun
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
 import com.sigeye.ui.CountUp
@@ -91,6 +93,9 @@ private const val TARGET_LOST_MS = 60_000L
 
 /** Long enough that the number means something before it can be shown big. */
 private const val TAKEAWAY_AFTER_MS = 2 * 60_000L
+
+/** How often the in-progress follow is written down, in seconds of wall clock. */
+private const val SAVE_EVERY_S = 15L
 
 /**
  * Where a follow has got to on screen.
@@ -194,6 +199,10 @@ private fun Live(onLocate: (String) -> Unit) {
     var levelMarked by remember { mutableStateOf(false) }
     var dismissedRebaseline by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var keeping by remember { mutableStateOf<FollowCandidate?>(null) }
+    var expandedWalkBy by remember { mutableStateOf<Int?>(null) }
+    var announcedShortlist by remember { mutableStateOf(false) }
+    var resumable by remember { mutableStateOf(library.loadInProgress() != null) }
     var wasLost by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf<List<String>>(emptyList()) }
     val tests = remember { mutableStateListOf<String>() }
@@ -219,7 +228,36 @@ private fun Live(onLocate: (String) -> Unit) {
         stepStartedMs = System.currentTimeMillis()
     }
 
+    fun resume() {
+        val saved = library.loadInProgress() ?: return
+        val restored = FollowSession(settings.load())
+        runCatching { restored.restore(org.json.JSONObject(saved)) }
+            .onFailure {
+                library.clearInProgress()
+                resumable = false
+                return
+            }
+        tuning = restored.tuning
+        session = restored
+        live.clear()
+        bars.clear()
+        lastWatched = 0
+        startedAtMs = restored.state(System.currentTimeMillis()).followStartedAtMs ?: 0L
+        theyAreHere = true
+        // The radio was off while the app was away, so none of that counts as silence.
+        // Without this, coming back to a follow would find every device dropped at once.
+        restored.resume(System.currentTimeMillis())
+        step = when (restored.phase) {
+            FollowPhase.HOLDING, FollowPhase.LOST -> Step.HOLD
+            FollowPhase.FOLLOWING -> Step.FOLLOWING
+            else -> Step.BRIEF
+        }
+        stepStartedMs = System.currentTimeMillis()
+    }
+
     fun reset() {
+        library.clearInProgress()
+        resumable = false
         tuning = settings.load()
         session = FollowSession(tuning)
         live.clear()
@@ -243,6 +281,14 @@ private fun Live(onLocate: (String) -> Unit) {
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
         onDispose {
+            // Written down on the way out, and the clock stopped. The radio is about to go
+            // quiet because this screen was the only thing holding it open, and a minute of
+            // that would otherwise read as every device in the pool leaving at once.
+            val now = System.currentTimeMillis()
+            session.pause(now)
+            if (session.state(now).followStartedAtMs != null) {
+                library.saveInProgress(session.snapshot().toString())
+            }
             feedback.release()
             BleScanHub.release(HUB_TAG)
         }
@@ -331,9 +377,32 @@ private fun Live(onLocate: (String) -> Unit) {
                 feedback.alert(AlertStyle.BOTH, urgent = true)
                 log = listOf("Back in range") + log
             }
+            // A buzz when the list first gets short enough to act on. Whoever is walking is
+            // not looking at the phone, and this is the moment worth looking up for.
+            if (next.narrowed && !announcedShortlist) {
+                announcedShortlist = true
+                feedback.alert(AlertStyle.BOTH, urgent = true)
+            } else if (!next.narrowed) {
+                announcedShortlist = false
+            }
+
             wasLost = next.phase == FollowPhase.LOST
             state = next
+
+            // Kept up to date rather than only written on the way out, because the way out
+            // is not always graceful - a killed process would otherwise take the follow.
+            if (next.followStartedAtMs != null && next.atMs / 1000 % SAVE_EVERY_S == 0L) {
+                library.saveInProgress(session.snapshot().toString())
+            }
         }
+    }
+
+    keeping?.let { candidate ->
+        DeviceListDialog(
+            address = candidate.address,
+            suggestedName = candidate.vendor,
+            onDismiss = { keeping = null },
+        )
     }
 
     if (showSettings) {
@@ -353,6 +422,8 @@ private fun Live(onLocate: (String) -> Unit) {
         Step.LIBRARY -> Library(
             follows = follows,
             targetCount = targets.size,
+            resumable = resumable,
+            onResume = { resume() },
             onNew = {
                 reset()
                 goTo(Step.BRIEF)
@@ -442,10 +513,13 @@ private fun Live(onLocate: (String) -> Unit) {
                 goTo(Step.HOLD)
             },
             onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
+            onKeep = { keeping = it },
             onTargets = { goTo(Step.TARGETS) },
             onSettings = { showSettings = true },
             onFinish = {
                 library.save(state.asSavedFollow(startedAtMs, followName, tests.toList()))
+                library.clearInProgress()
+                resumable = false
                 goTo(Step.LIBRARY)
             },
         )
@@ -477,10 +551,19 @@ private fun Live(onLocate: (String) -> Unit) {
         Step.REVIEW -> Review(
             state = state,
             targets = targets,
+            expanded = expandedWalkBy,
+            onExpand = { expandedWalkBy = it },
             onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
+            onKeep = { keeping = it },
             onHold = {
                 session.lock(it.address)
                 goTo(Step.HOLD)
+            },
+            onNewWalkBy = {
+                levelMarked = false
+                session.beginProbe(Probe.WALK_BY, System.currentTimeMillis())
+                tests += "walked past them"
+                goTo(Step.WALK_BY)
             },
             onBack = { goTo(Step.FOLLOWING) },
         )
@@ -626,12 +709,45 @@ private fun FollowState.asSavedFollow(
 private fun Library(
     follows: List<SavedFollow>,
     targetCount: Int,
+    resumable: Boolean,
+    onResume: () -> Unit,
     onNew: () -> Unit,
     onTargets: () -> Unit,
     onSettings: () -> Unit,
     onForget: (String) -> Unit,
 ) {
-    Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("Start a new follow") }
+    if (resumable) {
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    "You left one running",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Picking it up carries on where it stopped. The time the app was away " +
+                        "does not count against anybody - nothing was listening, so nobody " +
+                        "went quiet.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
+                    Text("Carry on with it")
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+
+    Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) {
+        Text(if (resumable) "Start a different one" else "Start a new follow")
+    }
 
     if (targetCount > 0) {
         Spacer(Modifier.height(8.dp))
@@ -922,6 +1038,7 @@ private fun Following(
     onReview: () -> Unit,
     onHold: (FollowCandidate) -> Unit,
     onPromote: (FollowCandidate) -> Unit,
+    onKeep: (FollowCandidate) -> Unit,
     onTargets: () -> Unit,
     onSettings: () -> Unit,
     onFinish: () -> Unit,
@@ -943,7 +1060,13 @@ private fun Following(
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                "${state.watching} heard in total · ${state.runningForMs / 60_000} min",
+                "${state.watching} heard in total · " +
+                    "${state.listeningForMs / 60_000} min of listening" +
+                    if (state.blindMs > 30_000L) {
+                        " · ${state.blindMs / 60_000} min away"
+                    } else {
+                        ""
+                    },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1098,8 +1221,10 @@ private fun Following(
                 candidate = candidate,
                 nowMs = nowMs,
                 onClick = { onHold(candidate) },
-                action = if (already) null else "Add to targets",
-                onAction = { onPromote(candidate) },
+                action = "Name and list",
+                onAction = { onKeep(candidate) },
+                secondary = if (already) null else "Add to targets",
+                onSecondary = { onPromote(candidate) },
             )
         }
     }
@@ -1112,10 +1237,14 @@ private fun Following(
     )
     Spacer(Modifier.height(8.dp))
     ProbeCard(
-        title = "Walk past them",
+        title = if (state.walkedBy) {
+            "Walk-bys (${state.walkBys.size})"
+        } else {
+            "Walk past them"
+        },
         detail = if (state.walkedBy) {
-            "Done. ${state.passed} of the ones still with them peaked as you passed. Tap " +
-                "to look at the traces."
+            "Latest: ${state.passed} of the ones still with them peaked as you passed. Tap " +
+                "to see every one, and to do another."
         } else {
             "They stand still; you walk past and stop the same distance away on the far " +
                 "side. Whatever is on them rises as you draw level and comes back down. " +
@@ -1125,15 +1254,15 @@ private fun Following(
         emphasis = state.walkedBy,
     )
     ProbeCard(
-        title = "Circle them",
+        title = if (state.orbited) "Circle them again" else "Circle them",
         detail = if (state.orbited) {
-            "Done. ${state.centred} stayed at the same distance all the way round."
+            "${state.orbits.size} walked. Latest: ${state.centred} stayed at the same " +
+                "distance all the way round. Another lap is scored on its own."
         } else {
             "One slow lap about five paces out. Anything on them stays the same distance " +
                 "from you the whole way round; anything across the room does not."
         },
         onClick = onCircle,
-        enabled = !state.orbited,
     )
 
     if (state.dropped.isNotEmpty()) {
@@ -1237,141 +1366,209 @@ private fun WalkByStep(
  * the thresholds happened to let through in about a second - which is faster and more
  * reliable than any amount of tuning.
  */
+/**
+ * Every walk-by that has been done, newest first, with the traces to check each against.
+ *
+ * A list rather than one result, because you can do several and the reason for doing a
+ * second is almost always that the first came out ambiguous. Showing only the latest would
+ * hide the thing you did the second one to compare against.
+ *
+ * Each run expands to its own ranked table. A verdict you cannot check is an assertion, and
+ * a person can tell a clean hill from a mess the thresholds happened to let through in
+ * about a second - faster and more reliably than any amount of tuning from me.
+ */
 @Composable
 private fun Review(
     state: FollowState,
     targets: List<TargetDevice>,
+    expanded: Int?,
+    onExpand: (Int?) -> Unit,
     onPromote: (FollowCandidate) -> Unit,
+    onKeep: (FollowCandidate) -> Unit,
     onHold: (FollowCandidate) -> Unit,
+    onNewWalkBy: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val walk = state.probes.firstOrNull { it.kind == Probe.WALK_BY }
-    val scored = state.candidates
-        .filter { it.walkBy != null && it.walkByTrail.size >= 2 }
-        .sortedWith(
-            compareByDescending<FollowCandidate> { it.walkBy!!.passed }
-                .thenByDescending { it.walkBy!!.riseDb },
-        )
+    val runs = state.walkBys.sortedByDescending { it.startedAtMs }
 
     Text(
-        "What the walk-by saw",
+        "Walk-bys",
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
     )
     Spacer(Modifier.height(6.dp))
-
-    val mid = walk?.midAtMs
-    val end = walk?.endedAtMs
-    if (mid == null || end == null || scored.isEmpty()) {
-        Text(
-            "Nothing to show. A walk-by needs a start, a tap when you drew level, and an " +
-                "end the same distance the other side - without the middle mark there is no " +
-                "peak to test against.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Spacer(Modifier.height(12.dp))
-        Grey("Back", onBack)
-        return
-    }
-
-    val passed = scored.count { it.walkBy!!.passed }
     Text(
-        if (passed == 0) {
-            "None of ${scored.size} passed. Look at the shapes anyway - if one is a hill " +
-                "the thresholds just missed, that is worth knowing, and the thresholds are " +
-                "settings."
+        if (runs.isEmpty()) {
+            "None yet."
         } else {
-            "$passed of ${scored.size} rose as you drew level and came back down. The best " +
-                "is first."
+            "${runs.size} done. The vertical line on each chart is where you tapped, the " +
+                "dashed line is the level the rise is measured against, and the shaded ends " +
+                "are the two windows it came from."
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Spacer(Modifier.height(6.dp))
-    Text(
-        "The vertical line is where you tapped. The dashed line is the level the rise is " +
-            "measured against, and the shaded ends are the two windows it came from.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 
     Spacer(Modifier.height(12.dp))
-    scored.take(8).forEach { candidate ->
-        val score = candidate.walkBy!!
-        val already = targets.any { it.address.equals(candidate.address, true) }
+    Button(onClick = onNewWalkBy, modifier = Modifier.fillMaxWidth()) {
+        Text(if (runs.isEmpty()) "Do a walk-by" else "Do another walk-by")
+    }
+
+    runs.forEach { run ->
+        val results = state.walkByResults(run.index)
+        val passed = results.count { it.second.score.passed }
+        val open = expanded == run.index
+
+        Spacer(Modifier.height(10.dp))
         Card(
-            Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClickLabel = "Walk-by at ${clock(run.startedAtMs)}") {
+                    onExpand(if (open) null else run.index)
+                },
             colors = CardDefaults.cardColors(
-                containerColor = if (score.passed) {
+                containerColor = if (passed > 0) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
                 },
             ),
         ) {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(14.dp)) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.padding(end = 8.dp)) {
+                    Column {
                         Text(
-                            candidate.label ?: candidate.vendor ?: candidate.address,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            clock(run.startedAtMs),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            candidate.address,
+                            "${run.durationMs(run.endedAtMs ?: run.startedAtMs) / 1000} s " +
+                                "walk · ${results.size} devices scored",
                             style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Text(
-                        if (score.passed) "passed" else "no",
+                        if (passed == 0) "none passed" else "$passed passed",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
-                WalkByChart(
-                    trail = candidate.walkByTrail,
-                    score = score,
-                    startMs = walk.startedAtMs,
-                    endMs = end,
-                )
+                if (!open) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Tap to see the traces",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    return@Column
+                }
 
-                Spacer(Modifier.height(6.dp))
-                Field("Rise as you passed", "${score.riseDb.roundToInt()} dB")
-                Field("Ends differ by", "${score.symmetryDb.roundToInt()} dB")
-                Field("Peak off the mark by", "${score.offsetMs / 1000} s")
-                Field("Readings", "${score.packets}")
-                Spacer(Modifier.height(4.dp))
-                Text(score.describe(), style = MaterialTheme.typography.bodySmall)
+                if (results.isEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Nothing was heard often enough during this one to have a shape.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    return@Column
+                }
 
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (!already) {
-                        Button(
-                            onClick = { onPromote(candidate) },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Add to targets") }
-                    }
-                    OutlinedButton(
-                        onClick = { onHold(candidate) },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Hold this one") }
+                results.take(8).forEach { (candidate, result) ->
+                    Spacer(Modifier.height(12.dp))
+                    WalkByResultCard(
+                        candidate = candidate,
+                        result = result,
+                        run = run,
+                        alreadyTarget = targets.any {
+                            it.address.equals(candidate.address, true)
+                        },
+                        onPromote = { onPromote(candidate) },
+                        onKeep = { onKeep(candidate) },
+                        onHold = { onHold(candidate) },
+                    )
                 }
             }
         }
     }
 
+    Spacer(Modifier.height(10.dp))
     Grey("Back to the follow", onBack)
 }
+
+@Composable
+private fun WalkByResultCard(
+    candidate: FollowCandidate,
+    result: CandidateWalkBy,
+    run: ProbeRun,
+    alreadyTarget: Boolean,
+    onPromote: () -> Unit,
+    onKeep: () -> Unit,
+    onHold: () -> Unit,
+) {
+    val score = result.score
+    Column {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.padding(end = 8.dp)) {
+                Text(
+                    candidate.label ?: candidate.vendor ?: candidate.address,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    candidate.address,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            Text(
+                if (score.passed) "passed" else "no",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        WalkByChart(
+            trail = result.trail,
+            score = score,
+            startMs = run.startedAtMs,
+            endMs = run.endedAtMs ?: score.midAtMs,
+        )
+
+        Spacer(Modifier.height(6.dp))
+        Field("Rise as you passed", "${score.riseDb.roundToInt()} dB")
+        Field("Ends differ by", "${score.symmetryDb.roundToInt()} dB")
+        Field("Peak off the mark by", "${score.offsetMs / 1000} s")
+        Field("Readings", "${score.packets}")
+        Spacer(Modifier.height(4.dp))
+        Text(score.describe(), style = MaterialTheme.typography.bodySmall)
+
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onKeep, modifier = Modifier.weight(1f)) { Text("Name and list") }
+            if (!alreadyTarget) {
+                OutlinedButton(onClick = onPromote, modifier = Modifier.weight(1f)) {
+                    Text("Target")
+                }
+            }
+            OutlinedButton(onClick = onHold, modifier = Modifier.weight(1f)) { Text("Hold") }
+        }
+    }
+}
+
+/** A wall-clock time, for telling one walk-by from another. */
+private fun clock(atMs: Long): String =
+    java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(java.util.Date(atMs))
 
 @Composable
 private fun Targets(
@@ -1572,6 +1769,8 @@ private fun CandidateCard(
     onClick: (() -> Unit)?,
     action: String? = null,
     onAction: () -> Unit = {},
+    secondary: String? = null,
+    onSecondary: () -> Unit = {},
 ) {
     Card(
         Modifier
@@ -1614,9 +1813,12 @@ private fun CandidateCard(
                     )
                 }
             }
-            action?.let {
+            if (action != null || secondary != null) {
                 Spacer(Modifier.height(6.dp))
-                TextButton(onClick = onAction) { Text(it) }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    action?.let { TextButton(onClick = onAction) { Text(it) } }
+                    secondary?.let { TextButton(onClick = onSecondary) { Text(it) } }
+                }
             }
         }
     }
