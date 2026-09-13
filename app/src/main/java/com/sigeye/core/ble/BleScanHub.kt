@@ -303,8 +303,19 @@ object BleScanHub {
             .build()
 
         try {
-            // Null filters on purpose: every advertiser in range, not a device class.
-            scanner.startScan(null, settings, callback)
+            // Filtered on purpose, which is the opposite of what it used to be.
+            //
+            // An unfiltered scan returns every advertiser in range, which is what this app
+            // wants - right up until the screen goes off, at which point Android 8.1 and
+            // later return nothing at all from it. A recording left running overnight went
+            // flat at the moment the display timed out, and holding the screen awake looked
+            // like the only cure.
+            //
+            // ScanFilters.broad() is as close to "everything" as the API can express. It is
+            // used with the screen on as well, so a count taken at midnight is comparable
+            // with one taken at noon - a measurement that quietly changes what it includes
+            // halfway through is worse than one that consistently includes less.
+            scanner.startScan(ScanFilters.broad(), settings, callback)
             scanning = true
             scanStartedAtMs = System.currentTimeMillis()
             lastResultMs = scanStartedAtMs

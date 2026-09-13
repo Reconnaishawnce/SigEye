@@ -158,6 +158,10 @@ private fun Live(dwell: Boolean) {
         tracker.config = PopulationConfig(
             rssiFloor = rssiFloor.roundToInt(),
             devicesPerPerson = perPerson.toDouble(),
+            // How long something must linger before it counts as living here is a fact
+            // about the place rather than about the device. Twenty minutes marks out a
+            // resident in a house and marks out half a train carriage on a commute.
+            residentMinutes = SettingsStore.get(context).tuning.residentMinutes,
         )
     }
 
