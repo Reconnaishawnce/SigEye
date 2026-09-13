@@ -317,7 +317,7 @@ exactly where it was.
 | 25. Rotation Lab left running | **Done.** A `ScanService.Mode` now, sharing the pattern Follow Me uses: the lab lives in `Recordings`, the service feeds and ticks it, and the screen reads it. The phone can be in a pocket on a train for half an hour, which is the measurement the paper needs. |
 | 26. Speed Estimator's cross-check | **Open.** No GPS comparison. |
 | 27. Bluetooth Explorer's rule about writes | **Done in turn 13.** On the screen, in the KDoc, and enforced by `GattWriteRuleTest`, which reads the source and fails the build on a mutating call. |
-| 28. Wall Penetration's floor plan | **Half.** Saved runs now carry a name you choose and the excess loss, which is most of the survey. The in-screen spot list still says "Spot 1, Spot 2" and is not ordered by loss. |
+| 28. Wall Penetration's floor plan | **Done.** You name each spot as you save it, the list is ordered worst first, and the survey says which room costs the most and by how much over the best one. Spots persist across screen exits with the baseline they were measured against, so walking a house survives locking the phone, and re-baselining starts a new survey instead of silently deleting the old one. |
 | 29. The shipped artifact | **Open.** `isMinifyEnabled = false` and CI still ships `app-debug.apk`. Fine as a decision, but the release block is dead code that reads as if it were used. |
 | 30. Crashes in the field | **Done in turn 13.** Traces written to app-private storage, listed in Settings, sent only on a tap. No network anywhere in it. |
 

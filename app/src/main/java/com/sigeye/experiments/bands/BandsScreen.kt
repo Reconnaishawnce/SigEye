@@ -11,12 +11,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,11 +41,14 @@ import com.sigeye.core.CsvExport
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.RunFigure
+import com.sigeye.core.SurveyStore
 import com.sigeye.core.Takeaway
 import com.sigeye.core.analysis.rf.BandPair
 import com.sigeye.core.analysis.rf.DualBand
 import com.sigeye.core.analysis.rf.Penetration
 import com.sigeye.core.analysis.rf.Radio
+import com.sigeye.core.analysis.rf.SurveySpot
+import com.sigeye.core.analysis.rf.WallSurvey
 import com.sigeye.core.wifi.WifiScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
@@ -62,14 +69,6 @@ private const val SCAN_INTERVAL_MS = 6_000L
 
 /** Readings kept per radio. Enough to average out a fade, few enough to still mean "here". */
 private const val WINDOW = 6
-
-/** A saved spot: where you stood, and what the building did to 5 GHz there. */
-private data class Spot(
-    val name: String,
-    val typicalExcessDb: Double?,
-    val pairs: Int,
-    val lost5: Int,
-)
 
 @Composable
 fun BandsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -111,9 +110,19 @@ private fun Live() {
     // difference between two radios and a mean over both would erase it.
     val history = remember { LinkedHashMap<String, ArrayDeque<Int>>() }
     var pairs by remember { mutableStateOf<List<BandPair>>(emptyList()) }
-    var baseline by remember { mutableStateOf<Map<String, Double>?>(null) }
-    var baselineAt by remember { mutableStateOf(0L) }
-    var spots by remember { mutableStateOf<List<Spot>>(emptyList()) }
+    // The survey outlives the screen. Walking a building means locking the phone and
+    // reopening it in the next room, and a survey that did not survive that was a survey
+    // of one room.
+    val survey = remember { SurveyStore.get(context) }
+    val storedBaseline by survey.baseline.collectAsStateWithLifecycle()
+    val allSpots by survey.spots.collectAsStateWithLifecycle()
+    val baseline = storedBaseline?.gaps
+    val baselineAt = storedBaseline?.takenAtMs ?: 0L
+    val spots = remember(allSpots, baselineAt) { WallSurvey.against(allSpots, baselineAt) }
+    val olderSpots = allSpots.size - spots.size
+
+    var naming by remember { mutableStateOf(false) }
+    var confirmRebaseline by remember { mutableStateOf(false) }
 
     KeepScreenOn(true)
 
@@ -171,24 +180,25 @@ private fun Live() {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             onClick = {
-                baseline = pairs.filter { it.scans >= DualBand.MIN_SCANS }
-                    .associate { it.key to it.gapDb }
-                baselineAt = System.currentTimeMillis()
-                spots = emptyList()
+                // Re-baselining moves the reference every saved spot was measured from, so
+                // it ends the survey rather than adding to it. Asking first, because the
+                // button sits next to the one you press in every room.
+                if (baseline != null && spots.isNotEmpty()) {
+                    confirmRebaseline = true
+                } else {
+                    survey.startSurvey(
+                        gaps = pairs.filter { it.scans >= DualBand.MIN_SCANS }
+                            .associate { it.key to it.gapDb },
+                        atMs = System.currentTimeMillis(),
+                    )
+                }
             },
             enabled = settled.isNotEmpty(),
             modifier = Modifier.weight(1f),
         ) { Text(if (baseline == null) "Set the baseline here" else "Re-baseline here") }
 
         OutlinedButton(
-            onClick = {
-                spots = spots + Spot(
-                    name = "Spot ${spots.size + 1}",
-                    typicalExcessDb = typical,
-                    pairs = penetrations.count { it.excessDb != null },
-                    lost5 = penetrations.count { it.excessDb != null && !it.usable5 },
-                )
-            },
+            onClick = { naming = true },
             enabled = baseline != null && typical != null,
             modifier = Modifier.weight(1f),
         ) { Text("Save this spot") }
@@ -259,39 +269,77 @@ private fun Live() {
 
     if (spots.isNotEmpty()) {
         Spacer(Modifier.height(14.dp))
-        Text("Saved spots", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        spots.forEach { spot ->
-            Card(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        Text(spot.name, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "${spot.pairs} access point${if (spot.pairs == 1) "" else "s"}" +
-                                if (spot.lost5 > 0) " · ${spot.lost5} lost 5 GHz" else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        spot.typicalExcessDb?.let {
-                            String.format(Locale.US, "%+.1f dB", it)
-                        } ?: "-",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if ((spot.typicalExcessDb ?: 0.0) >= DualBand.SERIOUS_DB) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                    )
-                }
+        Text(
+            "Your survey",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+
+        // The finding, not a list. Which room is worst and by how much is the thing
+        // somebody walked the building to learn.
+        WallSurvey.summarize(spots)?.let { summary ->
+            Spacer(Modifier.height(6.dp))
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (summary.tellsYouSomething) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                ),
+            ) {
+                Text(
+                    WallSurvey.finding(summary),
+                    Modifier.padding(14.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
+
+        Spacer(Modifier.height(8.dp))
+        // Worst first. A survey is a hunt for where it is bad, and the order things were
+        // saved in is the order least useful for finding that.
+        WallSurvey.order(spots).forEach { spot ->
+            SpotCard(
+                spot = spot,
+                onForget = { survey.remove(spot.takenAtMs) },
+            )
+        }
+
+        if (olderSpots > 0) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "$olderSpots spot${if (olderSpots == 1) "" else "s"} from earlier " +
+                        "surveys, measured against a different baseline.",
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { survey.clearOlderThan(baselineAt) }) { Text("Forget") }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = {
+                CsvExport.shareText(
+                    context = context,
+                    folder = "bands",
+                    prefix = "survey",
+                    content = CsvExport.header(
+                        "Wall penetration survey",
+                        "spots=${spots.size}",
+                        "baseline_ms=$baselineAt",
+                    ) + WallSurvey.csv(spots),
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Export the survey") }
     }
 
     Spacer(Modifier.height(14.dp))
@@ -337,6 +385,57 @@ private fun Live() {
         enabled = pairs.isNotEmpty(),
         modifier = Modifier.fillMaxWidth(),
     ) { Text("Export the pairs") }
+
+    if (naming) {
+        NameSpotDialog(
+            suggestion = WallSurvey.suggestName(spots),
+            used = spots.map { it.name },
+            onSave = { name ->
+                survey.add(
+                    SurveySpot(
+                        name = name,
+                        excessDb = typical,
+                        pairs = penetrations.count { it.excessDb != null },
+                        lost5 = penetrations.count { it.excessDb != null && !it.usable5 },
+                        takenAtMs = System.currentTimeMillis(),
+                        baselineAtMs = baselineAt,
+                    ),
+                )
+                naming = false
+            },
+            onDismiss = { naming = false },
+        )
+    }
+
+    if (confirmRebaseline) {
+        AlertDialog(
+            onDismissRequest = { confirmRebaseline = false },
+            title = { Text("Start a new survey?") },
+            text = {
+                Text(
+                    "Excess loss is measured against the baseline, so the " +
+                        "${spots.size} spot${if (spots.size == 1) "" else "s"} you have " +
+                        "saved cannot be compared to anything measured from a new one. " +
+                        "They stay on the phone, but this starts a fresh survey.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        survey.startSurvey(
+                            gaps = pairs.filter { it.scans >= DualBand.MIN_SCANS }
+                                .associate { it.key to it.gapDb },
+                            atMs = System.currentTimeMillis(),
+                        )
+                        confirmRebaseline = false
+                    },
+                ) { Text("Start a new one") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { confirmRebaseline = false }) { Text("Keep going") }
+            },
+        )
+    }
 
     TakeawayButton(
         typical?.takeIf { settled.isNotEmpty() }?.let { excess ->
@@ -580,4 +679,111 @@ private fun BandBars(lowDbm: Double, highDbm: Double) {
             size = Size(size.width * fraction(highDbm), barHeight),
         )
     }
+}
+
+/**
+ * One place in the building, its name, and what it cost.
+ *
+ * The name is the whole point of item 28. "Spot 3" told you a number without telling you
+ * where to stand to do something about it, which for a survey is most of the value gone.
+ */
+@Composable
+private fun SpotCard(spot: SurveySpot, onForget: () -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(spot.name, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    buildString {
+                        append(spot.pairs)
+                        append(" access point")
+                        if (spot.pairs != 1) append("s")
+                        if (spot.lost5 > 0) append(" · ${spot.lost5} lost 5 GHz")
+                        if (spot.blackspot) append(" · no 5 GHz left")
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                spot.excessDb?.let { String.format(Locale.US, "%+.1f dB", it) } ?: "-",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if ((spot.excessDb ?: 0.0) >= DualBand.SERIOUS_DB) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
+            TextButton(onClick = onForget) { Text("Forget") }
+        }
+    }
+}
+
+/**
+ * Naming the room before the reading is filed.
+ *
+ * Asked at save time rather than offered as an edit afterwards, because the one moment
+ * somebody certainly knows which room they are standing in is while they are standing in it.
+ */
+@Composable
+private fun NameSpotDialog(
+    suggestion: String,
+    used: List<String>,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf(suggestion) }
+    val taken = used.map { it.lowercase() }.toSet()
+    val quick = WallSurvey.roomNames().filter { it.lowercase() !in taken }.take(6)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Where are you?") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(30) },
+                    singleLine = true,
+                    label = { Text("This spot") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (quick.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        quick.take(3).forEach { room ->
+                            AssistChip(onClick = { name = room }, label = { Text(room) })
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        quick.drop(3).take(3).forEach { room ->
+                            AssistChip(onClick = { name = room }, label = { Text(room) })
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "The reading is taken now, from where the phone is standing. Name it " +
+                        "something you will recognize on the export.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(name.trim()) },
+                enabled = name.isNotBlank(),
+            ) { Text("Save the spot") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
