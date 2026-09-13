@@ -55,13 +55,14 @@ phone on a fifteen minute timer has not "failed to rotate" after ninety seconds.
 screen is waiting, it says what it is waiting for.
 
 **Numbers come with a denominator.** "Three devices still with you" is not a result; "three
-out of two hundred and fourteen, after two legs" is. Anywhere the app shows you a number
-big enough to photograph, it shows you what the number is out of and one line on what it
-does not prove.
+out of the two hundred and fourteen that were in range when you started" is. Anywhere the
+app shows you a number big enough to photograph, it shows you what the number is out of and
+one line on what it does not prove.
 
-**Screens stay awake while they record**, so the phone will not lock in the middle of a
-measurement. That costs battery. Leave the screen off in your pocket and the recording is
-over.
+**The long ones keep running with the screen off.** Follow Me, Rotation Lab, Forensics,
+Place Profiler and Journey hand themselves to a background service, so the phone can go in
+a pocket and the count carries on in the notification. The short ones - a sweep, a circle,
+a walk-by - hold the screen awake while they happen, because you are watching those.
 
 ---
 
