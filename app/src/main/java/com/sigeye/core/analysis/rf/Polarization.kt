@@ -29,8 +29,9 @@ data class PolarizationResult(
         }
 
     fun verdict(): String? = when {
-        coverage < MIN_COVERAGE -> "Only ${(coverage * 100).toInt()}% of the roll covered. " +
-            "Turn the phone all the way over - a full revolution about its long axis."
+        coverage < MIN_COVERAGE -> "Only ${(coverage * 100).toInt()}% of the roll " +
+            "covered so far. Keep turning. One full revolution about the long axis, then " +
+            "back the other way."
         depthDb == null -> "Nothing measured yet."
         depthDb < MEANINGFUL_DEPTH_DB ->
             String.format(

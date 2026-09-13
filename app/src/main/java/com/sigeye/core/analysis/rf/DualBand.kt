@@ -85,8 +85,9 @@ data class Penetration(
             !usable5 && usable24 ->
                 "5 GHz has lost the argument here. It is down to " +
                     "${pair.high.rssi.roundToInt()} dBm while 2.4 is still at " +
-                    "${pair.low.rssi.roundToInt()}, so a phone that clings to the faster " +
-                    "band will be slower than one that gives up on it."
+                    "${pair.low.rssi.roundToInt()}, so a phone clinging to the faster " +
+                    "band will be slower than one that gives up on it. Move a room " +
+                    "closer, or set this device to prefer 2.4 GHz here."
             excess >= DualBand.SERIOUS_DB ->
                 String.format(
                     Locale.US,

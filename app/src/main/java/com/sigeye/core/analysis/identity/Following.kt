@@ -10,7 +10,11 @@ enum class FollowRefusal(val reason: String) {
             "would be a coincidence rather than a link. It will not be followed.",
     ),
     STILL_TALKING("Still on the air."),
-    NO_CANDIDATE("Nothing has appeared that matches."),
+    NO_CANDIDATE(
+        "Nothing has appeared that matches. Stay where you are for a minute: a device " +
+            "that has just rotated needs a few seconds of packets before it can be " +
+            "recognized.",
+    ),
     AMBIGUOUS(
         "More than one device matches equally well, so there is no way to tell which " +
             "one it is. Following stops here rather than guessing.",

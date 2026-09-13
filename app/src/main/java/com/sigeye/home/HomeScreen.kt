@@ -222,25 +222,24 @@ private fun Welcome(onDismiss: () -> Unit, onTryIt: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Everything around you is broadcasting - earbuds, cars, tills, " +
-                    "doorbells, and every phone in the room. This turns that into " +
-                    "experiments you can run and check, rather than a list of addresses.",
+                text = "Earbuds, cars, tills, doorbells, every phone in the room. All of " +
+                    "it is broadcasting, all the time. These experiments turn that into " +
+                    "something you can measure instead of a list of addresses.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Start with a favorite below. Each one opens with what it needs, " +
-                    "how to run it, what the reading means, and where it lies to you - " +
-                    "tap the title for that. Nothing leaves the phone and nothing is " +
-                    "connected to unless you ask.",
+                text = "Every experiment tells you what it needs, how to run it, and " +
+                    "where it will lie to you. Tap the title to read that part. Nothing " +
+                    "leaves your phone, and nothing gets connected to unless you ask.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Scanning costs battery, so it happens only while an experiment is " +
-                    "open or a recording is running. The card below always says which.",
+                text = "The radio only runs while an experiment is open or a recording " +
+                    "is going. The card below always says which.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
@@ -287,11 +286,11 @@ private fun FavoritesSection(
             )
             Text(
                 text = if (favorites.isEmpty()) {
-                    "Star anything below to put it up here."
+                    "Star anything below and it shows up here."
                 } else if (editing) {
-                    "Move them about, or tap a star to remove one."
+                    "Drag them about with the arrows. Tap a star to drop one."
                 } else {
-                    "Start here. Yours to rearrange."
+                    "Start here. Rearrange them however you like."
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -744,8 +743,8 @@ private fun WishList(
         fontWeight = FontWeight.Bold,
     )
     Text(
-        text = "Described, wanted, not built. Say if you want one of these sooner, or " +
-            "something that is not on it.",
+        text = "Written down, wanted, not built yet. Tell me if you want one of these " +
+            "sooner, or something that is not on the list.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

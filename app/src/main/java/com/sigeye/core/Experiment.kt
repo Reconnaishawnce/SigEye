@@ -107,10 +107,9 @@ object Experiments {
             id = FOLLOWING,
             title = "Persistent Tracking",
             blurb = "Keep a device's name attached to it after it changes address.",
-            teaches = "A nickname is stored against an address, and a phone changes its " +
-                "address every quarter of an hour - so the device you named comes back a " +
-                "stranger. This follows it across, and refuses loudly whenever it cannot " +
-                "be certain.",
+            teaches = "A nickname sticks to an address. A phone changes its address every " +
+                "quarter of an hour, so the thing you named comes back a stranger. This " +
+                "follows it across, and says so loudly when it cannot be sure.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.BETA,
             needs = "At least one named device on a list, made in Device Inspector. " +
@@ -480,9 +479,9 @@ object Experiments {
             id = DOPPLER,
             title = "Doppler Walk",
             blurb = "Walk away counting your steps, and measure the number everything guesses.",
-            teaches = "Signal becomes distance through one formula with one unknown - the " +
-                "path loss exponent. Every proximity feature ever shipped guesses it. " +
-                "With a real distance from the step counter it can be measured instead.",
+            teaches = "Signal turns into distance through one formula with one unknown in " +
+                "it, the path loss exponent. Every proximity feature ever shipped has " +
+                "guessed that number. Count your steps and you can measure it instead.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             needs = "Something that stays put, a straight line to walk, and ideally a step " +
@@ -514,10 +513,10 @@ object Experiments {
             id = POLARIZATION,
             title = "Rotational Polarization",
             blurb = "Roll the phone over and watch the signal die.",
-            teaches = "Radio has an orientation. Turn a receiving antenna across the " +
-                "field and it stops hearing - ten to twenty dB from nothing but a twist " +
-                "of the wrist, and the depth of that null says how much of the signal " +
-                "reached you without bouncing off anything.",
+            teaches = "Radio has an orientation. Turn a receiving antenna across the field " +
+                "and it stops hearing, ten to twenty dB from nothing but a twist of the " +
+                "wrist. How deep that null goes tells you how much of the signal reached " +
+                "you without bouncing off anything on the way.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             needs = "One chatty transmitter a few meters away, and an accelerometer - " +
@@ -550,9 +549,9 @@ object Experiments {
             id = CONGESTION,
             title = "Channel Congestion",
             blurb = "Who is using the 2.4 GHz band, and whether Bluetooth has room to shout.",
-            teaches = "Bluetooth advertises on three fixed frequencies chosen to dodge " +
-                "Wi-Fi 1, 6 and 11. An access point parked anywhere else lands on them, " +
-                "and the packets stop arriving. This shows both halves at once.",
+            teaches = "Bluetooth advertises on three fixed frequencies, picked to dodge " +
+                "Wi-Fi channels 1, 6 and 11. Park an access point anywhere else and it " +
+                "lands right on top of them. This shows you both halves at once.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             needs = "Wi-Fi switched on - being connected is not required, being enabled " +
@@ -586,10 +585,10 @@ object Experiments {
             id = BANDS,
             title = "Wall Penetration",
             blurb = "Measure how much more the building takes from 5 GHz than from 2.4.",
-            teaches = "Everyone has heard that 5 GHz does not go through walls as well. " +
-                "The two radios of one router already differ before any wall is involved, " +
-                "so the measurement is not the gap - it is how the gap changes when you " +
-                "walk. What is left is the building.",
+            teaches = "Everyone has heard that 5 GHz does not go through walls as well. The " +
+                "two radios in one router already differ before any wall is involved, so " +
+                "the gap itself is not the measurement. How the gap changes when you " +
+                "walk is the measurement. What is left over is the building.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             needs = "A dual-band access point broadcasting on both 2.4 and 5 GHz, which " +
@@ -832,9 +831,9 @@ object Experiments {
             id = FOLLOW,
             title = "Follow Me",
             blurb = "Narrow a whole street down to the one device traveling with you.",
-            teaches = "Following somebody by their phone needs no prior knowledge of it " +
-                "and no special hardware. It is done by elimination: walk together and " +
-                "everything that stayed behind drops out, which is nearly everything.",
+            teaches = "You do not need to know anything about a phone in advance to follow " +
+                "it, and you do not need special hardware. Walk somewhere together and " +
+                "everything that stayed behind drops out. That is nearly everything.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.BETA,
             needs = "Two people who both agree to this, one of them carrying a phone you " +
@@ -871,11 +870,11 @@ object Experiments {
             id = ROTATION_LAB,
             title = "Rotation Lab",
             blurb = "A whole room's address privacy, grouped by maker and measured by clock.",
-            teaches = "Rotation is a firmware decision, so it is a vendor trait - a " +
-                "maker's whole fleet behaves alike. And the fifteen minutes everyone " +
-                "quotes is a default, not a rule: the timeout is settable from a second " +
-                "to an hour, it runs from the last change rather than from a clock, and " +
-                "that free-running offset is an identifier every rotation preserves.",
+            teaches = "Rotation is a firmware decision, so a maker's whole fleet behaves the " +
+                "same way. And the fifteen minutes everyone quotes is a default rather " +
+                "than a rule. The timeout can be set anywhere from a second to an hour, " +
+                "and it runs from the last change rather than from a clock. That offset " +
+                "is an identifier every rotation carries across intact.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.BETA,
             needs = "A room with people in it. A cafe, a train, an office - somewhere with " +
@@ -914,9 +913,9 @@ object Experiments {
             title = "Exposure Scan",
             blurb = "Insecure and over-sharing things in range, from what they broadcast.",
             teaches = "Every network and every Bluetooth device describes its own security " +
-                "in the beacons it sends to everyone. WPS, WEP, missing frame protection, " +
-                "a permanent address, a person's name - all of it is readable without " +
-                "connecting to anything.",
+                "in beacons it sends to anyone listening. WPS, WEP, missing frame " +
+                "protection, a permanent address, somebody's name. You can read all of " +
+                "it without connecting to a thing.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.BETA,
             needs = "Wi-Fi switched on to scan, which does not require being connected.",

@@ -148,7 +148,11 @@ class PolarizationTest {
         }
         val result = Polarization.analyze(sweep)
         assertNotNull(result.verdict())
-        assertTrue(result.verdict()!!.contains("all the way over"))
+        // Asserting on what the verdict is for rather than on its exact wording. The
+        // coverage figure and the instruction to keep going are the parts that have to
+        // survive a copy edit; the sentence around them does not.
+        assertTrue(result.verdict()!!, result.verdict()!!.contains("%"))
+        assertTrue(result.verdict()!!, result.verdict()!!.contains("turning"))
     }
 
     // ------------------------------------------------- what the depth implies
