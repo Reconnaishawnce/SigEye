@@ -24,6 +24,17 @@ data class AdvertShape(
     val manufacturerLength: Int = 0,
     val manufacturerPrefix: String? = null,
     val serviceDataKeys: List<String> = emptyList(),
+
+    /**
+     * Which Apple Continuity messages this device sends, when it is an Apple device.
+     *
+     * A statement about what the thing is and what it is doing rather than who it is, so
+     * it survives an address change intact. Kept out of [key] on purpose: a device does not
+     * send every message in every packet, so the set grows over the first few seconds and
+     * comparing two readings of one phone by equality would call them different devices.
+     * Scored separately instead, where a partial overlap is still evidence.
+     */
+    val continuityTypes: Set<Int> = emptySet(),
     /**
      * Link-layer traits, which no privacy scheme touches.
      *
@@ -75,9 +86,23 @@ data class AdvertShape(
             // enough to be worth a point on their own.
             if (!isLegacy) 1 else null,
             if (advertisingSid != 0xFF) 1 else null,
-        ).size + serviceUuids.size + serviceDataKeys.size
+        ).size + serviceUuids.size + serviceDataKeys.size + continuityTypes.size
 
     val tooPlainToMatchOn: Boolean get() = distinctiveness < 2
+
+    /**
+     * Folds another reading of the same device into this one.
+     *
+     * Advertisements alternate. The same phone sends a full packet carrying a name and
+     * services, then a bare one carrying almost nothing, and keeping only the latest would
+     * compare a device's rich packet against another's empty one. Keeping only the most
+     * distinctive loses the Continuity types that arrived on the other packets, so those
+     * accumulate while everything else takes the better of the two.
+     */
+    fun merge(other: AdvertShape): AdvertShape {
+        val base = if (other.distinctiveness > distinctiveness) other else this
+        return base.copy(continuityTypes = continuityTypes + other.continuityTypes)
+    }
 }
 
 /** How sure we are that two addresses are one device. */
@@ -165,6 +190,9 @@ object Fingerprint {
     /** A device does not move far in the moment it changes address. */
     const val RSSI_CONTINUITY_DB = 10
 
+    /** How differently two devices may hold their interval and still be one device. */
+    const val JITTER_TOLERANCE = 0.12
+
     fun score(previous: Identity, candidate: Identity): LinkScore {
         val evidence = mutableListOf<LinkEvidence>()
 
@@ -218,6 +246,61 @@ object Fingerprint {
             ),
         )
 
+        // Worth two rather than four. A device emitting Nearby Info and Proximity Pairing
+        // says a great deal about what it is and almost nothing about which one it is, so
+        // this separates an iPhone from a pair of earbuds far better than it separates one
+        // iPhone from the next. Real evidence, not decisive evidence.
+        val apple = previous.shape.continuityTypes.isNotEmpty() &&
+            candidate.shape.continuityTypes.isNotEmpty()
+        val sharedTypes = previous.shape.continuityTypes intersect candidate.shape.continuityTypes
+        val typesMatch = apple && sharedTypes == previous.shape.continuityTypes
+        if (apple) {
+            evidence.add(
+                LinkEvidence(
+                    holds = typesMatch,
+                    weight = 2,
+                    text = if (typesMatch) {
+                        "Both send the same Apple messages: " +
+                            com.sigeye.core.ble.Continuity.describe(sharedTypes) +
+                            ". Which messages a device sends is about what it is, not " +
+                            "about which one it is, and rotating the address does not " +
+                            "change it."
+                    } else {
+                        "They send different Apple messages - " +
+                            com.sigeye.core.ble.Continuity.describe(
+                                previous.shape.continuityTypes,
+                            ) + " against " +
+                            com.sigeye.core.ble.Continuity.describe(
+                                candidate.shape.continuityTypes,
+                            ) + "."
+                    },
+                ),
+            )
+        }
+
+        // How tightly each holds its interval, which is separate from what the interval is.
+        // Two devices can both advertise every 152 ms while one is metronomic and the other
+        // wanders, and that difference is firmware rather than privacy.
+        val jitterKnown = previous.intervalJitter > 0.0 && candidate.intervalJitter > 0.0
+        if (jitterKnown) {
+            val jitterMatch = abs(previous.intervalJitter - candidate.intervalJitter) <=
+                JITTER_TOLERANCE
+            evidence.add(
+                LinkEvidence(
+                    holds = jitterMatch,
+                    weight = 1,
+                    text = if (jitterMatch) {
+                        "Both hold that interval about as tightly - " +
+                            previous.intervalStability + " against " +
+                            candidate.intervalStability + "."
+                    } else {
+                        "One keeps its interval " + previous.intervalStability +
+                            " and the other " + candidate.intervalStability + "."
+                    },
+                ),
+            )
+        }
+
         val gap = candidate.firstSeenMs - previous.lastSeenMs
         val handover = gap in -2_000L..HANDOVER_WINDOW_MS
         evidence.add(
@@ -260,14 +343,19 @@ object Fingerprint {
         )
 
         val points = evidence.filter { it.holds }.sumOf { it.weight }
+        val offered = evidence.sumOf { it.weight }.coerceAtLeast(1)
         return LinkScore(
             evidence = evidence,
             confidence = when {
                 !bothRandom -> LinkConfidence.NONE
                 !shapesMatch && !intervalMatch -> LinkConfidence.NONE
-                points >= 10 -> LinkConfidence.STRONG
-                points >= 7 -> LinkConfidence.LIKELY
-                points >= 4 -> LinkConfidence.POSSIBLE
+                // Thresholds are a fraction of what was actually available rather than
+                // raw points, because the Apple and jitter tests only exist for some
+                // devices. Fixed thresholds would have quietly made every non-Apple link
+                // one band weaker the moment those were added.
+                points >= offered * 0.85 -> LinkConfidence.STRONG
+                points >= offered * 0.6 -> LinkConfidence.LIKELY
+                points >= offered * 0.4 -> LinkConfidence.POSSIBLE
                 else -> LinkConfidence.NONE
             },
         )

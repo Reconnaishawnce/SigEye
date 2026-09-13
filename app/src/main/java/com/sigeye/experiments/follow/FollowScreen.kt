@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -18,6 +19,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,7 +60,10 @@ import com.sigeye.core.analysis.identity.FollowPhase
 import com.sigeye.core.analysis.identity.FollowSession
 import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.FollowTuning
+import com.sigeye.core.analysis.identity.CandidateScore
 import com.sigeye.core.analysis.identity.Handoff
+import com.sigeye.core.analysis.identity.Odds
+import com.sigeye.core.analysis.identity.Scoring
 import com.sigeye.core.analysis.identity.Stitch
 import com.sigeye.core.analysis.identity.Probe
 import com.sigeye.core.analysis.identity.ProbeRun
@@ -248,6 +253,9 @@ private fun Live(
     /** How many rotations have already been announced, so each is announced once. */
     var seenStitches by remember { mutableStateOf(0) }
 
+    /** Every candidate's case, recomputed on the tick rather than during composition. */
+    var scores by remember { mutableStateOf<Map<String, CandidateScore>>(emptyMap()) }
+
     /** Rotations followed so far, mirrored out of the session for the screen to show. */
     var stitchLog by remember { mutableStateOf<List<Stitch>>(emptyList()) }
 
@@ -380,6 +388,16 @@ private fun Live(
             // harmless: it is derived from the session rather than accumulated.
             FollowRunner.tick(now, ignoreList)
             val next = FollowRunner.state.value
+
+            // Scored here rather than in the session, because it is a reading of the
+            // session rather than part of it, and because correlating every pair of trails
+            // twice a second has no business happening inside a recomposition.
+            scores = Scoring.score(
+                candidates = next.candidates,
+                tuning = next.tuning,
+                nowMs = now,
+                trails = session().trails(),
+            ).associateBy { it.address }
 
             // Rotations the session followed on its own. The screen's job is to say so and
             // to keep anything holding an address in step - it is not the screen's decision
@@ -615,6 +633,7 @@ private fun Live(
 
         Step.FOLLOWING -> Following(
             state = state,
+            scores = scores,
             ownKit = ownKit,
             onOwnKit = { ownKit = it },
             onAutoMute = { level ->
@@ -1126,6 +1145,7 @@ private fun Following(
     bars: List<Float>,
     targets: List<TargetDevice>,
     nowMs: Long,
+    scores: Map<String, CandidateScore>,
     ownKit: OwnKit,
     onOwnKit: (OwnKit) -> Unit,
     onAutoMute: (Int) -> Unit,
@@ -1390,6 +1410,10 @@ private fun Following(
                     candidate = candidate,
                     nowMs = nowMs,
                     tuning = state.tuning,
+                    score = scores[candidate.address],
+                    // Only the ones actually in the pool and still audible are being
+                    // followed through rotations, and only once the field is small enough.
+                    watchedForRotation = state.bridging && candidate.stillIn,
                     onClick = { onHold(candidate) },
                     action = "Name and list",
                     onAction = { onKeep(candidate) },
@@ -1995,6 +2019,9 @@ private fun CandidateCard(
     nowMs: Long,
     onClick: (() -> Unit)?,
     tuning: FollowTuning = FollowTuning.DEFAULT,
+    score: CandidateScore? = null,
+    /** True while this device is one the session is following through its address changes. */
+    watchedForRotation: Boolean = false,
     action: String? = null,
     onAction: () -> Unit = {},
     secondary: String? = null,
@@ -2015,10 +2042,16 @@ private fun CandidateCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.padding(end = 8.dp)) {
-                    Text(
-                        candidate.label ?: candidate.vendor ?: candidate.address,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            candidate.label ?: candidate.vendor ?: candidate.address,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (watchedForRotation) {
+                            Spacer(Modifier.width(6.dp))
+                            RotationTag(candidate.rotations)
+                        }
+                    }
                     Text(
                         candidate.address,
                         style = MaterialTheme.typography.labelSmall,
@@ -2038,8 +2071,29 @@ private fun CandidateCard(
                             color = MaterialTheme.colorScheme.tertiary,
                         )
                     }
+                    score?.let {
+                        Text(
+                            it.headline(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = oddsColor(it.odds),
+                        )
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
+                    score?.let {
+                        Text(
+                            "${it.points.roundToInt()}",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = oddsColor(it.odds),
+                        )
+                        Text(
+                            it.odds.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = oddsColor(it.odds),
+                        )
+                    }
                     Text(
                         "${candidate.meanRssi.roundToInt()} dBm",
                         style = MaterialTheme.typography.labelMedium,
@@ -2289,4 +2343,36 @@ private fun OwnKitChooser(
             }
         }
     }
+}
+
+/**
+ * The badge on a device the session is following through its address changes.
+ *
+ * Worth saying out loud on the row rather than only in the headline. Being watched for a
+ * rotation is the difference between a device that will be lost the next time its phone
+ * changes address and one that will not, and which of those you are looking at changes
+ * what a falling count means.
+ */
+@Composable
+private fun RotationTag(rotations: Int) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Text(
+            if (rotations > 0) "ROTATION ×$rotations" else "ROTATION WATCH",
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun oddsColor(odds: Odds) = when (odds) {
+    Odds.RULED_OUT -> MaterialTheme.colorScheme.error
+    Odds.STILL_HERE -> MaterialTheme.colorScheme.onSurfaceVariant
+    Odds.PROBABLE -> MaterialTheme.colorScheme.tertiary
+    Odds.STANDOUT -> MaterialTheme.colorScheme.primary
 }

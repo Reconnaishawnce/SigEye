@@ -876,7 +876,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         }
         if (rssi >= tuning.carriedDbm) entry.closeReadings++
         if (rssi > entry.bestRssi) entry.bestRssi = rssi
-        if (shape.distinctiveness > entry.shape.distinctiveness) entry.shape = shape
+        entry.shape = entry.shape.merge(shape)
         // Gaps only from packets that arrived in order and close together. A gap spanning
         // a walk round a corner is a measure of the scanner, not of the device.
         entry.recent.lastOrNull()?.let { (previousMs, _) ->
@@ -1183,6 +1183,15 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     /** Rotations taken without asking, newest last, for a screen that wants to show them. */
     fun stitches(): List<Stitch> = stitched.toList()
+
+    /**
+     * Recent levels per address, for working out which devices share a pocket.
+     *
+     * Handed out rather than scored here, because who looks like the target is a reading of
+     * a follow rather than part of one - and the session has no business deciding it.
+     */
+    fun trails(): Map<String, List<Pair<Long, Int>>> =
+        tracked.mapValues { (_, entry) -> entry.recent.toList() }
 
     /** Takes the pending mutes away, so the caller can apply them to the shared list. */
     fun drainNewMutes(): List<String> {

@@ -108,6 +108,7 @@ fun Advert.shape(): AdvertShape = AdvertShape(
     manufacturerLength = manufacturerData?.size ?: 0,
     manufacturerPrefix = manufacturerData?.take(2)?.joinToString("") { "%02X".format(it) },
     serviceDataKeys = serviceData.keys.toList(),
+    continuityTypes = Continuity.types(companyId, manufacturerData),
     isLegacy = isLegacy,
     isConnectable = isConnectable,
     primaryPhy = primaryPhy,
