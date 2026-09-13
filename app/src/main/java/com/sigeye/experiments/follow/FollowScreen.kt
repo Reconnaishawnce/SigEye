@@ -65,17 +65,22 @@ import com.sigeye.core.analysis.identity.FollowSession
 import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.FollowTuning
 import com.sigeye.core.analysis.identity.CandidateScore
+import com.sigeye.core.analysis.identity.Guidance
+import com.sigeye.core.analysis.identity.Guide
 import com.sigeye.core.analysis.identity.Handoff
 import com.sigeye.core.analysis.identity.Journal
 import com.sigeye.core.analysis.identity.Mark
+import com.sigeye.core.analysis.identity.Move
 import com.sigeye.core.analysis.identity.Odds
 import com.sigeye.core.analysis.identity.Scoring
+import com.sigeye.core.analysis.identity.Stage
 import com.sigeye.core.analysis.identity.Stitch
 import com.sigeye.core.analysis.identity.Probe
 import com.sigeye.core.analysis.identity.ProbeRun
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.DeviceKind
 import com.sigeye.core.ble.shape
+import com.sigeye.core.sensors.WalkSensor
 import com.sigeye.ui.CountUp
 import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.Diagnostic
@@ -236,6 +241,12 @@ private fun Live(
     val ignoreList = remember { IgnoreList.get(context) }
     val feedback = remember { Feedback(context) }
 
+    // No permission, works indoors, and only has to answer a coarse question: is somebody
+    // carrying this. Standing still is the one case where a still count means the method
+    // has stopped rather than the app.
+    val walkSensor = remember { WalkSensor(context) }
+    val walk by walkSensor.walk.collectAsStateWithLifecycle()
+
     var tuning by remember { mutableStateOf(settings.load()) }
 
     // The session lives in FollowRunner rather than in this composition, because a follow
@@ -287,6 +298,16 @@ private fun Live(
     /** Which rotation question is on screen, and which have been put off. */
     var asking by remember { mutableStateOf<String?>(null) }
     val deferred = remember { mutableStateListOf<String>() }
+
+    /**
+     * Whether everything below the instruction is showing.
+     *
+     * Closed by default, and this is the whole of the redesign. On a street somebody needs
+     * the number, the thing to do, and one button. What was there instead was the count, a
+     * chart, a radar, filter chips, an own-kit card, a marks section, a replay, a stitch
+     * log and two lists, all at once, at the moment there is least attention to spare.
+     */
+    var details by remember { mutableStateOf(false) }
 
     /** How many marks have been made, so the section can say so without reading the journal. */
     var marked by remember { mutableStateOf(0) }
@@ -390,6 +411,7 @@ private fun Live(
     }
 
     DisposableEffect(Unit) {
+        walkSensor.start()
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
         onDispose {
@@ -404,6 +426,7 @@ private fun Live(
                 ScanService.stop(context, ScanService.Mode.FOLLOW)
             }
             feedback.release()
+            walkSensor.stop()
             BleScanHub.release(HUB_TAG)
         }
     }
@@ -694,6 +717,11 @@ private fun Live(
             scores = scores,
             kindFilter = kindFilter.toList(),
             journal = journal,
+            guidance = remember(state.atMs, journal.size, walk.stillForMs) {
+                Guide.of(state, journal.counts(), walk.stillForMs.takeIf { walk.available })
+            },
+            details = details,
+            onDetails = { details = it },
             marks = marked,
             onMark = { mark ->
                 session().mark(mark, System.currentTimeMillis())
@@ -1235,6 +1263,9 @@ private fun Following(
     kindFilter: List<DeviceKind>,
     onKindFilter: (DeviceKind) -> Unit,
     journal: Journal,
+    guidance: Guidance?,
+    details: Boolean,
+    onDetails: (Boolean) -> Unit,
     marks: Int,
     onMark: (Mark) -> Unit,
     onCaseFile: () -> Unit,
@@ -1331,401 +1362,469 @@ private fun Following(
         }
     }
 
-    Spacer(Modifier.height(10.dp))
-    LiveBars(
-        values = bars,
-        spoken = "How many are still with them, once a second. Now " +
-            "${bars.lastOrNull()?.toInt() ?: 0}, highest ${bars.maxOrNull()?.toInt() ?: 0} " +
-            "over the last ${bars.size} seconds.",
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(
-        "One bar a second. This is the list emptying out as you walk.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    // Only what is still in. A dropped device leaves the radar and does not come back,
-    // which is what makes this readable: every blip on it is a live candidate, and the ring
-    // it sits in is how close it is right now rather than how close it has been on average.
-    // Somebody drifting to the back of a carriage moves outward while you watch.
-    Spacer(Modifier.height(14.dp))
-    // The loudest only. Three hundred blips is not a radar, it is a grey disc, and it
-    // costs a text measure and a trail redraw each every frame - which on a phone already
-    // holding a scan is where the stutter comes from.
-    RadarPanel(
-        targets = state.stillIn.sortedByDescending { it.recentRssi }.take(RADAR_BLIPS)
-            .map { candidate ->
-            RadarTarget(
-                address = candidate.address,
-                label = candidate.label ?: candidate.vendor ?: candidate.address.takeLast(8),
-                smoothedRssi = candidate.recentRssi,
-                flagged = candidate.carried(state.tuning),
-                watched = targets.any { it.address.equals(candidate.address, true) },
-            )
-        },
-        selected = null,
-        onSelect = {},
-        showSelectionCard = false,
-        footnote = "Only devices still with them. Something that drops out leaves the " +
-            "radar for good, so every blip here is live - and the ring is where it is now, " +
-            "not where it has been on average.",
-    )
-
-    if (ownKit == OwnKit.UNASKED && state.autoMuting == null) {
+    // The instruction, and the one thing to do about it. This is what somebody standing
+    // on a street actually needs, and it used to be nowhere: a number with no context, a
+    // still count that reads as a broken app, and eleven cards to work it out from.
+    guidance?.let { advice ->
         Spacer(Modifier.height(12.dp))
-        OwnKitChooser(
-            tuning = state.tuning,
-            onSkip = { onOwnKit(OwnKit.DECIDED) },
-            onAutoMute = onAutoMute,
-        )
-    }
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    advice.urgent -> MaterialTheme.colorScheme.errorContainer
+                    advice.stage == Stage.IDENTIFY -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.secondaryContainer
+                },
+            ),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    advice.stage.label.uppercase(Locale.US),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    advice.headline,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(advice.expect, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    advice.why,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
 
-    state.autoMuting?.let { level ->
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "Muting anything heard above $level dBm. That is a rule about distance rather " +
-                "than about ownership - if you end up walking beside them, it can mute " +
-                "them. Turn it off in settings once your own kit has been ruled out.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.tertiary,
-        )
-    }
-
-    Spacer(Modifier.height(12.dp))
-    MarkRow(onMark = onMark, marks = marks)
-
-    Spacer(Modifier.height(12.dp))
-    Section(
-        title = "Replay",
-        summary = "Scrub back through the walk and see when it narrowed.",
-    ) {
-        Replay(journal)
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = onCaseFile, modifier = Modifier.fillMaxWidth()) {
-            Text("Export the case file")
+                // One button, and only when there is something to press. "Keep walking" is
+                // an instruction rather than an action, and a button that does nothing is
+                // worse than no button.
+                val action: (() -> Unit)? = when (advice.move) {
+                    Move.WALK_BY -> onWalkBy
+                    Move.ORBIT -> onCircle
+                    Move.OWN_KIT -> ({ state.carried.forEach(onMine) })
+                    Move.HOLD -> ({ onDetails(true) })
+                    Move.WAIT, Move.WALK, Move.GET_MOVING -> null
+                }
+                action?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = it, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            when (advice.move) {
+                                Move.OWN_KIT -> "Those ${state.carried.size} are mine"
+                                Move.HOLD -> "Show the list"
+                                else -> advice.move.label
+                            },
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    Spacer(Modifier.height(12.dp))
+    Grey(if (details) "Hide the detail" else "Show the detail", { onDetails(!details) })
+
+    if (details) {
+        Spacer(Modifier.height(10.dp))
+        LiveBars(
+            values = bars,
+            spoken = "How many are still with them, once a second. Now " +
+                "${bars.lastOrNull()?.toInt() ?: 0}, highest ${bars.maxOrNull()?.toInt() ?: 0} " +
+                "over the last ${bars.size} seconds.",
+        )
         Spacer(Modifier.height(4.dp))
         Text(
-            "One document: what happened, what was found, what argues against it, and the " +
-                "count every five seconds. Written so somebody who was not there can " +
-                "disagree with it.",
+            "One bar a second. This is the list emptying out as you walk.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
 
-    if (stitchLog.isNotEmpty()) {
+        // Only what is still in. A dropped device leaves the radar and does not come back,
+        // which is what makes this readable: every blip on it is a live candidate, and the ring
+        // it sits in is how close it is right now rather than how close it has been on average.
+        // Somebody drifting to the back of a carriage moves outward while you watch.
+        Spacer(Modifier.height(14.dp))
+        // The loudest only. Three hundred blips is not a radar, it is a grey disc, and it
+        // costs a text measure and a trail redraw each every frame - which on a phone already
+        // holding a scan is where the stutter comes from.
+        RadarPanel(
+            targets = state.stillIn.sortedByDescending { it.recentRssi }.take(RADAR_BLIPS)
+                .map { candidate ->
+                RadarTarget(
+                    address = candidate.address,
+                    label = candidate.label ?: candidate.vendor ?: candidate.address.takeLast(8),
+                    smoothedRssi = candidate.recentRssi,
+                    flagged = candidate.carried(state.tuning),
+                    watched = targets.any { it.address.equals(candidate.address, true) },
+                )
+            },
+            selected = null,
+            onSelect = {},
+            showSelectionCard = false,
+            footnote = "Only devices still with them. Something that drops out leaves the " +
+                "radar for good, so every blip here is live - and the ring is where it is now, " +
+                "not where it has been on average.",
+        )
+
+        if (ownKit == OwnKit.UNASKED && state.autoMuting == null) {
+            Spacer(Modifier.height(12.dp))
+            OwnKitChooser(
+                tuning = state.tuning,
+                onSkip = { onOwnKit(OwnKit.DECIDED) },
+                onAutoMute = onAutoMute,
+            )
+        }
+
+        state.autoMuting?.let { level ->
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Muting anything heard above $level dBm. That is a rule about distance rather " +
+                    "than about ownership - if you end up walking beside them, it can mute " +
+                    "them. Turn it off in settings once your own kit has been ruled out.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+        MarkRow(onMark = onMark, marks = marks)
+
         Spacer(Modifier.height(12.dp))
         Section(
-            title = "Rotations followed",
-            summary = "${stitchLog.size} address " +
-                (if (stitchLog.size == 1) "change" else "changes") + " carried across.",
+            title = "Replay",
+            summary = "Scrub back through the walk and see when it narrowed.",
         ) {
-            Text(
-                "Each of these is a device that changed address and was followed to the new " +
-                    "one. Every one is also a chance to have been wrong, which is why the " +
-                    "ones the app was not sure about were put to you instead.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(Modifier.height(8.dp))
-            stitchLog.asReversed().forEach { stitch ->
-                Field(
-                    "${stitch.fromAddress.takeLast(8)} to ${stitch.toAddress.takeLast(8)}",
-                    if (stitch.byHand) "you picked it" else "followed automatically",
-                )
+            Replay(journal)
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onCaseFile, modifier = Modifier.fillMaxWidth()) {
+                Text("Export the case file")
             }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "One document: what happened, what was found, what argues against it, and the " +
+                    "count every five seconds. Written so somebody who was not there can " +
+                    "disagree with it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-    }
 
-    if (state.carried.isNotEmpty()) {
-        Spacer(Modifier.height(10.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            ),
-        ) {
-            Column(Modifier.padding(14.dp)) {
+        if (stitchLog.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Section(
+                title = "Rotations followed",
+                summary = "${stitchLog.size} address " +
+                    (if (stitchLog.size == 1) "change" else "changes") + " carried across.",
+            ) {
                 Text(
-                    if (state.carried.size == 1) {
-                        "One of these is probably yours"
-                    } else {
-                        "${state.carried.size} of these are probably yours"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Sitting in the innermost ring the whole way and never moving. That is " +
-                        "what something in your own pocket looks like - earbuds, a watch, a " +
-                        "tag - and it survives every test by construction, because it goes " +
-                        "everywhere you go. Worth ruling out before you read anything into " +
-                        "the rest of the list.",
+                    "Each of these is a device that changed address and was followed to the new " +
+                        "one. Every one is also a chance to have been wrong, which is why the " +
+                        "ones the app was not sure about were put to you instead.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Spacer(Modifier.height(6.dp))
-                state.carried.forEach { candidate ->
+                Spacer(Modifier.height(8.dp))
+                stitchLog.asReversed().forEach { stitch ->
                     Field(
-                        candidate.label ?: candidate.vendor ?: candidate.address,
-                        candidate.carriedReason(state.tuning) ?: "",
+                        "${stitch.fromAddress.takeLast(8)} to ${stitch.toAddress.takeLast(8)}",
+                        if (stitch.byHand) "you picked it" else "followed automatically",
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        if (state.carried.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        if (state.carried.size == 1) {
+                            "One of these is probably yours"
+                        } else {
+                            "${state.carried.size} of these are probably yours"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Sitting in the innermost ring the whole way and never moving. That is " +
+                            "what something in your own pocket looks like - earbuds, a watch, a " +
+                            "tag - and it survives every test by construction, because it goes " +
+                            "everywhere you go. Worth ruling out before you read anything into " +
+                            "the rest of the list.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    state.carried.forEach { candidate ->
+                        Field(
+                            candidate.label ?: candidate.vendor ?: candidate.address,
+                            candidate.carriedReason(state.tuning) ?: "",
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Say so once and they are gone from every follow after this, not just " +
+                            "this one. Nothing here can work out which devices are yours, and " +
+                            "every guess at it either leaves your earbuds at the top of the " +
+                            "list forever or quietly removes the target.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { state.carried.forEach(onMine) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (state.carried.size == 1) {
+                                "That one is mine, ignore it"
+                            } else {
+                                "Those ${state.carried.size} are mine, ignore them"
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (rebaselinePrompt) {
+            Spacer(Modifier.height(12.dp))
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        "This is not narrowing. Start the baseline again?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${state.runningForMs / 60_000} minutes in and still " +
+                            "${state.stillIn.size} with them. Almost always one thing: their " +
+                            "phone changed address partway through, so the device you were " +
+                            "converging on stopped existing and its replacement was never in " +
+                            "the pool. Starting again reopens the pool to whatever is audible " +
+                            "now, without forgetting the room.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(onClick = onRebaseline, modifier = Modifier.weight(1f)) {
+                            Text("Re-baseline")
+                        }
+                        OutlinedButton(
+                            onClick = onDismissRebaseline,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Carry on") }
+                    }
+                }
+            }
+        }
+
+        if (state.listable) {
+            // Only the kinds actually in front of you. Offering "Speaker or TV" when nothing
+            // here is one produces an empty list that reads as a broken radio.
+            val present = state.stillIn.map { it.kind }.toSet()
+                .filter { it in DeviceKind.FILTERABLE }
+            if (present.size > 1) {
+                Spacer(Modifier.height(14.dp))
                 Text(
-                    "Say so once and they are gone from every follow after this, not just " +
-                        "this one. Nothing here can work out which devices are yours, and " +
-                        "every guess at it either leaves your earbuds at the top of the " +
-                        "list forever or quietly removes the target.",
+                    "Narrow by what they are",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    present.forEach { kind ->
+                        val on = kind in kindFilter
+                        FilterChip(
+                            selected = on,
+                            onClick = { onKindFilter(kind) },
+                            label = {
+                                Text(
+                                    "${kind.emoji} ${kind.label} " +
+                                        "${state.stillIn.count { it.kind == kind }}",
+                                )
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "What a device is comes from what it broadcasts, and most of it is a guess. " +
+                        "An iPhone and an Apple Watch in a pocket send the same messages under " +
+                        "the same company id with the bodies randomized, so both read as " +
+                        "\"Apple device\" rather than as one or the other - calling either a " +
+                        "phone would invent the fact you are here to establish.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { state.carried.forEach(onMine) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        if (state.carried.size == 1) {
-                            "That one is mine, ignore it"
-                        } else {
-                            "Those ${state.carried.size} are mine, ignore them"
-                        },
+            }
+
+            fun narrow(list: List<FollowCandidate>) =
+                if (kindFilter.isEmpty()) list else list.filter { it.kind in kindFilter }
+
+            val arrivedFirst = narrow(state.stillInArrived)
+            val wasAlreadyHere = narrow(state.stillInAlreadyHere)
+
+            @Composable
+            fun list(candidates: List<FollowCandidate>) {
+                candidates.forEach { candidate ->
+                    val already = targets.any { it.address.equals(candidate.address, true) }
+                    CandidateCard(
+                        candidate = candidate,
+                        nowMs = nowMs,
+                        tuning = state.tuning,
+                        score = scores[candidate.address],
+                        // Only the ones actually in the pool and still audible are being
+                        // followed through rotations, and only once the field is small enough.
+                        watchedForRotation = state.bridging && candidate.stillIn,
+                        onClick = { onHold(candidate) },
+                        action = "Name and list",
+                        onAction = { onKeep(candidate) },
+                        secondary = if (already) null else "Target",
+                        onSecondary = { onPromote(candidate) },
+                        tertiary = "Mine",
+                        onTertiary = { onMine(candidate) },
                     )
                 }
             }
-        }
-    }
 
-    if (rebaselinePrompt) {
-        Spacer(Modifier.height(12.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            ),
-        ) {
-            Column(Modifier.padding(14.dp)) {
+            Spacer(Modifier.height(16.dp))
+
+            // Two strengths of claim, and they were one list. When the baseline was taken
+            // before the person arrived, everything in the first group was in range at a
+            // moment they were not - which is the whole reason for taking a baseline that way,
+            // and it was being thrown away by showing them all together.
+            if (state.waitedForArrival && arrivedFirst.isNotEmpty()) {
                 Text(
-                    "This is not narrowing. Start the baseline again?",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    "Arrived after the baseline",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "None of these were here before them. That is the strongest thing this " +
+                        "follow knows, so they are first.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    "${state.runningForMs / 60_000} minutes in and still " +
-                        "${state.stillIn.size} with them. Almost always one thing: their " +
-                        "phone changed address partway through, so the device you were " +
-                        "converging on stopped existing and its replacement was never in " +
-                        "the pool. Starting again reopens the pool to whatever is audible " +
-                        "now, without forgetting the room.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(onClick = onRebaseline, modifier = Modifier.weight(1f)) {
-                        Text("Re-baseline")
-                    }
-                    OutlinedButton(
-                        onClick = onDismissRebaseline,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Carry on") }
-                }
-            }
-        }
-    }
+                list(arrivedFirst)
 
-    if (state.listable) {
-        // Only the kinds actually in front of you. Offering "Speaker or TV" when nothing
-        // here is one produces an empty list that reads as a broken radio.
-        val present = state.stillIn.map { it.kind }.toSet()
-            .filter { it in DeviceKind.FILTERABLE }
-        if (present.size > 1) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "Narrow by what they are",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(4.dp))
-            Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                present.forEach { kind ->
-                    val on = kind in kindFilter
-                    FilterChip(
-                        selected = on,
-                        onClick = { onKindFilter(kind) },
-                        label = {
-                            Text(
-                                "${kind.emoji} ${kind.label} " +
-                                    "${state.stillIn.count { it.kind == kind }}",
-                            )
-                        },
+                if (wasAlreadyHere.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Was already here",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                    Text(
+                        "Part of the furniture when you took the baseline, and still with you. " +
+                            "Possible, but a weaker claim than the ones above.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    list(wasAlreadyHere)
                 }
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "What a device is comes from what it broadcasts, and most of it is a guess. " +
-                    "An iPhone and an Apple Watch in a pocket send the same messages under " +
-                    "the same company id with the bodies randomized, so both read as " +
-                    "\"Apple device\" rather than as one or the other - calling either a " +
-                    "phone would invent the fact you are here to establish.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        fun narrow(list: List<FollowCandidate>) =
-            if (kindFilter.isEmpty()) list else list.filter { it.kind in kindFilter }
-
-        val arrivedFirst = narrow(state.stillInArrived)
-        val wasAlreadyHere = narrow(state.stillInAlreadyHere)
-
-        @Composable
-        fun list(candidates: List<FollowCandidate>) {
-            candidates.forEach { candidate ->
-                val already = targets.any { it.address.equals(candidate.address, true) }
-                CandidateCard(
-                    candidate = candidate,
-                    nowMs = nowMs,
-                    tuning = state.tuning,
-                    score = scores[candidate.address],
-                    // Only the ones actually in the pool and still audible are being
-                    // followed through rotations, and only once the field is small enough.
-                    watchedForRotation = state.bridging && candidate.stillIn,
-                    onClick = { onHold(candidate) },
-                    action = "Name and list",
-                    onAction = { onKeep(candidate) },
-                    secondary = if (already) null else "Target",
-                    onSecondary = { onPromote(candidate) },
-                    tertiary = "Mine",
-                    onTertiary = { onMine(candidate) },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Two strengths of claim, and they were one list. When the baseline was taken
-        // before the person arrived, everything in the first group was in range at a
-        // moment they were not - which is the whole reason for taking a baseline that way,
-        // and it was being thrown away by showing them all together.
-        if (state.waitedForArrival && arrivedFirst.isNotEmpty()) {
-            Text(
-                "Arrived after the baseline",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                "None of these were here before them. That is the strongest thing this " +
-                    "follow knows, so they are first.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            list(arrivedFirst)
-
-            if (wasAlreadyHere.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
+            } else {
                 Text(
-                    "Was already here",
+                    if (state.narrowed) "Short list" else "Still with them",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Part of the furniture when you took the baseline, and still with you. " +
-                        "Possible, but a weaker claim than the ones above.",
+                    "Tap one to hold onto it. Name it and put it on a list to use it in the " +
+                        "other experiments, or say it is yours and it leaves for good.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(6.dp))
-                list(wasAlreadyHere)
+                list(state.stillIn)
             }
-        } else {
-            Text(
-                if (state.narrowed) "Short list" else "Still with them",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "Tap one to hold onto it. Name it and put it on a list to use it in the " +
-                    "other experiments, or say it is yours and it leaves for good.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            list(state.stillIn)
         }
-    }
 
-    Spacer(Modifier.height(14.dp))
-    Text(
-        "Anything you can do without giving yourself away",
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Spacer(Modifier.height(8.dp))
-    ProbeCard(
-        title = if (state.walkedBy) {
-            "Walk-bys (${state.walkBys.size})"
-        } else {
-            "Walk past them"
-        },
-        detail = if (state.walkedBy) {
-            "Latest: ${state.passed} of the ones still with them peaked as you passed. Tap " +
-                "to see every one, and to do another."
-        } else {
-            "They stand still; you walk past and stop the same distance away on the far " +
-                "side. Whatever is on them rises as you draw level and comes back down. " +
-                "This one picks devices out rather than ruling them out."
-        },
-        onClick = if (state.walkedBy) onReview else onWalkBy,
-        emphasis = state.walkedBy,
-    )
-    ProbeCard(
-        title = if (state.orbited) "Circle them again" else "Circle them",
-        detail = if (state.orbited) {
-            "${state.orbits.size} walked. Latest: ${state.centred} stayed at the same " +
-                "distance all the way round. Another lap is scored on its own."
-        } else {
-            "One slow lap about five paces out. Anything on them stays the same distance " +
-                "from you the whole way round; anything across the room does not."
-        },
-        onClick = onCircle,
-    )
-
-    if (state.dropped.isNotEmpty()) {
         Spacer(Modifier.height(14.dp))
-        Section(
-            title = "Dropped out",
-            summary = "${state.dropped.size} gone, newest first." +
-                if (state.returned.isEmpty()) "" else " ${state.returned.size} came back.",
-        ) {
-            Text(
-                "A device is out when it has not been heard for " +
-                    "${state.tuning.dropAfterMs / 1000} seconds, and it stays out. Coming " +
-                    "back is recorded rather than undone - usually it means you walked a " +
-                    "loop past the same fixed thing twice.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            state.dropped.take(12).forEach { candidate ->
-                Field(
-                    candidate.label ?: candidate.vendor ?: candidate.address,
-                    "lasted ${candidate.heldForMs(nowMs) / 1000}s" +
-                        if (candidate.returnedAtMs != null) " · came back" else "",
+        Text(
+            "Anything you can do without giving yourself away",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(8.dp))
+        ProbeCard(
+            title = if (state.walkedBy) {
+                "Walk-bys (${state.walkBys.size})"
+            } else {
+                "Walk past them"
+            },
+            detail = if (state.walkedBy) {
+                "Latest: ${state.passed} of the ones still with them peaked as you passed. Tap " +
+                    "to see every one, and to do another."
+            } else {
+                "They stand still; you walk past and stop the same distance away on the far " +
+                    "side. Whatever is on them rises as you draw level and comes back down. " +
+                    "This one picks devices out rather than ruling them out."
+            },
+            onClick = if (state.walkedBy) onReview else onWalkBy,
+            emphasis = state.walkedBy,
+        )
+        ProbeCard(
+            title = if (state.orbited) "Circle them again" else "Circle them",
+            detail = if (state.orbited) {
+                "${state.orbits.size} walked. Latest: ${state.centred} stayed at the same " +
+                    "distance all the way round. Another lap is scored on its own."
+            } else {
+                "One slow lap about five paces out. Anything on them stays the same distance " +
+                    "from you the whole way round; anything across the room does not."
+            },
+            onClick = onCircle,
+        )
+
+        if (state.dropped.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Section(
+                title = "Dropped out",
+                summary = "${state.dropped.size} gone, newest first." +
+                    if (state.returned.isEmpty()) "" else " ${state.returned.size} came back.",
+            ) {
+                Text(
+                    "A device is out when it has not been heard for " +
+                        "${state.tuning.dropAfterMs / 1000} seconds, and it stays out. Coming " +
+                        "back is recorded rather than undone - usually it means you walked a " +
+                        "loop past the same fixed thing twice.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(8.dp))
+                state.dropped.take(12).forEach { candidate ->
+                    Field(
+                        candidate.label ?: candidate.vendor ?: candidate.address,
+                        "lasted ${candidate.heldForMs(nowMs) / 1000}s" +
+                            if (candidate.returnedAtMs != null) " · came back" else "",
+                    )
+                }
             }
         }
+
     }
 
     TakeawayButton(takeawayFrom(state))

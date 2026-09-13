@@ -340,6 +340,15 @@ private const val BRIDGE_AFTER_MS = 90_000L
 private const val QUIET_AFTER_MS = 12_000L
 
 /**
+ * Drop-off for a device that was already fading when it went quiet.
+ *
+ * Under half the ordinary one. There is nothing to wait for: the signal was receding, the
+ * silence is explained, and the only thing the remaining thirty-five seconds buys is a
+ * screen that appears not to be working.
+ */
+private const val FADED_DROP_MS = 25_000L
+
+/**
  * How many readings of each trail survive being saved.
  *
  * Four hundred is well over a minute at one a second, which is longer than any probe, so in
@@ -1534,9 +1543,29 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             val dropped = entry.droppedAtMs
             if (dropped == null) {
                 val silentSince = maxOf(entry.lastSeenMs, started)
-                if (silenceMs(silentSince, nowMs) > tuning.dropAfterMs) {
-                    entry.droppedAtMs =
-                        silentSince + tuning.dropAfterMs + blindMsBetween(silentSince, nowMs)
+                val silence = silenceMs(silentSince, nowMs)
+                // A device that was fading before it went quiet was walking out of range,
+                // and waiting the full minute for it is a minute of a screen that looks
+                // stuck. The same reading that stops a rotation being chased after a
+                // genuine walk-off pays for itself again here: it is exactly the case
+                // where the silence is already explained.
+                //
+                // Never the other way round. Something that was loud and steady and then
+                // stopped gets the full drop-off, because that is what a rotation looks
+                // like and retiring it early would lose the target at the moment it
+                // changed address.
+                val limit = if (
+                    silence > FADED_DROP_MS &&
+                    entry.recent.size >= Handoffs.MIN_TRAIL &&
+                    Handoffs.classify(entry.addresses.last(), entry.recent.toList(), entry.bestRssi)
+                        .exit == Exit.FADED
+                ) {
+                    FADED_DROP_MS
+                } else {
+                    tuning.dropAfterMs
+                }
+                if (silence > limit) {
+                    entry.droppedAtMs = silentSince + limit + blindMsBetween(silentSince, nowMs)
                 }
             } else if (entry.lastSeenMs > dropped && entry.returnedAtMs == null) {
                 entry.returnedAtMs = entry.lastSeenMs

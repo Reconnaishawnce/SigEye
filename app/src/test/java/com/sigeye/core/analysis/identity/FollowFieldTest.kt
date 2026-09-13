@@ -102,6 +102,36 @@ class FollowFieldTest {
         assertEquals("nothing left to be on its way out", 0, gone.goingQuiet)
     }
 
+    // ------------------------------------------------------------------ faders go early
+
+    @Test
+    fun `something walking out of range is retired without the full wait`() {
+        // It was receding, the silence is explained, and the remaining thirty-five seconds
+        // buy nothing except a screen that appears not to be working.
+        val session = session()
+        session.startBaseline(t0)
+        repeat(12) { session.hear("AA:BB:CC:06:00:01", t0 + it * 1_000L, rssi = -55 - it * 3) }
+        session.endBaseline(t0 + 12_000L)
+        session.startFollowing(t0 + 12_000L)
+
+        val early = session.state(t0 + 12_000L + 30_000L)
+        assertEquals("should already be gone", 0, early.stillIn.size)
+    }
+
+    @Test
+    fun `something loud that simply stopped still gets the full minute`() {
+        // That is what a rotation looks like, and retiring it early would lose the target
+        // at the one moment it changed address.
+        val session = session()
+        session.startBaseline(t0)
+        repeat(12) { session.hear("AA:BB:CC:07:00:01", t0 + it * 1_000L, rssi = -58) }
+        session.endBaseline(t0 + 12_000L)
+        session.startFollowing(t0 + 12_000L)
+
+        assertEquals(1, session.state(t0 + 12_000L + 40_000L).stillIn.size)
+        assertEquals(0, session.state(t0 + 12_000L + 70_000L).stillIn.size)
+    }
+
     // ------------------------------------------------------------------ no questions in a crowd
 
     @Test
