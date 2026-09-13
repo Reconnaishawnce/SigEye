@@ -28,6 +28,20 @@ data class ScanUiState(
     val totalAdvertisements: Long = 0,
     /** Live delivery rate, and the healthy rate learned after the last scan restart. */
     val advertsPerSecond: Double = 0.0,
+    /**
+     * Advertisements and first-ever-seen addresses since the previous publish, and how long
+     * that covered.
+     *
+     * Here because [advertsPerSecond] is republished every ten seconds by the scan hub, so
+     * anything sampling it faster than that draws the same number over and over. These are
+     * counted between publishes, which is twice a second, and are therefore the only
+     * numbers on this state worth plotting.
+     */
+    val sampleAdverts: Int = 0,
+    val sampleNew: Int = 0,
+    val sampleMs: Long = 0,
+    /** Increments once per publish, so a reader can tell two identical samples apart. */
+    val sampleSeq: Int = 0,
     val referenceRate: Double = 0.0,
     val ignoredCount: Int = 0,
     val lastAlertMs: Long = 0,

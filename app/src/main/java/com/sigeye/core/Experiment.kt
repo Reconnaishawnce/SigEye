@@ -1046,7 +1046,8 @@ object Experiments {
      * appear in their own categories below, because a shortcut that removes things from
      * where they belong is a maze.
      */
-    val featuredIds: List<String> = listOf(ROTATION, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
+    val featuredIds: List<String> =
+        listOf(FOLLOW, ROTATION, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
 
     /** Why each featured experiment earned the spot, in a few words. */
     /**

@@ -52,7 +52,6 @@ import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
 import com.sigeye.ui.Sparkline
 import com.sigeye.ui.TileColumn
-import com.sigeye.ui.barsSpoken
 import com.sigeye.ui.tile
 import com.sigeye.ui.tiles
 import java.io.File
@@ -361,13 +360,27 @@ private fun ArmingCard(state: ScanUiState) {
     // would go still is the one time the radio is behaving.
     val latest by rememberUpdatedState(state)
     var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-    val rates = remember(state.startedAtMs) { mutableStateListOf<Float>() }
+    val found = remember(state.startedAtMs) { mutableStateListOf<Float>() }
+    var lastSampleSeq by remember(state.startedAtMs) { mutableStateOf(0) }
 
+    // Driven by the engine's own per-publish counts rather than by a timer of its own, so
+    // every bar is a distinct measurement. The first version of this sampled the scan
+    // hub's advertisements-per-second, which is recomputed once every ten seconds - so
+    // twenty consecutive bars were the same number, which is why the chart looked like it
+    // was not measuring anything. It was not.
+    LaunchedEffect(state.sampleSeq) {
+        nowMs = System.currentTimeMillis()
+        if (state.sampleSeq > lastSampleSeq) {
+            lastSampleSeq = state.sampleSeq
+            found.add(state.sampleNew.toFloat())
+            while (found.size > BASELINE_BARS) found.removeAt(0)
+        }
+    }
+
+    // The clock, separately, because it has to move whether or not the radio is delivering.
     LaunchedEffect(state.startedAtMs) {
         while (true) {
             nowMs = System.currentTimeMillis()
-            rates.add(latest.advertsPerSecond.toFloat())
-            while (rates.size > BASELINE_BARS) rates.removeAt(0)
             delay(SAMPLE_MS)
         }
     }
@@ -416,13 +429,15 @@ private fun ArmingCard(state: ScanUiState) {
 
             Spacer(Modifier.height(14.dp))
             LiveBars(
-                values = rates.toList(),
-                spoken = barsSpoken(rates.toList(), "advertisements a second"),
+                values = found.toList(),
+                spoken = "Devices heard for the first time, twice a second. " +
+                    "${found.sumOf { it.toInt() }} across the last ${found.size} readings.",
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = format1(state.advertsPerSecond) + " advertisements a second, " +
-                    "right now",
+                text = "Each bar is how many devices were heard for the first time in that " +
+                    "half second. It starts tall and flattens off, and when it has " +
+                    "flattened the census has found what is here.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

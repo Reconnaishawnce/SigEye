@@ -30,7 +30,7 @@ class OrbitTest {
     }
 
     private fun circling(): FollowSession = FollowSession().apply {
-        beginLeg("circle", LegKind.ORBIT, start)
+        beginProbe(Probe.ORBIT, start)
     }
 
     @Test
@@ -38,7 +38,7 @@ class OrbitTest {
         val session = circling()
         // Two dB of wander and nothing else: you are orbiting it, so the range never changes.
         walk(session, "AA:BB:CC:DD:EE:01") { elapsed -> -55 + (elapsed / 10_000L).toInt() % 3 }
-        session.endLeg(start + lapMs)
+        session.endProbe(start + lapMs)
 
         val orbit = session.candidates(start + lapMs).single().orbit!!
 
@@ -55,7 +55,7 @@ class OrbitTest {
         walk(session, "AA:BB:CC:DD:EE:02") { elapsed ->
             if (elapsed < lapMs / 2) -48 else -82
         }
-        session.endLeg(start + lapMs)
+        session.endProbe(start + lapMs)
 
         val orbit = session.candidates(start + lapMs).single().orbit!!
 
@@ -72,7 +72,7 @@ class OrbitTest {
         walk(session, "AA:BB:CC:DD:EE:03") { elapsed ->
             if (elapsed in 20_000L..40_000L) null else -60
         }
-        session.endLeg(start + lapMs)
+        session.endProbe(start + lapMs)
 
         val orbit = session.candidates(start + lapMs).single().orbit!!
 
@@ -88,7 +88,7 @@ class OrbitTest {
         // as the phone in the pocket. Only its level tells them apart.
         val session = circling()
         walk(session, "AA:BB:CC:DD:EE:04") { -92 }
-        session.endLeg(start + lapMs)
+        session.endProbe(start + lapMs)
 
         val orbit = session.candidates(start + lapMs).single().orbit!!
 
@@ -136,9 +136,7 @@ class OrbitTest {
     @Test
     fun `no circle means no score at all, rather than a passing one`() {
         val session = FollowSession()
-        session.beginLeg("just standing about", LegKind.STILL, start)
         walk(session, "AA:BB:CC:DD:EE:07") { -55 }
-        session.endLeg(start + lapMs)
 
         val candidate = session.candidates(start + lapMs).single()
 
@@ -152,32 +150,37 @@ class OrbitTest {
         // would quietly destroy the only thing the test is looking at.
         val session = circling()
         walk(session, "AA:BB:CC:DD:EE:08") { -55 }
-        session.endLeg(start + lapMs)
+        session.endProbe(start + lapMs)
 
-        session.beginLeg("another circle", LegKind.ORBIT, start + lapMs + 1_000L)
+        session.beginProbe(Probe.ORBIT, start + lapMs + 1_000L)
 
-        assertEquals(1, session.state(start + lapMs + 2_000L).legs.size)
+        assertEquals(1, session.state(start + lapMs + 2_000L).probes.size)
     }
 
     @Test
     fun `being centred counts for something, but never for everything`() {
-        // Weight has to stay ordered so the list is: came with you and centred, came with
-        // you, centred only. A device sitting on the table you happened to circle must not
-        // outrank one that walked a mile with you.
+        // Weight has to stay ordered so the list reads: stayed with you and centred, stayed
+        // with you, centred only, dropped. A device sitting on the table you happened to
+        // circle must not outrank one that walked a mile with you.
+        val now = start + 10 * 60_000L
         val base = FollowCandidate(
             address = "AA", label = null, vendor = null, isRandom = true,
-            legsSeen = 1, legsPossible = 1, movingLegsSeen = 0,
-            packets = 40, meanRssi = -60.0, lastSeenMs = start, addresses = listOf("AA"),
+            packets = 40, meanRssi = -60.0,
+            firstSeenMs = start, lastSeenMs = now, addresses = listOf("AA"),
+            inPool = true,
         )
-        val centred = OrbitScore(arcsHeard = 8, arcsTotal = 8, packets = 60, meanRssi = -55.0, spreadDb = 4.0)
+        val centred = OrbitScore(
+            arcsHeard = 8, arcsTotal = 8, packets = 60, meanRssi = -55.0, spreadDb = 4.0,
+        )
 
-        val travelled = base.copy(movingLegsSeen = 1)
-        val onlyCentred = base.copy(orbit = centred)
-        val both = base.copy(movingLegsSeen = 1, orbit = centred)
+        val stayed = base
+        val stayedAndCentred = base.copy(orbit = centred)
+        val droppedButCentred = base.copy(droppedAtMs = start + 60_000L, orbit = centred)
+        val dropped = base.copy(droppedAtMs = start + 60_000L)
 
-        assertTrue(both.weight > travelled.weight)
-        assertTrue(travelled.weight > onlyCentred.weight)
-        assertTrue(onlyCentred.weight > base.weight)
+        assertTrue(stayedAndCentred.weight(now) > stayed.weight(now))
+        assertTrue(stayed.weight(now) > droppedButCentred.weight(now))
+        assertTrue(droppedButCentred.weight(now) > dropped.weight(now))
     }
 
     @Test
@@ -185,12 +188,12 @@ class OrbitTest {
         val session = circling()
         walk(session, "AA:BB:CC:DD:EE:09") { -55 }
         walk(session, "AA:BB:CC:DD:EE:0A") { elapsed -> if (elapsed < lapMs / 2) -48 else -84 }
-        session.endLeg(start + lapMs)
+        session.endProbe(start + lapMs)
 
         val state = session.state(start + lapMs)
 
         assertTrue(state.orbited)
-        assertEquals(2, state.survivors)
+        assertEquals(2, state.stillIn.size)
         assertEquals(1, state.centred)
     }
 }

@@ -31,6 +31,7 @@ class TrainSpotterEngine(
 
     private var nextCloseAtMs = 0L
     private var lastAlertMs = 0L
+    private var lastPublishMs = System.currentTimeMillis()
 
     fun start(nowMs: Long) {
         config = settings.load()
@@ -102,6 +103,7 @@ class TrainSpotterEngine(
     }
 
     fun publish(health: ScanHealth) {
+        val publishedAtMs = System.currentTimeMillis()
         PulseState.update {
             it.copy(
                 running = true,
@@ -114,12 +116,17 @@ class TrainSpotterEngine(
                 armingProgress = aggregator.armingProgress(),
                 totalAdvertisements = aggregator.totalAdvertisements,
                 advertsPerSecond = health.advertsPerSecond,
+                sampleAdverts = aggregator.takeAdvertsSinceLastAsk(),
+                sampleNew = aggregator.takeNewSinceLastAsk(),
+                sampleMs = (publishedAtMs - lastPublishMs).coerceAtLeast(1L),
+                sampleSeq = it.sampleSeq + 1,
                 referenceRate = health.referenceRate,
                 scanRestarts = health.restarts,
                 error = health.error,
                 csvPath = csv.currentFile?.absolutePath,
             )
         }
+        lastPublishMs = publishedAtMs
     }
 
     fun stop() {

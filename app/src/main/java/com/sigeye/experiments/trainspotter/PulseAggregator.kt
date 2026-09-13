@@ -19,6 +19,16 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
         private set
 
     private val lastSeen = HashMap<String, Long>()
+
+    /**
+     * Counted between one publish and the next, for the live chart.
+     *
+     * Separate from everything else here because the rest of this class thinks in bins, and
+     * a bin is eight seconds. A chart drawn twice a second needs numbers measured twice a
+     * second or it draws the same value sixteen times and calls it a trend.
+     */
+    private var firstEverSinceAsk = 0
+    private var advertsSinceAsk = 0
     private val bins = ArrayDeque<Bin>()
 
     private var currentBinStart = Long.MIN_VALUE
@@ -35,6 +45,18 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
     fun currentCount(): Int = currentNew
 
     fun activeUnique(): Int = lastSeen.size
+
+    /**
+     * Addresses heard for the first time since this was last asked, and the count reset.
+     *
+     * A first-ever sighting rather than a first-in-this-bin one: during a baseline the
+     * question the chart answers is "is the census still filling up", and a bin boundary
+     * has nothing to do with that.
+     */
+    fun takeNewSinceLastAsk(): Int = firstEverSinceAsk.also { firstEverSinceAsk = 0 }
+
+    /** Advertisements seen since this was last asked, and the count reset. */
+    fun takeAdvertsSinceLastAsk(): Int = advertsSinceAsk.also { advertsSinceAsk = 0 }
 
     fun phase(): Phase = when {
         closedBins < config.enrollmentBins -> Phase.ENROLL
@@ -73,6 +95,8 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
         pendingLabel = ""
         closedBins = 0
         totalAdvertisements = 0
+        firstEverSinceAsk = 0
+        advertsSinceAsk = 0
     }
 
     /**
@@ -86,7 +110,9 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
         if (currentBinStart == Long.MIN_VALUE) currentBinStart = nowMs
         totalAdvertisements++
 
+        advertsSinceAsk++
         val previous = lastSeen.put(address, nowMs)
+        if (previous == null) firstEverSinceAsk++
         val isNew = previous == null || nowMs - previous > config.windowMillis
         if (isNew && phase() != Phase.ENROLL) {
             currentNew++

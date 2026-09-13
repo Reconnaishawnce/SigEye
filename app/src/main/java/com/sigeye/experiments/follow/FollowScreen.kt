@@ -54,9 +54,10 @@ import com.sigeye.core.analysis.identity.FollowDecision
 import com.sigeye.core.analysis.identity.FollowPhase
 import com.sigeye.core.analysis.identity.FollowSession
 import com.sigeye.core.analysis.identity.FollowState
+import com.sigeye.core.analysis.identity.FollowTuning
 import com.sigeye.core.analysis.identity.Following
-import com.sigeye.core.analysis.identity.LegKind
 import com.sigeye.core.analysis.identity.LiveAddress
+import com.sigeye.core.analysis.identity.Probe
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
 import com.sigeye.ui.CountUp
@@ -72,56 +73,49 @@ import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.RotationCountdown
 import com.sigeye.ui.Section
 import com.sigeye.ui.TakeawayButton
-import com.sigeye.ui.barsSpoken
 import java.io.File
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "follow"
 private const val TICK_MS = 1_000L
 
-/** Long enough for a device advertising every couple of seconds to be heard repeatedly. */
-private const val BASELINE_MS = 35_000L
-
-/** A comfortable lap at five paces out, walked slowly enough not to blur the level. */
-private const val CIRCLE_MS = 75_000L
-
-/** Half a minute of bars, one a second. */
-private const val BARS = 35
+/** A minute of bars, one a second. */
+private const val BARS = 60
 
 /** Long enough that a couple of dropped packets is not a loss. */
-private const val LOST_AFTER_MS = 60_000L
+private const val TARGET_LOST_MS = 60_000L
+
+/** Long enough that the number means something before it can be shown big. */
+private const val TAKEAWAY_AFTER_MS = 2 * 60_000L
 
 /**
- * Where a follow has got to.
+ * Where a follow has got to on screen.
  *
- * A hub rather than a wizard. The first version of this was a straight line - census,
- * circle, walk, list - and a straight line is wrong here, because after the baseline the
- * person holding the phone is the one who can see what is possible. Sometimes the target is
- * sitting still and can be walked past. Sometimes they are about to leave and the only test
- * available is going with them. So the baseline leads to a hub, every test returns to it,
- * and the hub says what has been ruled out so far.
+ * Deliberately few. Following somebody is one continuous thing, and the app's job during it
+ * is to stay out of the way: one screen, one falling number, nothing to press while you
+ * walk. The circle and the walk-by are the only interruptions, and they are things you
+ * chose to do.
  */
 private enum class Step {
     /** Past follows, targets, and the way into a new one. */
     LIBRARY,
 
-    /** What this is, and what it needs from you. */
+    /** What this is, and naming it. */
     BRIEF,
 
     /** The opening census. */
     BASELINE,
 
-    /** The one question that decides everything after it. */
+    /** The one question that decides what happens next. */
     ASK_HERE,
 
     /** Baseline taken, target not here yet: watching the door. */
     WAITING,
 
-    /** The plan. Everything comes back here. */
-    HUB,
+    /** Following. The screen you are on for most of it. */
+    FOLLOWING,
 
     /** Walking a circle around them. */
     CIRCLE,
@@ -129,8 +123,8 @@ private enum class Step {
     /** Walking past them. */
     WALK_BY,
 
-    /** Walking with them. */
-    MOBILE,
+    /** What the walk-by saw, with the traces to check it against. */
+    REVIEW,
 
     /** One device chosen and held onto. */
     HOLD,
@@ -181,18 +175,14 @@ private fun Live(onLocate: (String) -> Unit) {
     val book = remember { DeviceBook.get(context) }
     val library = remember { FollowLibrary.get(context) }
     val targetStore = remember { TargetStore.get(context) }
+    val settings = remember { FollowSettings(context) }
     val feedback = remember { Feedback(context) }
     val live = remember { LinkedHashMap<String, LiveAddress>() }
-    val packets = remember { AtomicInteger(0) }
 
-    // Replaceable, because a follow that has to start again genuinely starts again.
-    var session by remember { mutableStateOf(FollowSession()) }
+    var tuning by remember { mutableStateOf(settings.load()) }
+    var session by remember { mutableStateOf(FollowSession(tuning)) }
+    var state by remember { mutableStateOf(FollowState()) }
 
-    var state by remember {
-        mutableStateOf(
-            FollowState(FollowPhase.CENSUS, emptyList(), emptyList(), 0, null, 0, null, null),
-        )
-    }
     var step by remember { mutableStateOf(Step.LIBRARY) }
     var stepStartedMs by remember { mutableStateOf(0L) }
     var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -201,10 +191,18 @@ private fun Live(onLocate: (String) -> Unit) {
     var theyAreHere by remember { mutableStateOf<Boolean?>(null) }
     var levelMarked by remember { mutableStateOf(false) }
     var dismissedRebaseline by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var wasLost by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf<List<String>>(emptyList()) }
     val tests = remember { mutableStateListOf<String>() }
-    val rates = remember { mutableStateListOf<Float>() }
+
+    // Two different quantities, both measured here rather than read from somewhere that
+    // updates on its own schedule. During the baseline the useful one is how fast the room
+    // is filling up; during a follow it is how many are left. The first version of these
+    // bars sampled a rate the radio republishes every ten seconds, so thirty identical
+    // readings were drawn as a chart - which is exactly as informative as it sounds.
+    val bars = remember { mutableStateListOf<Float>() }
+    var lastWatched by remember { mutableStateOf(0) }
 
     val follows by library.follows.collectAsStateWithLifecycle()
     val targets by targetStore.targets.collectAsStateWithLifecycle()
@@ -212,6 +210,7 @@ private fun Live(onLocate: (String) -> Unit) {
     val currentStep by rememberUpdatedState(step)
     val stepStarted by rememberUpdatedState(stepStartedMs)
     val hereAnswer by rememberUpdatedState(theyAreHere)
+    val currentTuning by rememberUpdatedState(tuning)
 
     fun goTo(next: Step) {
         step = next
@@ -219,11 +218,13 @@ private fun Live(onLocate: (String) -> Unit) {
     }
 
     fun reset() {
-        session = FollowSession()
+        tuning = settings.load()
+        session = FollowSession(tuning)
         live.clear()
         log = emptyList()
         tests.clear()
-        rates.clear()
+        bars.clear()
+        lastWatched = 0
         theyAreHere = null
         levelMarked = false
         dismissedRebaseline = false
@@ -233,7 +234,7 @@ private fun Live(onLocate: (String) -> Unit) {
     KeepScreenOn(step != Step.LIBRARY && step != Step.TARGETS)
 
     BackHandler(enabled = step != Step.LIBRARY) {
-        step = if (step == Step.TARGETS && startedAtMs == 0L) Step.LIBRARY else Step.HUB
+        step = if (startedAtMs == 0L) Step.LIBRARY else Step.FOLLOWING
     }
 
     DisposableEffect(Unit) {
@@ -247,7 +248,6 @@ private fun Live(onLocate: (String) -> Unit) {
 
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
-            packets.incrementAndGet()
             session.observe(
                 address = advert.address,
                 rssi = advert.rssi,
@@ -275,8 +275,6 @@ private fun Live(onLocate: (String) -> Unit) {
             delay(TICK_MS)
             val now = System.currentTimeMillis()
             nowMs = now
-            rates.add(packets.getAndSet(0).toFloat())
-            while (rates.size > BARS) rates.removeAt(0)
 
             watchForRotations(
                 state = latest,
@@ -286,33 +284,47 @@ private fun Live(onLocate: (String) -> Unit) {
                 onMoved = { from, to, message ->
                     log = listOf(message) + log
                     feedback.alert(AlertStyle.BOTH, urgent = true)
-                    // A saved target that rotates has to come along, or the targets screen
-                    // goes on hunting for an address nothing will ever send again.
                     targetStore.reacquire(from, to, now)
                 },
             )
 
-            // The two timed steps end themselves and buzz when they do, because somebody
-            // walking a circle round their friend is not looking at the phone.
-            if (currentStep == Step.BASELINE && now - stepStarted >= BASELINE_MS) {
+            val next = session.state(now)
+
+            // One bar a second, of whatever the screen is about at the time.
+            bars.add(
+                if (next.followStartedAtMs != null) {
+                    next.stillIn.size.toFloat()
+                } else {
+                    (next.watching - lastWatched).coerceAtLeast(0).toFloat()
+                },
+            )
+            lastWatched = next.watching
+            while (bars.size > BARS) bars.removeAt(0)
+
+            if (currentStep == Step.BASELINE && now - stepStarted >= currentTuning.baselineMs) {
                 session.endBaseline(now)
                 feedback.alert(AlertStyle.BOTH, urgent = false)
-                step = when (hereAnswer) {
-                    null -> Step.ASK_HERE
-                    true -> Step.HUB
-                    else -> Step.WAITING
+                when (hereAnswer) {
+                    null -> step = Step.ASK_HERE
+
+                    true -> {
+                        session.startFollowing(now)
+                        bars.clear()
+                        step = Step.FOLLOWING
+                    }
+
+                    else -> step = Step.WAITING
                 }
                 stepStartedMs = now
             }
 
-            if (currentStep == Step.CIRCLE && now - stepStarted >= CIRCLE_MS) {
-                session.endLeg(now)
+            if (currentStep == Step.CIRCLE && now - stepStarted >= currentTuning.circleMs) {
+                session.endProbe(now)
                 feedback.alert(AlertStyle.BOTH, urgent = false)
-                step = Step.HUB
+                step = Step.FOLLOWING
                 stepStartedMs = now
             }
 
-            val next = session.state(now)
             if (wasLost && next.phase == FollowPhase.HOLDING) {
                 feedback.alert(AlertStyle.BOTH, urgent = true)
                 log = listOf("Back in range") + log
@@ -320,6 +332,19 @@ private fun Live(onLocate: (String) -> Unit) {
             wasLost = next.phase == FollowPhase.LOST
             state = next
         }
+    }
+
+    if (showSettings) {
+        FollowSettingsDialog(
+            initial = tuning,
+            onDismiss = { showSettings = false },
+            onSave = {
+                settings.save(it)
+                tuning = it
+                session.tuning = it
+                showSettings = false
+            },
+        )
     }
 
     when (step) {
@@ -331,16 +356,19 @@ private fun Live(onLocate: (String) -> Unit) {
                 goTo(Step.BRIEF)
             },
             onTargets = { goTo(Step.TARGETS) },
+            onSettings = { showSettings = true },
             onForget = { library.delete(it) },
         )
 
         Step.BRIEF -> Brief(
             name = followName,
+            tuning = tuning,
             onName = { followName = it },
+            onSettings = { showSettings = true },
             onStart = {
                 val now = System.currentTimeMillis()
                 startedAtMs = now
-                session.beginLeg("Baseline", LegKind.BASELINE, now)
+                session.startBaseline(now)
                 tests += "baseline"
                 goTo(Step.BASELINE)
             },
@@ -349,17 +377,24 @@ private fun Live(onLocate: (String) -> Unit) {
 
         Step.BASELINE -> Baseline(
             state = state,
-            rates = rates.toList(),
+            bars = bars.toList(),
             elapsedMs = nowMs - stepStartedMs,
+            totalMs = tuning.baselineMs,
             theyAreHere = theyAreHere,
             onAnswer = { theyAreHere = it },
         )
 
         Step.ASK_HERE -> AskHere(
             heard = state.watching,
-            onAnswer = {
-                theyAreHere = it
-                goTo(if (it) Step.HUB else Step.WAITING)
+            onAnswer = { here ->
+                theyAreHere = here
+                if (here) {
+                    session.startFollowing(System.currentTimeMillis())
+                    bars.clear()
+                    goTo(Step.FOLLOWING)
+                } else {
+                    goTo(Step.WAITING)
+                }
             },
         )
 
@@ -367,12 +402,15 @@ private fun Live(onLocate: (String) -> Unit) {
             state = state,
             onArrived = {
                 theyAreHere = true
-                goTo(Step.HUB)
+                session.startFollowing(System.currentTimeMillis())
+                bars.clear()
+                goTo(Step.FOLLOWING)
             },
         )
 
-        Step.HUB -> Hub(
+        Step.FOLLOWING -> Following(
             state = state,
+            bars = bars.toList(),
             targets = targets,
             nowMs = nowMs,
             rebaselinePrompt = state.shouldRebaseline && !dismissedRebaseline,
@@ -380,82 +418,41 @@ private fun Live(onLocate: (String) -> Unit) {
             onRebaseline = {
                 val now = System.currentTimeMillis()
                 session.rebaseline(now)
-                session.beginLeg("Baseline", LegKind.BASELINE, now)
+                bars.clear()
                 tests += "re-baseline"
                 dismissedRebaseline = false
                 goTo(Step.BASELINE)
             },
-            onStandStill = {
-                session.beginLeg(LegKind.STILL.label, LegKind.STILL, System.currentTimeMillis())
-                tests += "stood still"
-            },
             onCircle = {
-                session.beginLeg(LegKind.ORBIT.label, LegKind.ORBIT, System.currentTimeMillis())
+                session.beginProbe(Probe.ORBIT, System.currentTimeMillis())
                 tests += "circled them"
                 goTo(Step.CIRCLE)
             },
             onWalkBy = {
                 levelMarked = false
-                session.beginLeg(
-                    LegKind.WALK_BY.label,
-                    LegKind.WALK_BY,
-                    System.currentTimeMillis(),
-                )
+                session.beginProbe(Probe.WALK_BY, System.currentTimeMillis())
                 tests += "walked past them"
                 goTo(Step.WALK_BY)
             },
-            onMobile = {
-                session.beginLeg(
-                    LegKind.TOGETHER.label,
-                    LegKind.TOGETHER,
-                    System.currentTimeMillis(),
-                )
-                tests += "went mobile"
-                goTo(Step.MOBILE)
-            },
-            onEndLeg = { session.endLeg(System.currentTimeMillis()) },
+            onReview = { goTo(Step.REVIEW) },
             onHold = {
                 session.lock(it.address)
                 goTo(Step.HOLD)
             },
-            onPromote = { candidate ->
-                targetStore.add(
-                    TargetDevice(
-                        address = candidate.address,
-                        label = candidate.label,
-                        vendor = candidate.vendor,
-                        evidence = candidate.describe(),
-                        fromFollow = followName.ifBlank { "Unnamed follow" },
-                        addedAtMs = System.currentTimeMillis(),
-                        addresses = candidate.addresses,
-                    ),
-                )
-            },
+            onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
             onTargets = { goTo(Step.TARGETS) },
+            onSettings = { showSettings = true },
             onFinish = {
-                val now = System.currentTimeMillis()
-                library.save(
-                    SavedFollow(
-                        id = startedAtMs.toString(),
-                        name = followName.ifBlank { "Unnamed follow" },
-                        startedAtMs = startedAtMs,
-                        endedAtMs = now,
-                        watched = state.watching,
-                        leads = state.stillIn.take(FollowSession.SHORTLIST_MAX).map {
-                            FollowLead(it.address, it.label, it.vendor, it.describe())
-                        },
-                        tests = tests.toList(),
-                    ),
-                )
+                library.save(state.asSavedFollow(startedAtMs, followName, tests.toList()))
                 goTo(Step.LIBRARY)
             },
         )
 
         Step.CIRCLE -> Timed(
             elapsedMs = nowMs - stepStartedMs,
-            totalMs = CIRCLE_MS,
+            totalMs = tuning.circleMs,
             label = "Circling",
-            caption = "${state.centred} of ${state.watching} at the same distance",
+            caption = "${state.centred} of ${state.stillIn.size} at the same distance",
             instruction = "Keep walking. One slow lap, about five paces out, phone in your " +
                 "hand in front of you. Do not double back.",
         )
@@ -470,18 +467,20 @@ private fun Live(onLocate: (String) -> Unit) {
                 feedback.alert(AlertStyle.BOTH, urgent = false)
             },
             onDone = {
-                session.endLeg(System.currentTimeMillis())
-                goTo(Step.HUB)
+                session.endProbe(System.currentTimeMillis())
+                goTo(if (levelMarked) Step.REVIEW else Step.FOLLOWING)
             },
         )
 
-        Step.MOBILE -> Mobile(
+        Step.REVIEW -> Review(
             state = state,
-            nowMs = nowMs,
-            onStop = {
-                session.endLeg(System.currentTimeMillis())
-                goTo(Step.HUB)
+            targets = targets,
+            onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
+            onHold = {
+                session.lock(it.address)
+                goTo(Step.HOLD)
             },
+            onBack = { goTo(Step.FOLLOWING) },
         )
 
         Step.HOLD -> Holding(
@@ -489,7 +488,7 @@ private fun Live(onLocate: (String) -> Unit) {
             log = log,
             onUnlock = {
                 session.unlock()
-                goTo(Step.HUB)
+                goTo(Step.FOLLOWING)
             },
             onLocate = { state.target?.let { onLocate(it.address) } },
         )
@@ -499,7 +498,7 @@ private fun Live(onLocate: (String) -> Unit) {
             nowMs = nowMs,
             onLocate = onLocate,
             onForget = { targetStore.remove(it) },
-            onBack = { goTo(if (startedAtMs == 0L) Step.LIBRARY else Step.HUB) },
+            onBack = { goTo(if (startedAtMs == 0L) Step.LIBRARY else Step.FOLLOWING) },
         )
     }
 
@@ -516,7 +515,7 @@ private fun Live(onLocate: (String) -> Unit) {
                 runCatching { file.writeText(session.csv()) }
                 SweepExport.share(context, file)
             },
-            enabled = state.legs.isNotEmpty(),
+            enabled = state.watching > 0,
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Export the session") }
 
@@ -525,18 +524,11 @@ private fun Live(onLocate: (String) -> Unit) {
             title = "What this is seeing",
             diagnostics = listOf(
                 Diagnostic("Heard", "${state.watching}", "addresses, ever"),
-                Diagnostic("Audible now", "${state.stillHere.size}", "still answering"),
-                Diagnostic("Still in", "${state.survivors}", "survived every test"),
-                Diagnostic(
-                    "Tests",
-                    "${state.legs.count { it.kind != LegKind.BASELINE }}",
-                    "run",
-                ),
-                Diagnostic(
-                    "Arrived",
-                    "${state.candidates.count { it.arrived }}",
-                    "after the baseline",
-                ),
+                Diagnostic("In the pool", "${state.poolSize}", "when the follow started"),
+                Diagnostic("Still with them", "${state.stillIn.size}", "have not dropped"),
+                Diagnostic("Dropped", "${state.dropped.size}", "went quiet"),
+                Diagnostic("Came back", "${state.returned.size}", "after dropping"),
+                Diagnostic("Arrived", "${state.arrivals.size}", "after the baseline"),
                 Diagnostic(
                     "Circle",
                     if (state.orbited) "${state.centred}" else "not walked",
@@ -547,16 +539,12 @@ private fun Live(onLocate: (String) -> Unit) {
                     if (state.walkedBy) "${state.passed}" else "not walked",
                     "peaked as you passed",
                 ),
-                Diagnostic(
-                    "Short list",
-                    if (state.narrowed) "${state.shortlist.size}" else "-",
-                    "of ${FollowSession.SHORTLIST_MAX}",
-                ),
+                Diagnostic("Drop-off", "${tuning.dropAfterMs / 1000}s", "of silence"),
             ),
-            footnote = "Only a device heard during a test counts as having survived it, so " +
-                "something that dropped out and came back has not. That is what makes the " +
-                "elimination work, and it is also why walking through a tunnel will cost " +
-                "you the target.",
+            footnote = "A device drops out when it has not been heard for the drop-off, and " +
+                "it stays out. Something that went quiet for a minute while you covered a " +
+                "quarter of a mile did not come with you, and letting it back in when it " +
+                "reappears would undo the only claim this makes.",
         )
     }
 }
@@ -564,14 +552,12 @@ private fun Live(onLocate: (String) -> Unit) {
 /**
  * Keeps the short list attached to its devices across address changes.
  *
- * Watched for every candidate on the short list rather than only for a locked target, which
- * is where the first version of this was wrong. Five devices being watched is five chances
- * to keep the trail; watching only the one already committed to means the rotation that
- * loses you the target is the one nobody was looking at.
+ * Watched for every candidate on the short list rather than only for a locked target. Five
+ * devices being watched is five chances to keep the trail; watching only the one already
+ * committed to means the rotation that loses you the target is the one nobody was looking
+ * at.
  *
- * The decision stays [Following]'s, refusals and all. This acts on a yes and does nothing
- * else - a candidate that cannot be followed unambiguously is dropped rather than guessed
- * at, and the log says which.
+ * The decision stays [Following]'s, refusals and all.
  */
 private fun watchForRotations(
     state: FollowState,
@@ -606,6 +592,32 @@ private fun watchForRotations(
     }
 }
 
+private fun FollowCandidate.asTarget(followName: String) = TargetDevice(
+    address = address,
+    label = label,
+    vendor = vendor,
+    evidence = describe(),
+    fromFollow = followName.ifBlank { "Unnamed follow" },
+    addedAtMs = System.currentTimeMillis(),
+    addresses = addresses,
+)
+
+private fun FollowState.asSavedFollow(
+    startedAtMs: Long,
+    name: String,
+    tests: List<String>,
+) = SavedFollow(
+    id = startedAtMs.toString(),
+    name = name.ifBlank { "Unnamed follow" },
+    startedAtMs = startedAtMs,
+    endedAtMs = atMs,
+    watched = watching,
+    leads = stillIn.take(tuning.listableAt).map {
+        FollowLead(it.address, it.label, it.vendor, it.describe())
+    },
+    tests = tests,
+)
+
 // -------------------------------------------------------------------------- the steps
 
 @Composable
@@ -614,6 +626,7 @@ private fun Library(
     targetCount: Int,
     onNew: () -> Unit,
     onTargets: () -> Unit,
+    onSettings: () -> Unit,
     onForget: (String) -> Unit,
 ) {
     Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("Start a new follow") }
@@ -624,8 +637,10 @@ private fun Library(
             Text("Targets ($targetCount)")
         }
     }
+    Spacer(Modifier.height(4.dp))
+    Grey("How this follow behaves", onSettings)
 
-    Spacer(Modifier.height(18.dp))
+    Spacer(Modifier.height(12.dp))
     Text(
         "Past follows",
         style = MaterialTheme.typography.labelLarge,
@@ -635,10 +650,9 @@ private fun Library(
 
     if (follows.isEmpty()) {
         Text(
-            "None yet. A follow is twenty minutes of walking about, and it used to " +
-                "evaporate the moment you left the screen - which was wrong for the longest " +
-                "single thing anybody does in here. What gets kept is the conclusion and " +
-                "the conditions, not the packets.",
+            "None yet. What gets kept is the conclusion and the conditions - how many were " +
+                "in range when you started, what it came down to, which tests you ran - " +
+                "rather than the packets.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -667,7 +681,7 @@ private fun Library(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                follow.leads.forEach { lead ->
+                follow.leads.take(5).forEach { lead ->
                     Spacer(Modifier.height(4.dp))
                     Text(
                         (lead.label ?: lead.vendor ?: lead.address) + " · " + lead.evidence,
@@ -693,7 +707,9 @@ private fun Library(
 @Composable
 private fun Brief(
     name: String,
+    tuning: FollowTuning,
     onName: (String) -> Unit,
+    onSettings: () -> Unit,
     onStart: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -704,18 +720,18 @@ private fun Brief(
     )
     Spacer(Modifier.height(8.dp))
     Text(
-        "It starts with a baseline: about half a minute of listening to everything audible " +
-            "from where you are standing. That number is what every later claim gets " +
-            "divided by, and taking it before anything else is what makes the rest mean " +
-            "anything.",
+        "First a baseline: ${tuning.baselineMs / 1000} seconds of listening to everything " +
+            "audible from where you are standing. That is the denominator, and it is also " +
+            "the pool - whatever is in range when you start following is what can still be " +
+            "with you later.",
         style = MaterialTheme.typography.bodySmall,
     )
     Spacer(Modifier.height(8.dp))
     Text(
-        "Then you pick tests. Stand still, walk a circle around them, walk past them, or go " +
-            "with them. Each rules out a different kind of thing, and you choose as you go " +
-            "rather than following a script - because you are the one who can see whether " +
-            "they are sitting still or about to leave.",
+        "Then you walk, and the list shrinks on its own. Anything that goes unheard for " +
+            "${tuning.dropAfterMs / 1000} seconds drops out and stays out. No buttons, " +
+            "nothing to press - the point is to be following somebody, not operating a " +
+            "phone.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -738,14 +754,16 @@ private fun Brief(
     Spacer(Modifier.height(10.dp))
     Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Take a baseline") }
     Spacer(Modifier.height(4.dp))
+    Grey("Change how it behaves", onSettings)
     Grey("Not now", onCancel)
 }
 
 @Composable
 private fun Baseline(
     state: FollowState,
-    rates: List<Float>,
+    bars: List<Float>,
     elapsedMs: Long,
+    totalMs: Long,
     theyAreHere: Boolean?,
     onAnswer: (Boolean) -> Unit,
 ) {
@@ -766,19 +784,23 @@ private fun Baseline(
         )
         Spacer(Modifier.height(14.dp))
         CountdownRing(
-            elapsedMs = elapsedMs.coerceIn(0L, BASELINE_MS),
-            totalMs = BASELINE_MS,
+            elapsedMs = elapsedMs.coerceIn(0L, totalMs),
+            totalMs = totalMs,
             label = "baseline",
             caption = "stand still",
         )
     }
 
     Spacer(Modifier.height(14.dp))
-    LiveBars(values = rates, spoken = barsSpoken(rates, "advertisements a second"))
+    LiveBars(
+        values = bars,
+        spoken = "New devices found each second. " +
+            "${bars.sumOf { it.toInt() }} across the last ${bars.size} seconds.",
+    )
     Spacer(Modifier.height(4.dp))
     Text(
-        "Every bar is a second of what the radio is actually hearing. This is the " +
-            "denominator being measured, not a loading bar.",
+        "Each bar is how many devices were heard for the first time in that second. It " +
+            "starts tall and flattens out, and when it has flattened the census is done.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -791,10 +813,10 @@ private fun Baseline(
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        "Answer while this runs. It changes what happens next rather than what is being " +
-            "recorded. If they are here, the baseline is the room and you start ruling " +
-            "devices out of it. If they are not, the baseline is everything that was here " +
-            "before them, and whoever walks in afterwards is a much shorter list.",
+        "Answer while this runs. If they are here, the follow starts the moment the " +
+            "baseline ends and everything audible is in the pool. If they are not, the app " +
+            "waits and watches the door - whoever walks in is a far shorter list than the " +
+            "building.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -839,8 +861,6 @@ private fun AskHere(heard: Int, onAnswer: (Boolean) -> Unit) {
 
 @Composable
 private fun Waiting(state: FollowState, onArrived: () -> Unit) {
-    val arrivals = state.candidates.filter { it.arrived }
-
     Text(
         "Watching the door",
         style = MaterialTheme.typography.titleMedium,
@@ -856,7 +876,7 @@ private fun Waiting(state: FollowState, onArrived: () -> Unit) {
 
     Spacer(Modifier.height(16.dp))
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        CountUp(value = arrivals.size, fontSize = 72.sp)
+        CountUp(value = state.arrivals.size, fontSize = 72.sp)
         Text(
             "have arrived since the baseline",
             style = MaterialTheme.typography.bodyMedium,
@@ -869,47 +889,41 @@ private fun Waiting(state: FollowState, onArrived: () -> Unit) {
         )
     }
 
-    if (arrivals.isNotEmpty()) {
+    if (state.arrivals.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
-        arrivals.take(8).forEach { CandidateCard(it, onClick = null) }
+        state.arrivals.take(8).forEach { CandidateCard(it, state.atMs, onClick = null) }
     }
 
     Spacer(Modifier.height(12.dp))
     Button(onClick = onArrived, modifier = Modifier.fillMaxWidth()) {
-        Text("They are here now")
+        Text("They are here now - start following")
     }
 }
 
 /**
- * The plan, and everything ruled out so far.
+ * The screen you are on for most of a follow.
  *
- * This is the screen the experiment lives on. It has to answer three questions without
- * being asked: how far has this got, what can I do next, and is it worth carrying on. The
- * four tests are laid out as four things you might be able to do rather than as a sequence,
- * because which of them is possible depends on what the person you are following is doing,
- * and only the person holding the phone can see that.
+ * One number, and it only falls. Everything else here is either something you might choose
+ * to do or a record of what has already gone, and none of it needs touching while you walk.
  */
 @Composable
-private fun Hub(
+private fun Following(
     state: FollowState,
+    bars: List<Float>,
     targets: List<TargetDevice>,
     nowMs: Long,
     rebaselinePrompt: Boolean,
     onDismissRebaseline: () -> Unit,
     onRebaseline: () -> Unit,
-    onStandStill: () -> Unit,
     onCircle: () -> Unit,
     onWalkBy: () -> Unit,
-    onMobile: () -> Unit,
-    onEndLeg: () -> Unit,
+    onReview: () -> Unit,
     onHold: (FollowCandidate) -> Unit,
     onPromote: (FollowCandidate) -> Unit,
     onTargets: () -> Unit,
+    onSettings: () -> Unit,
     onFinish: () -> Unit,
 ) {
-    val running = state.legs.lastOrNull()?.takeIf { it.running && it.kind != LegKind.BASELINE }
-    val tested = state.testsDone > 0
-
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -921,28 +935,18 @@ private fun Hub(
         ),
     ) {
         Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // Three different numbers, because they answer three different questions and
-            // showing the wrong one is how this screen lied. A test still running has
-            // eliminated nobody, so its verdict is not the thing to watch - what is still
-            // answering is.
-            CountUp(
-                value = when {
-                    running != null -> state.stillHere.size
-                    tested -> state.survivors
-                    else -> state.watching
-                },
-                fontSize = 64.sp,
-            )
+            CountUp(value = state.stillIn.size, fontSize = 96.sp)
             Text(
-                when {
-                    running != null -> "still answering right now, of ${state.watching} heard"
-                    tested -> "still in the running, out of ${state.watching} heard"
-                    else -> "audible from here, and nothing ruled out yet"
-                },
+                "still with them, of ${state.poolSize} when you started",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Text(
+                "${state.watching} heard in total · ${state.runningForMs / 60_000} min",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             if (state.narrowed) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     "Short list. Every one of these is being watched for an address change.",
                     style = MaterialTheme.typography.labelSmall,
@@ -951,6 +955,20 @@ private fun Hub(
             }
         }
     }
+
+    Spacer(Modifier.height(10.dp))
+    LiveBars(
+        values = bars,
+        spoken = "How many are still with them, once a second. Now " +
+            "${bars.lastOrNull()?.toInt() ?: 0}, highest ${bars.maxOrNull()?.toInt() ?: 0} " +
+            "over the last ${bars.size} seconds.",
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "One bar a second. This is the list emptying out as you walk.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 
     if (rebaselinePrompt) {
         Spacer(Modifier.height(12.dp))
@@ -968,11 +986,12 @@ private fun Hub(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Five minutes in and still ${state.survivors} in the running. Almost " +
-                        "always one thing: their phone changed address partway through, so " +
-                        "the device you were converging on stopped existing and its " +
-                        "replacement has missed every test since. Starting again puts " +
-                        "everything back on equal terms without forgetting the room.",
+                    "${state.runningForMs / 60_000} minutes in and still " +
+                        "${state.stillIn.size} with them. Almost always one thing: their " +
+                        "phone changed address partway through, so the device you were " +
+                        "converging on stopped existing and its replacement was never in " +
+                        "the pool. Starting again reopens the pool to whatever is audible " +
+                        "now, without forgetting the room.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(10.dp))
@@ -992,138 +1011,91 @@ private fun Hub(
         }
     }
 
-    val silent = targets.filter { nowMs - it.lastSeenMs > LOST_AFTER_MS }
-    if (silent.isNotEmpty()) {
-        Spacer(Modifier.height(12.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-            ),
-        ) {
-            Column(Modifier.padding(14.dp)) {
-                Text(
-                    if (silent.size == 1) {
-                        "Lost ${silent.first().name}"
-                    } else {
-                        "Lost ${silent.size} of your targets"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Quiet for over a minute. Open the targets to see when the next address " +
-                        "change is due and to hunt for it.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = onTargets, modifier = Modifier.fillMaxWidth()) {
-                    Text("Hunt")
-                }
-            }
-        }
-    }
-
-    Spacer(Modifier.height(14.dp))
-
-    if (running != null) {
-        Text(
-            running.kind.label + " · " + (running.durationMs(nowMs) / 1000) + " s",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onEndLeg, modifier = Modifier.fillMaxWidth()) {
-            Text("End this test")
-        }
-    } else {
-        Text(
-            "What can you do right now?",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(8.dp))
-
-        Test(
-            title = "Go with them",
-            detail = "The strongest test there is. Walk a few minutes together and almost " +
-                "nothing else comes along - the shops fall away, the parked cars fall " +
-                "away, the other passengers get off.",
-            onClick = onMobile,
-            emphasis = true,
-        )
-        Test(
-            title = "Walk past them",
-            detail = if (state.walkedBy) {
-                "Already done. ${state.passed} peaked as you passed."
-            } else {
-                "They stand still; you walk past and stop the same distance away on the " +
-                    "far side. Whatever is on them rises as you draw level and comes back " +
-                    "down. This one picks devices out rather than ruling them out."
-            },
-            onClick = onWalkBy,
-            enabled = !state.walkedBy,
-        )
-        Test(
-            title = "Circle them",
-            detail = if (state.orbited) {
-                "Already done. ${state.centred} stayed at the same distance."
-            } else {
-                "One slow lap about five paces out. Anything on them stays the same " +
-                    "distance from you the whole way round; anything across the room does " +
-                    "not."
-            },
-            onClick = onCircle,
-            enabled = !state.orbited,
-        )
-        Test(
-            title = "Stand still a while",
-            detail = "Cuts whatever walks past and very little else. Worth it when they " +
-                "are not going anywhere and neither are you.",
-            onClick = onStandStill,
-        )
-    }
-
-    if (state.narrowed) {
+    if (state.listable) {
         Spacer(Modifier.height(16.dp))
         Text(
-            "Short list",
+            if (state.narrowed) "Short list" else "Still with them",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            "Tap one to hold onto it, or add it to your targets to use it in the other " +
-                "experiments.",
+            if (state.narrowed) {
+                "Tap one to hold onto it, or add it to your targets to use it elsewhere."
+            } else {
+                "Short enough to look down. Add anything worth keeping to your targets."
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(6.dp))
-        state.shortlist.forEach { candidate ->
+        state.stillIn.forEach { candidate ->
             val already = targets.any { it.address.equals(candidate.address, true) }
             CandidateCard(
                 candidate = candidate,
+                nowMs = nowMs,
                 onClick = { onHold(candidate) },
                 action = if (already) null else "Add to targets",
                 onAction = { onPromote(candidate) },
             )
         }
-    } else if (tested) {
+    }
+
+    Spacer(Modifier.height(14.dp))
+    Text(
+        "Anything you can do without giving yourself away",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Spacer(Modifier.height(8.dp))
+    ProbeCard(
+        title = "Walk past them",
+        detail = if (state.walkedBy) {
+            "Done. ${state.passed} of the ones still with them peaked as you passed. Tap " +
+                "to look at the traces."
+        } else {
+            "They stand still; you walk past and stop the same distance away on the far " +
+                "side. Whatever is on them rises as you draw level and comes back down. " +
+                "This one picks devices out rather than ruling them out."
+        },
+        onClick = if (state.walkedBy) onReview else onWalkBy,
+        emphasis = state.walkedBy,
+    )
+    ProbeCard(
+        title = "Circle them",
+        detail = if (state.orbited) {
+            "Done. ${state.centred} stayed at the same distance all the way round."
+        } else {
+            "One slow lap about five paces out. Anything on them stays the same distance " +
+                "from you the whole way round; anything across the room does not."
+        },
+        onClick = onCircle,
+        enabled = !state.orbited,
+    )
+
+    if (state.dropped.isNotEmpty()) {
         Spacer(Modifier.height(14.dp))
-        Text(
-            if (state.survivors == 0) {
-                "Nothing has survived every test. If they were with you the whole time, " +
-                    "the likeliest reason is that their phone changed address partway " +
-                    "through - which reads as two devices that each missed a test."
-            } else {
-                "${state.survivors} still in. Five or fewer is where this becomes a short " +
-                    "list worth acting on, and going with them is what gets you there."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Section(
+            title = "Dropped out",
+            summary = "${state.dropped.size} gone, newest first." +
+                if (state.returned.isEmpty()) "" else " ${state.returned.size} came back.",
+        ) {
+            Text(
+                "A device is out when it has not been heard for " +
+                    "${state.tuning.dropAfterMs / 1000} seconds, and it stays out. Coming " +
+                    "back is recorded rather than undone - usually it means you walked a " +
+                    "loop past the same fixed thing twice.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            state.dropped.take(12).forEach { candidate ->
+                Field(
+                    candidate.label ?: candidate.vendor ?: candidate.address,
+                    "lasted ${candidate.heldForMs(nowMs) / 1000}s" +
+                        if (candidate.returnedAtMs != null) " · came back" else "",
+                )
+            }
+        }
     }
 
     TakeawayButton(takeawayFrom(state))
@@ -1135,6 +1107,7 @@ private fun Hub(
         }
         Spacer(Modifier.height(6.dp))
     }
+    Grey("How this follow behaves", onSettings)
     Grey("Finish and save this follow", onFinish)
 }
 
@@ -1172,7 +1145,7 @@ private fun WalkByStep(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            "${state.watching} heard so far",
+            "${state.stillIn.size} still with them",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1192,53 +1165,148 @@ private fun WalkByStep(
     }
 }
 
+/**
+ * What the walk-by saw, with the traces it saw it in.
+ *
+ * Ranked, best first, and every one drawn. A verdict you cannot check is an assertion, and
+ * the whole reason for showing the shape is that a person can tell a clean hill from a mess
+ * the thresholds happened to let through in about a second - which is faster and more
+ * reliable than any amount of tuning.
+ */
 @Composable
-private fun Mobile(state: FollowState, nowMs: Long, onStop: () -> Unit) {
-    val running = state.legs.lastOrNull()?.takeIf { it.running }
+private fun Review(
+    state: FollowState,
+    targets: List<TargetDevice>,
+    onPromote: (FollowCandidate) -> Unit,
+    onHold: (FollowCandidate) -> Unit,
+    onBack: () -> Unit,
+) {
+    val walk = state.probes.firstOrNull { it.kind == Probe.WALK_BY }
+    val scored = state.candidates
+        .filter { it.walkBy != null && it.walkByTrail.size >= 2 }
+        .sortedWith(
+            compareByDescending<FollowCandidate> { it.walkBy!!.passed }
+                .thenByDescending { it.walkBy!!.riseDb },
+        )
 
     Text(
-        "Going with them",
+        "What the walk-by saw",
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
     )
     Spacer(Modifier.height(6.dp))
+
+    val mid = walk?.midAtMs
+    val end = walk?.endedAtMs
+    if (mid == null || end == null || scored.isEmpty()) {
+        Text(
+            "Nothing to show. A walk-by needs a start, a tap when you drew level, and an " +
+                "end the same distance the other side - without the middle mark there is no " +
+                "peak to test against.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(12.dp))
+        Grey("Back", onBack)
+        return
+    }
+
+    val passed = scored.count { it.walkBy!!.passed }
     Text(
-        "Keep walking. Every corner you turn together costs whatever did not come with you.",
+        if (passed == 0) {
+            "None of ${scored.size} passed. Look at the shapes anyway - if one is a hill " +
+                "the thresholds just missed, that is worth knowing, and the thresholds are " +
+                "settings."
+        } else {
+            "$passed of ${scored.size} rose as you drew level and came back down. The best " +
+                "is first."
+        },
         style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(6.dp))
+    Text(
+        "The vertical line is where you tapped. The dashed line is the level the rise is " +
+            "measured against, and the shaded ends are the two windows it came from.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    Spacer(Modifier.height(18.dp))
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Still audible, not "survived every test". The survivor count is a verdict on
-        // finished legs and cannot move until this one ends, so watching it during a walk
-        // shows a flat number - and before this was fixed it showed a climbing one.
-        CountUp(value = state.stillHere.size, fontSize = 96.sp)
-        Text(
-            "still with you right now, of ${state.watching} heard so far",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        running?.let {
-            Text(
-                "${it.durationMs(nowMs) / 1000} s into this leg",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (state.narrowed) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Short list reached. Watching all of them for an address change.",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+    Spacer(Modifier.height(12.dp))
+    scored.take(8).forEach { candidate ->
+        val score = candidate.walkBy!!
+        val already = targets.any { it.address.equals(candidate.address, true) }
+        Card(
+            Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (score.passed) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+            ),
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.padding(end = 8.dp)) {
+                        Text(
+                            candidate.label ?: candidate.vendor ?: candidate.address,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            candidate.address,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                    Text(
+                        if (score.passed) "passed" else "no",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+                WalkByChart(
+                    trail = candidate.walkByTrail,
+                    score = score,
+                    startMs = walk.startedAtMs,
+                    endMs = end,
+                )
+
+                Spacer(Modifier.height(6.dp))
+                Field("Rise as you passed", "${score.riseDb.roundToInt()} dB")
+                Field("Ends differ by", "${score.symmetryDb.roundToInt()} dB")
+                Field("Peak off the mark by", "${score.offsetMs / 1000} s")
+                Field("Readings", "${score.packets}")
+                Spacer(Modifier.height(4.dp))
+                Text(score.describe(), style = MaterialTheme.typography.bodySmall)
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!already) {
+                        Button(
+                            onClick = { onPromote(candidate) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Add to targets") }
+                    }
+                    OutlinedButton(
+                        onClick = { onHold(candidate) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Hold this one") }
+                }
+            }
         }
     }
 
-    Spacer(Modifier.height(18.dp))
-    Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
-        Text("Stop here, end the leg")
-    }
+    Grey("Back to the follow", onBack)
 }
 
 @Composable
@@ -1268,7 +1336,7 @@ private fun Targets(
 
     targets.forEach { target ->
         val silentFor = nowMs - target.lastSeenMs
-        val lost = silentFor > LOST_AFTER_MS
+        val lost = silentFor > TARGET_LOST_MS
         Card(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
             colors = CardDefaults.cardColors(
@@ -1317,10 +1385,7 @@ private fun Targets(
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
                     Spacer(Modifier.height(10.dp))
-                    RotationCountdown(
-                        changesAtMs = target.changesAtMs,
-                        nowMs = nowMs,
-                    )
+                    RotationCountdown(changesAtMs = target.changesAtMs, nowMs = nowMs)
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -1369,7 +1434,7 @@ private fun Timed(
 // ------------------------------------------------------------------------ small parts
 
 @Composable
-private fun Test(
+private fun ProbeCard(
     title: String,
     detail: String,
     onClick: () -> Unit,
@@ -1439,6 +1504,7 @@ private fun Grey(label: String, onClick: () -> Unit) {
 @Composable
 private fun CandidateCard(
     candidate: FollowCandidate,
+    nowMs: Long,
     onClick: (() -> Unit)?,
     action: String? = null,
     onAction: () -> Unit = {},
@@ -1472,10 +1538,17 @@ private fun CandidateCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(
-                    "${candidate.meanRssi.roundToInt()} dBm",
-                    style = MaterialTheme.typography.labelMedium,
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${candidate.meanRssi.roundToInt()} dBm",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Text(
+                        "${candidate.heldForMs(nowMs) / 60_000} min",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             action?.let {
                 Spacer(Modifier.height(6.dp))
@@ -1493,10 +1566,11 @@ private fun Explainer() {
         emphasis = true,
     ) {
         Text(
-            "This narrows a room down to the device travelling with somebody, without " +
-                "knowing anything about it in advance. It works by elimination and by " +
-                "geometry: stand together and most of what is in range stays in range, " +
-                "which proves nothing. Walk a mile together and almost nothing does.",
+            "This narrows a street down to the device travelling with somebody, without " +
+                "knowing anything about it in advance. It works by elimination: stand " +
+                "together and most of what is in range stays in range, which proves " +
+                "nothing. Walk half a mile together and almost nothing does - the shops " +
+                "fall away, the parked cars fall away, the other passengers get off.",
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(8.dp))
@@ -1510,10 +1584,10 @@ private fun Explainer() {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "The honest output is the short list and its denominator, never a name. Two " +
-                "survivors out of two hundred after three miles is a strong claim. Forty " +
-                "out of two hundred after standing in a lobby is no claim at all, and the " +
-                "screen shows both numbers so you can tell which you have.",
+            "The honest output is the short list and its denominator, never a name. Two out " +
+                "of two hundred after three miles is a strong claim. Forty out of two " +
+                "hundred after standing in a lobby is no claim at all, and the screen shows " +
+                "both numbers so you can tell which you have.",
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -1522,27 +1596,26 @@ private fun Explainer() {
 /**
  * The short list as something that can be shown big, or null when it is not worth showing.
  *
- * Refused while nothing has been ruled out, because the number would be "everything in the
- * room" dressed up as "everything following you" - and a card is the one place that mistake
- * travels furthest.
+ * Refused until the follow has actually run for a while, because a number taken thirty
+ * seconds in is "everything in the room" dressed up as "everything following them" - and a
+ * card is the one place that mistake travels furthest.
  */
 private fun takeawayFrom(state: FollowState): Takeaway? {
-    if (state.watching == 0) return null
-    val tests = state.legs.count { it.kind != LegKind.BASELINE && !it.running }
-    if (tests == 0) return null
+    if (state.followStartedAtMs == null || state.poolSize == 0) return null
+    if (state.runningForMs < TAKEAWAY_AFTER_MS) return null
 
     return Takeaway(
         experiment = "Follow Me",
-        headline = "${state.survivors}",
-        unit = if (state.survivors == 1) {
+        headline = "${state.stillIn.size}",
+        unit = if (state.stillIn.size == 1) {
             "device stayed with them"
         } else {
             "devices stayed with them"
         },
-        denominator = "out of ${state.watching} heard along the way",
+        denominator = "out of ${state.poolSize} that were in range when it started",
         context = listOfNotNull(
-            "$tests test" + if (tests == 1) "" else "s",
-            state.legs.count { it.moving }.takeIf { it > 0 }?.let { "$it walked together" },
+            "${state.runningForMs / 60_000} minutes of following",
+            "${state.watching} heard along the way",
             if (state.orbited) "${state.centred} survived the circle" else null,
             if (state.walkedBy) "${state.passed} peaked as you passed" else null,
         ),
@@ -1572,8 +1645,9 @@ private fun Holding(
     }
 
     Field("Address now", target.address)
-    Field("Survived", target.describe())
+    Field("Evidence", target.describe())
     Field("Signal", "${target.meanRssi.roundToInt()} dBm average")
+    Field("With you for", "${target.heldForMs(state.atMs) / 60_000} min")
 
     if (state.phase == FollowPhase.LOST) {
         Spacer(Modifier.height(12.dp))
@@ -1591,12 +1665,7 @@ private fun Holding(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Spacer(Modifier.height(6.dp))
-
-                RotationCountdown(
-                    changesAtMs = state.rotationChangesAtMs,
-                    nowMs = System.currentTimeMillis(),
-                )
-
+                RotationCountdown(changesAtMs = state.rotationChangesAtMs, nowMs = state.atMs)
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(onClick = onLocate, modifier = Modifier.fillMaxWidth()) {
                     Text("Try to locate it")

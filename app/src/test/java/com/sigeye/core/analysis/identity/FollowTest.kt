@@ -1,280 +1,387 @@
 package com.sigeye.core.analysis.identity
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * A follow is one continuous thing and the number it shows can only fall.
+ *
+ * That is the whole design, and it replaced a leg-based one that was wrong in a way a real
+ * walk made obvious: the count climbed as you went. These tests are written as walks
+ * through real time, because the thing being tested is behaviour over minutes.
+ */
 class FollowTest {
 
     private val start = 1_700_000_000_000L
+    private val minute = 60_000L
 
-    private fun FollowSession.hear(
-        address: String,
-        atMs: Long,
-        packets: Int = 10,
-        rssi: Int = -60,
-        random: Boolean = true,
-    ) {
-        repeat(packets) {
-            observe(
-                address = address,
-                rssi = rssi,
-                atMs = atMs + it * 150L,
-                label = null,
-                vendor = "Apple",
-                isRandom = random,
-            )
-        }
+    private fun FollowSession.hear(address: String, atMs: Long, packets: Int = 5, rssi: Int = -60) {
+        repeat(packets) { observe(address, rssi, atMs + it * 100L, null, null, true) }
     }
 
-    // -------------------------------------------------------------------- elimination
+    /** Baseline, then start following, with everything named audible throughout the census. */
+    private fun following(vararg addresses: String): FollowSession = FollowSession().apply {
+        startBaseline(start)
+        addresses.forEach { hear(it, start) }
+        endBaseline(start + 30_000L)
+        startFollowing(start + 30_000L)
+    }
+
+    // ------------------------------------------------------------------ the pool
+
+    @Test
+    fun `the pool closes when the follow starts`() {
+        val session = following("5A:01", "5A:02")
+
+        // Met half a mile later. In the denominator, never on the list.
+        session.hear("5A:99", start + 5 * minute)
+        val state = session.state(start + 5 * minute + 1_000L)
+
+        assertEquals(3, state.watching)
+        assertEquals(2, state.poolSize)
+        assertFalse(state.candidates.first { it.address == "5A:99" }.inPool)
+    }
+
+    @Test
+    fun `nothing is eliminated during the baseline`() {
+        // A baseline is a census, not a test. Dropping from it would be eliminating on the
+        // strength of having stood still for half a minute.
+        val session = FollowSession()
+        session.startBaseline(start)
+        session.hear("5A:01", start)
+        session.hear("5A:02", start)
+
+        val state = session.state(start + 10 * minute)
+
+        assertTrue(state.dropped.isEmpty())
+        assertNull(state.followStartedAtMs)
+        assertTrue(state.narrowing().contains("has not started"))
+    }
+
+    // ------------------------------------------------------------------ the falling number
+
+    @Test
+    fun `the street falls away behind you and the count only goes down`() {
+        val session = following("5A:01", "5A:02", "5A:03", "5A:04", "5A:05")
+        val counts = mutableListOf<Int>()
+
+        fun tick(atMs: Long, vararg stillAudible: String) {
+            stillAudible.forEach { session.hear(it, atMs) }
+            counts += session.state(atMs + 1_000L).stillIn.size
+        }
+
+        tick(start + 60_000L, "5A:01", "5A:02", "5A:03", "5A:04", "5A:05")
+        tick(start + 120_000L, "5A:01", "5A:02", "5A:03")
+        tick(start + 200_000L, "5A:01", "5A:02")
+        tick(start + 300_000L, "5A:01")
+        tick(start + 400_000L, "5A:01")
+
+        assertEquals(listOf(5, 5, 3, 2, 1), counts)
+        assertEquals(
+            "it never climbed",
+            counts,
+            counts.sortedDescending(),
+        )
+    }
 
     @Test
     fun `standing still narrows nothing, and says so`() {
         // Everybody in the lobby survives the lobby. The screen has to admit that or it is
         // asserting a finding it does not have.
-        val session = FollowSession()
-        session.beginLeg("lobby", kind = LegKind.STILL, atMs = start)
-        listOf("5A:01", "5A:02", "5A:03").forEach { session.hear(it, start) }
-        session.endLeg(start + 60_000)
+        val session = following("5A:01", "5A:02", "5A:03")
+        repeat(10) { minutePassed ->
+            listOf("5A:01", "5A:02", "5A:03").forEach {
+                session.hear(it, start + 30_000L + minutePassed * 30_000L)
+            }
+        }
 
-        val state = session.state(start + 60_000)
-        assertEquals(3, state.survivors)
-        assertEquals(3, state.watching)
+        val state = session.state(start + 30_000L + 10 * 30_000L)
+
+        assertEquals(3, state.stillIn.size)
         assertTrue(state.narrowing().contains("not narrowed anything"))
     }
 
     @Test
-    fun `traveling together cuts what stayed behind`() {
-        val session = FollowSession()
+    fun `a drop is permanent, and coming back is reported rather than undone`() {
+        // A device that went quiet for a minute while you covered a quarter of a mile did
+        // not come with you. Letting it back in would undo the only claim this makes.
+        val session = following("5A:01", "5A:02")
+        session.hear("5A:01", start + 60_000L)
+        session.hear("5A:02", start + 60_000L)
 
-        session.beginLeg("the office", kind = LegKind.STILL, atMs = start)
-        listOf("5A:01", "5A:02", "5A:03", "5A:04").forEach { session.hear(it, start) }
-        session.endLeg(start + 60_000)
+        // 5A:02 goes quiet, and is dropped.
+        session.hear("5A:01", start + 150_000L)
+        assertEquals(listOf("5A:01"), session.state(start + 150_000L).stillIn.map { it.address })
 
-        // A mile later, only the one that came along is still audible.
-        session.beginLeg("the walk", kind = LegKind.TOGETHER, atMs = start + 120_000)
-        session.hear("5A:01", start + 120_000)
-        session.endLeg(start + 300_000)
+        // Then it turns up again. Noted, not reinstated.
+        session.hear("5A:02", start + 300_000L)
+        val state = session.state(start + 300_000L)
 
-        val state = session.state(start + 300_000)
-        assertEquals(1, state.survivors)
-        assertEquals(4, state.watching)
-        assertEquals("5A:01", state.candidates.first().address)
-        assertTrue(state.narrowing().contains("1 of 4"))
+        assertEquals(listOf("5A:01"), state.stillIn.map { it.address })
+        assertEquals(listOf("5A:02"), state.returned.map { it.address })
+        assertNotNull(state.candidates.first { it.address == "5A:02" }.droppedAtMs)
     }
 
     @Test
-    fun `a moving leg is worth more than a standing one`() {
-        val session = FollowSession()
-        session.beginLeg("stood about", kind = LegKind.STILL, atMs = start)
-        session.hear("5A:01", start)
-        session.hear("5A:02", start)
-        session.endLeg(start + 30_000)
+    fun `the drop-off is a setting, and a shorter one cuts sooner`() {
+        val patient = FollowSession(FollowTuning.DEFAULT.copy(dropAfterMs = 120_000L))
+        val impatient = FollowSession(FollowTuning.DEFAULT.copy(dropAfterMs = 20_000L))
 
-        session.beginLeg("walked", kind = LegKind.TOGETHER, atMs = start + 40_000)
-        session.hear("5A:02", start + 40_000)
-        session.endLeg(start + 90_000)
+        listOf(patient, impatient).forEach { session ->
+            session.startBaseline(start)
+            session.hear("5A:01", start)
+            session.endBaseline(start + 30_000L)
+            session.startFollowing(start + 30_000L)
+        }
 
-        val candidates = session.state(start + 90_000).candidates
-        // Both were seen once; the one seen while moving is the better claim.
-        assertEquals("5A:02", candidates.first().address)
-        assertTrue(candidates.first().weight > candidates.last().weight)
+        // Silent for a minute after the follow began.
+        assertEquals(1, patient.state(start + 90_000L).stillIn.size)
+        assertEquals(0, impatient.state(start + 90_000L).stillIn.size)
     }
 
     @Test
-    fun `a device that drops out and comes back has not survived the leg it missed`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
-        session.hear("5A:02", start)
-        session.endLeg(start + 60_000)
+    fun `a device heard once is not a candidate at all`() {
+        val session = following()
+        session.hear("5A:01", start + 40_000L, packets = 1)
+        session.hear("5A:02", start + 40_000L, packets = 10)
 
-        session.beginLeg("two", kind = LegKind.TOGETHER, atMs = start + 70_000)
-        session.hear("5A:01", start + 70_000)
-        session.endLeg(start + 130_000)
-
-        session.beginLeg("three", kind = LegKind.TOGETHER, atMs = start + 140_000)
-        session.hear("5A:01", start + 140_000)
-        session.hear("5A:02", start + 140_000)
-        session.endLeg(start + 200_000)
-
-        val state = session.state(start + 200_000)
-        assertEquals(1, state.survivors)
         assertEquals(
-            2,
-            state.candidates.first { it.address == "5A:02" }.legsSeen,
+            listOf("5A:02"),
+            session.state(start + 45_000L).candidates.map { it.address },
         )
-    }
-
-    @Test
-    fun `a device heard once is not a candidate`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start, packets = 1)
-        session.hear("5A:02", start, packets = 10)
-        session.endLeg(start + 60_000)
-        assertEquals(listOf("5A:02"), session.state(start + 60_000).candidates.map { it.address })
     }
 
     @Test
     fun `nothing heard is nothing claimed`() {
         val state = FollowSession().state(start)
+
         assertEquals(0, state.watching)
-        assertEquals(0, state.survivors)
+        assertTrue(state.stillIn.isEmpty())
         assertNull(state.target)
         assertTrue(state.narrowing().contains("Nothing heard"))
     }
 
+    // ------------------------------------------------------------------ thresholds
+
     @Test
-    fun `beginning a leg closes the one before it`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.STILL, atMs = start)
-        session.beginLeg("two", kind = LegKind.TOGETHER, atMs = start + 10_000)
-        val legs = session.state(start + 20_000).legs
-        assertEquals(2, legs.size)
-        assertEquals(start + 10_000, legs.first().endedAtMs)
-        assertTrue(legs.last().running)
+    fun `fifteen or fewer is worth saving, five or fewer is a short list`() {
+        val session = following(*(1..20).map { "5A:%02d".format(it) }.toTypedArray())
+        fun surviving(count: Int, atMs: Long): FollowState {
+            (1..count).forEach { session.hear("5A:%02d".format(it), atMs) }
+            return session.state(atMs + 1_000L)
+        }
+
+        val room = surviving(20, start + 45_000L)
+        assertFalse("twenty is a room", room.listable)
+        assertFalse(room.narrowed)
+
+        val handful = surviving(12, start + 105_000L)
+        assertTrue("twelve is worth saving", handful.listable)
+        assertFalse("but it is not a short list", handful.narrowed)
+
+        val few = surviving(4, start + 200_000L)
+        assertTrue(few.listable)
+        assertTrue("four is a short list", few.narrowed)
+        assertEquals(4, few.shortlist.size)
     }
 
-    // ------------------------------------------------------------------------ holding
+    @Test
+    fun `the thresholds are settings too`() {
+        val session = FollowSession(FollowTuning.DEFAULT.copy(shortlistMax = 2, listableAt = 3))
+        session.startBaseline(start)
+        listOf("5A:01", "5A:02", "5A:03").forEach { session.hear(it, start) }
+        session.endBaseline(start + 30_000L)
+        session.startFollowing(start + 30_000L)
+
+        val state = session.state(start + 35_000L)
+
+        assertTrue("three is listable under a threshold of three", state.listable)
+        assertFalse("but not a short list of two", state.narrowed)
+    }
+
+    // ------------------------------------------------------------------ arrivals
 
     @Test
-    fun `locking a candidate moves the session to holding`() {
+    fun `a device that turns up after the baseline is marked as an arrival`() {
         val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
+        session.startBaseline(start)
         session.hear("5A:01", start)
+        session.endBaseline(start + 30_000L)
+
+        // They walk in. The follow starts when they do, so they are in the pool.
+        session.hear("5A:07", start + 60_000L)
+        session.startFollowing(start + 65_000L)
+
+        val byAddress = session.state(start + 70_000L).candidates.associateBy { it.address }
+
+        assertFalse(byAddress.getValue("5A:01").arrived)
+        assertTrue(byAddress.getValue("5A:07").arrived)
+        assertTrue(byAddress.getValue("5A:07").inPool)
+    }
+
+    // ------------------------------------------------------------------ starting again
+
+    @Test
+    fun `a follow that has got nowhere suggests starting again`() {
+        val session = following(*(1..20).map { "5A:%02d".format(it) }.toTypedArray())
+        var at = start + 30_000L
+        repeat(12) {
+            at += 30_000L
+            (1..20).forEach { session.hear("5A:%02d".format(it), at) }
+        }
+
+        assertTrue(session.state(at).shouldRebaseline)
+    }
+
+    @Test
+    fun `a follow that did narrow down is left alone`() {
+        val session = following("5A:01", "5A:02")
+        var at = start + 30_000L
+        repeat(12) {
+            at += 30_000L
+            session.hear("5A:01", at)
+        }
+
+        val state = session.state(at)
+        assertTrue(state.narrowed)
+        assertFalse(state.shouldRebaseline)
+    }
+
+    @Test
+    fun `re-baselining reopens the pool without forgetting the room`() {
+        val session = following("5A:01", "5A:02")
+        session.hear("5A:01", start + 60_000L)
+        assertEquals(1, session.state(start + 150_000L).stillIn.size)
+
+        session.rebaseline(start + 160_000L)
+        val after = session.state(start + 160_000L)
+
+        assertEquals("nobody forgotten", 2, after.candidates.size)
+        assertEquals("and nobody in the pool until it starts again", 0, after.poolSize)
+        assertEquals(FollowPhase.BASELINE, after.phase)
+        assertFalse(after.shouldRebaseline)
+    }
+
+    // ------------------------------------------------------------------ holding
+
+    @Test
+    fun `locking a candidate moves the follow to holding`() {
+        val session = following("5A:01")
         session.lock("5A:01")
-        val state = session.state(start + 5_000)
+
+        val state = session.state(start + 35_000L)
+
         assertEquals(FollowPhase.HOLDING, state.phase)
         assertEquals("5A:01", state.target!!.address)
     }
 
     @Test
     fun `a target that has gone quiet is reported lost, not still held`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
+        val session = following("5A:01")
         session.lock("5A:01")
-        val state = session.state(start + 5 * 60_000L)
+
+        val state = session.state(start + 5 * minute)
+
         assertEquals(FollowPhase.LOST, state.phase)
-        assertTrue(state.silentForMs > FollowSession.LOST_AFTER_MS)
+        assertTrue(state.silentForMs > FollowTuning.DEFAULT.lostAfterMs)
     }
 
     @Test
     fun `a couple of dropped packets is not being lost`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
+        val session = following("5A:01")
         session.lock("5A:01")
-        assertEquals(FollowPhase.HOLDING, session.state(start + 20_000).phase)
+
+        assertEquals(FollowPhase.HOLDING, session.state(start + 50_000L).phase)
     }
 
-    @Test
-    fun `unlocking goes back to narrowing rather than starting over`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
-        session.lock("5A:01")
-        session.unlock()
-        val state = session.state(start + 5_000)
-        assertEquals(FollowPhase.NARROWING, state.phase)
-        assertNull(state.target)
-        assertEquals(1, state.legs.size)
-    }
-
-    // ---------------------------------------------------------------------- rotation
+    // ------------------------------------------------------------------ rotation
 
     @Test
-    fun `a re-acquired target carries its history onto the new address`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
-        session.endLeg(start + 60_000)
-        session.beginLeg("two", kind = LegKind.TOGETHER, atMs = start + 70_000)
-        session.hear("5A:01", start + 70_000)
+    fun `a re-acquired target carries its history and its place in the pool`() {
+        val session = following("5A:01")
+        session.hear("5A:01", start + 60_000L)
         session.lock("5A:01")
 
-        session.hear("5B:02", start + 130_000)
-        session.reacquire("5B:02", start + 130_000)
-        session.endLeg(start + 140_000)
+        // A new address appears mid-follow. On its own it would be out of the pool.
+        session.hear("5B:02", start + 80_000L)
+        assertFalse(session.state(start + 85_000L).candidates.first { it.address == "5B:02" }.inPool)
 
-        val target = session.state(start + 145_000).target!!
+        session.reacquire("5B:02", start + 80_000L)
+        val target = session.state(start + 85_000L).target!!
+
         assertEquals("5B:02", target.address)
         assertEquals(listOf("5A:01", "5B:02"), target.addresses)
         assertEquals(1, target.rotations)
-        // The legs it survived before the rotation still count for it.
-        assertEquals(2, target.legsSeen)
+        assertTrue("a rotation is the one way in mid-follow", target.inPool)
+        assertTrue(target.stillIn)
     }
 
     @Test
     fun `nothing is predicted about a return until a rotation has been watched`() {
-        // A device that has never changed address while being watched could do it at any
-        // moment. A countdown to a made-up deadline is worse than no countdown.
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
+        val session = following("5A:01")
         session.lock("5A:01")
-        assertNull(session.state(start + 10_000).expectedReturnMs)
+
+        assertNull(session.state(start + 35_000L).expectedReturnMs)
     }
 
     @Test
     fun `one rotation is enough to expect the next, on the specification default`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
+        val session = following("5A:01")
         session.lock("5A:01")
-        session.hear("5B:02", start + 100_000)
-        session.reacquire("5B:02", start + 100_000)
+        session.hear("5B:02", start + 100_000L)
+        session.reacquire("5B:02", start + 100_000L)
 
-        val state = session.state(start + 110_000)
-        assertEquals(
-            start + 100_000 + RotationRhythm.SPEC_DEFAULT_MS,
-            state.expectedReturnMs,
-        )
-        // One change is not a rhythm, so nothing is claimed to have been measured.
-        assertNull(state.rhythm)
+        val state = session.state(start + 110_000L)
+
+        assertEquals(start + 100_000L + RotationRhythm.SPEC_DEFAULT_MS, state.expectedReturnMs)
+        assertNull("one change is not a rhythm", state.rhythm)
     }
 
     @Test
     fun `a measured rhythm beats the default once there is one`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
+        val session = following("5A:01")
         session.lock("5A:01")
 
-        var at = start
+        var at = start + 30_000L
         listOf("5B:02", "5C:03", "5D:04", "5E:05").forEach { address ->
             at += 300_000L
             session.hear(address, at)
             session.reacquire(address, at)
         }
 
-        val state = session.state(at + 10_000)
+        val state = session.state(at + 10_000L)
+
         assertEquals(300_000L, state.rhythm!!.medianPeriodMs)
         assertEquals(at + 300_000L, state.expectedReturnMs)
     }
 
     @Test
     fun `re-acquiring something never heard from changes nothing`() {
-        val session = FollowSession()
-        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
+        val session = following("5A:01")
         session.lock("5A:01")
-        session.reacquire("FF:FF", start + 10_000)
-        assertEquals("5A:01", session.state(start + 12_000).target!!.address)
+        session.reacquire("FF:FF", start + 40_000L)
+
+        assertEquals("5A:01", session.state(start + 42_000L).target!!.address)
     }
 
+    // ------------------------------------------------------------------ the export
+
     @Test
-    fun `the export carries the legs and the survivors`() {
-        val session = FollowSession()
-        session.beginLeg("the walk", kind = LegKind.TOGETHER, atMs = start)
-        session.hear("5A:01", start)
-        session.endLeg(start + 60_000)
+    fun `the export carries the tuning, the probes and the verdicts`() {
+        val session = following("5A:01")
+        session.beginProbe(Probe.WALK_BY, start + 40_000L)
+        session.markClosest(start + 60_000L)
+        session.endProbe(start + 80_000L)
+
         val csv = session.csv()
-        assertTrue(csv.contains("the walk"))
+
+        assertTrue(csv.contains("drop_after_ms,60000"))
+        assertTrue(csv.contains("WALK_BY"))
         assertTrue(csv.contains("5A:01"))
-        assertTrue(csv.contains("legs_seen"))
+        assertTrue(csv.contains("still_in"))
     }
 }

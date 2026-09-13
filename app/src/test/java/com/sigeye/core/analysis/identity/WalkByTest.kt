@@ -20,7 +20,7 @@ class WalkByTest {
     private val midMs = start + walkMs / 2
 
     private fun walking(): FollowSession = FollowSession().apply {
-        beginLeg("walk past", LegKind.WALK_BY, start)
+        beginProbe(Probe.WALK_BY, start)
     }
 
     /** Feeds one device through the whole walk, one advertisement a second. */
@@ -41,7 +41,7 @@ class WalkByTest {
 
     private fun finish(session: FollowSession, markMiddle: Boolean = true) {
         if (markMiddle) session.markClosest(midMs)
-        session.endLeg(start + walkMs)
+        session.endProbe(start + walkMs)
     }
 
     @Test
@@ -141,7 +141,7 @@ class WalkByTest {
         // to test the peak against. Better to say nothing than to guess the mark.
         val session = walking()
         walk(session, "AA:BB:CC:DD:EE:07") { passing(it) }
-        session.endLeg(start + walkMs)
+        session.endProbe(start + walkMs)
 
         assertNull(session.candidates(start + walkMs).single().walkBy)
     }
@@ -161,7 +161,7 @@ class WalkByTest {
         walk(session, "AA:BB:CC:DD:EE:09") { passing(it) }
         session.markClosest(start + 5_000L)
         session.markClosest(midMs)
-        session.endLeg(start + walkMs)
+        session.endProbe(start + walkMs)
 
         val score = session.candidates(start + walkMs).single().walkBy!!
 
@@ -175,9 +175,9 @@ class WalkByTest {
         walk(session, "AA:BB:CC:DD:EE:0A") { passing(it) }
         finish(session)
 
-        session.beginLeg("another", LegKind.WALK_BY, start + walkMs + 1_000L)
+        session.beginProbe(Probe.WALK_BY, start + walkMs + 1_000L)
 
-        assertEquals(1, session.state(start + walkMs + 2_000L).legs.size)
+        assertEquals(1, session.state(start + walkMs + 2_000L).probes.size)
     }
 
     @Test
@@ -185,15 +185,19 @@ class WalkByTest {
         // A circle says a device is somewhere near the middle of a lap. A walk-by says you
         // drew level with it at a moment you chose. The second is the stronger statement
         // and the ranking has to say so.
+        val now = start + 10 * 60_000L
         val base = FollowCandidate(
             address = "AA", label = null, vendor = null, isRandom = true,
-            legsSeen = 1, legsPossible = 1, movingLegsSeen = 0,
-            packets = 40, meanRssi = -60.0, lastSeenMs = start, addresses = listOf("AA"),
+            packets = 40, meanRssi = -60.0,
+            firstSeenMs = start, lastSeenMs = now, addresses = listOf("AA"),
+            inPool = true,
         )
         val centred = OrbitScore(8, 8, 60, -55.0, 4.0)
         val passed = WalkByScore(40, -80.0, -45.0, midMs, -79.0, midMs, walkMs)
 
         assertTrue(passed.passed)
-        assertTrue(base.copy(walkBy = passed).weight > base.copy(orbit = centred).weight)
+        assertTrue(
+            base.copy(walkBy = passed).weight(now) > base.copy(orbit = centred).weight(now),
+        )
     }
 }
