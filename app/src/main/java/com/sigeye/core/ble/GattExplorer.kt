@@ -66,6 +66,25 @@ data class Exploration(
  * whoever is holding it. That is a real difference in kind, not degree, so the screen that
  * drives this asks first.
  *
+ * ## The rule: it reads, and that is all
+ *
+ * **This class never writes a characteristic, never writes a descriptor, never subscribes
+ * to a notification, and never pairs or bonds.** It connects, asks for the service list,
+ * reads the values the device has already marked readable, and disconnects.
+ *
+ * That is not an accident of what has been implemented so far, it is the boundary, and it
+ * is written down here because the next person to extend this file will have a good reason
+ * to cross it. Reading is asking a device to describe itself, which it was built to do for
+ * any stranger that asks. Writing is changing something on hardware belonging to somebody
+ * who did not agree to it - a light, a lock, a pump - and "it was only a test device" is
+ * exactly how that goes wrong. Subscribing leaves a connection open and a device talking to
+ * you after you stopped looking. Bonding leaves a lasting relationship on somebody else's
+ * property.
+ *
+ * `GattWriteRuleTest` reads this source file and fails the build if a mutating call appears
+ * in it. If you have a real reason to cross the line, the test is where to argue it, and
+ * the screen has to say so too.
+ *
  * GATT is strictly one operation at a time. Issuing a second read before the first
  * callback returns does not queue it - it silently fails, and the usual symptom is a device
  * that appears to have three readable values when it has thirty. So reads run from a queue,

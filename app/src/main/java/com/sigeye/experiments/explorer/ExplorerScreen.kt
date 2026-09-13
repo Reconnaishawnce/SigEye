@@ -38,11 +38,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
-import com.sigeye.core.ble.ExploreState
+import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.Exploration
+import com.sigeye.core.ble.ExploreState
 import com.sigeye.core.ble.GattExplorer
 import com.sigeye.core.ble.GattService
-import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
@@ -146,6 +146,23 @@ private fun Live() {
                     "other device sees it, may log it, and on some hardware will show a " +
                     "pairing prompt to whoever is holding it. Only do this to things you " +
                     "own or have permission to poke.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "It reads. It never writes.",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "No characteristic is written, nothing is subscribed to, and it never pairs " +
+                    "or bonds. It asks the device to describe itself and reads back what the " +
+                    "device already marked readable, then hangs up. Nothing on the other end " +
+                    "is changed and nothing is left connected. There is a test that reads " +
+                    "the source and fails the build if that ever stops being true.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )

@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <external-files-path name="logs" path="." />
+    <!--
+      Crash traces live in internal storage rather than alongside the recordings, because
+      they have to be writable at the moment the app is falling over and internal storage
+      is the one place that is always there. Only this one directory is exposed, and only
+      so the share button has something to hand the chooser.
+    -->
+    <files-path name="crashes" path="crashes/" />
 </paths>

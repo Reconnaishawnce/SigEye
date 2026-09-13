@@ -47,8 +47,19 @@ object SweepExport {
         }.getOrNull()
     }
 
-    /** A share sheet for one exported file. */
-    fun share(context: Context, file: File) {
+    /**
+     * A share sheet for one exported file.
+     *
+     * The type and the chooser title are arguments because this is now the only share in
+     * the app and not everything it sends is a sweep. A crash trace announced as text/csv
+     * offers to open in a spreadsheet, which is a small lie that wastes somebody's time.
+     */
+    fun share(
+        context: Context,
+        file: File,
+        mime: String = "text/csv",
+        title: String = "Send sweep",
+    ) {
         runCatching {
             val uri = FileProvider.getUriForFile(
                 context,
@@ -56,12 +67,12 @@ object SweepExport {
                 file,
             )
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
+                type = mime
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_SUBJECT, file.name)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "Send sweep"))
+            context.startActivity(Intent.createChooser(intent, title))
         }
     }
 }

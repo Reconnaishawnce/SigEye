@@ -42,8 +42,14 @@ import com.sigeye.core.Permissions
 import com.sigeye.core.RunFigure
 import com.sigeye.core.analysis.rf.AbComparison
 import com.sigeye.core.analysis.rf.AbResult
+import com.sigeye.core.analysis.rf.ControlBand
+import com.sigeye.core.analysis.rf.ControlRadios
+import com.sigeye.core.analysis.rf.ControlVerdict
+import com.sigeye.core.analysis.rf.Radio
 import com.sigeye.core.analysis.rf.Significance
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.wifi.AccessPoint
+import com.sigeye.core.wifi.WifiScanHub
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -59,6 +65,16 @@ private const val HUB_TAG = "microwave"
 /** One second per sample - fine against a phase measured in tens of seconds. */
 private const val SAMPLE_MS = 1_000L
 private const val TARGET_SECONDS = 30
+
+/**
+ * How often to ask for a Wi-Fi scan, for the control band.
+ *
+ * Android will not scan faster than about eight seconds however nicely it is asked, so the
+ * control gets a handful of readings per phase where the advertisement count gets dozens.
+ * That is why the control is judged on whether a band moved by more than three decibels
+ * rather than on a t statistic it does not have the samples for.
+ */
+private const val WIFI_SCAN_MS = 8_000L
 
 @Composable
 fun MicrowaveScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -102,6 +118,15 @@ private fun Live() {
     val packets = remember { AtomicInteger(0) }
 
     val health by BleScanHub.health.collectAsStateWithLifecycle()
+    val wifi by WifiScanHub.state.collectAsStateWithLifecycle()
+
+    // The control. Two radios, pinned once at the start of the baseline and followed
+    // through both phases whatever happens to them.
+    val lowBand = remember { AbComparison() }
+    val highBand = remember { AbComparison() }
+    var control by remember { mutableStateOf(ControlRadios(null, null, sameBox = false)) }
+    var lowResult by remember { mutableStateOf(lowBand.result()) }
+    var highResult by remember { mutableStateOf(highBand.result()) }
 
     var phase by remember { mutableStateOf(AbComparison.Phase.IDLE) }
     var result by remember { mutableStateOf(comparison.result()) }
@@ -109,10 +134,37 @@ private fun Live() {
     var baselineSeries by remember { mutableStateOf<List<Double>>(emptyList()) }
     var testSeries by remember { mutableStateOf<List<Double>>(emptyList()) }
 
+    /** Only the access points from the most recent scan: the hub keeps older ones too. */
+    fun latestScan(): List<AccessPoint> =
+        wifi.results.filter { it.seenAtMs >= wifi.lastScanAtMs }
+
     DisposableEffect(Unit) {
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
-        onDispose { BleScanHub.release(HUB_TAG) }
+        WifiScanHub.init(context)
+        WifiScanHub.acquire(context, HUB_TAG)
+        onDispose {
+            BleScanHub.release(HUB_TAG)
+            WifiScanHub.release(context, HUB_TAG)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            WifiScanHub.requestScan()
+            delay(WIFI_SCAN_MS)
+        }
+    }
+
+    // One reading per scan, never one per second: recording the same scan thirty times
+    // would flatten its variance to nothing and make any difference look certain.
+    LaunchedEffect(wifi.scans) {
+        if (wifi.scans == 0) return@LaunchedEffect
+        val scan = latestScan().associate { it.bssid to it.rssi }
+        ControlBand.levelOf(control.low?.bssid, scan)?.let { lowBand.record(it) }
+        ControlBand.levelOf(control.high?.bssid, scan)?.let { highBand.record(it) }
+        lowResult = lowBand.result()
+        highResult = highBand.result()
     }
 
     LaunchedEffect(Unit) {
@@ -195,7 +247,14 @@ private fun Live() {
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = {
+                    control = ControlBand.choose(
+                        latestScan().map {
+                            Radio(it.bssid, it.ssid, it.frequencyMhz, it.rssi.toDouble())
+                        },
+                    )
                     comparison.startBaseline()
+                    lowBand.startBaseline()
+                    highBand.startBaseline()
                     phase = AbComparison.Phase.BASELINE
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -209,11 +268,15 @@ private fun Live() {
             samples = result.baseline.samples,
             onNext = {
                 comparison.startTest()
+                lowBand.startTest()
+                highBand.startTest()
                 phase = AbComparison.Phase.TEST
             },
             nextLabel = "Oven is running - record test",
             onCancel = {
                 comparison.reset()
+                lowBand.reset()
+                highBand.reset()
                 phase = AbComparison.Phase.IDLE
             },
         )
@@ -225,11 +288,15 @@ private fun Live() {
             samples = result.test.samples,
             onNext = {
                 comparison.stop()
+                lowBand.stop()
+                highBand.stop()
                 phase = AbComparison.Phase.IDLE
             },
             nextLabel = "Stop and compare",
             onCancel = {
                 comparison.reset()
+                lowBand.reset()
+                highBand.reset()
                 phase = AbComparison.Phase.IDLE
             },
         )
@@ -253,9 +320,16 @@ private fun Live() {
         )
     }
 
+    if (phase != AbComparison.Phase.IDLE || control.usable) {
+        Spacer(Modifier.height(12.dp))
+        ControlCard(control, lowResult, highResult, phase)
+    }
+
     if (result.baseline.samples >= 3 && result.test.samples >= 3) {
+        val verdict = ControlBand.judge(lowResult, highResult)
+
         Spacer(Modifier.height(16.dp))
-        Verdict(result)
+        Verdict(result, verdict)
 
         Spacer(Modifier.height(16.dp))
         RunHistory(
@@ -267,7 +341,14 @@ private fun Live() {
                 result.tStatistic?.let { RunFigure("t statistic", it, decimals = 2) },
                 RunFigure("Baseline packets", result.baseline.samples.toDouble(), decimals = 0),
                 RunFigure("Test packets", result.test.samples.toDouble(), decimals = 0),
+                lowResult.takeIf { ControlBand.enough(it) }?.let {
+                    RunFigure("2.4 GHz control", it.delta, "dB", 1, higherIsBetter = true)
+                },
+                highResult.takeIf { ControlBand.enough(it) }?.let {
+                    RunFigure("5 GHz control", it.delta, "dB", 1, higherIsBetter = true)
+                },
             ),
+            note = control.takeIf { it.usable }?.label(),
         )
     }
 
@@ -276,9 +357,14 @@ private fun Live() {
         OutlinedButton(
             onClick = {
                 comparison.reset()
+                lowBand.reset()
+                highBand.reset()
+                control = ControlRadios(null, null, sameBox = false)
                 baselineSeries = emptyList()
                 testSeries = emptyList()
                 result = comparison.result()
+                lowResult = lowBand.result()
+                highResult = highBand.result()
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Start over") }
@@ -334,7 +420,7 @@ private fun PhasePanel(
 }
 
 @Composable
-private fun Verdict(result: AbResult) {
+private fun Verdict(result: AbResult, control: ControlVerdict) {
     val drop = result.percentChange
     Card(
         Modifier.fillMaxWidth(),
@@ -366,14 +452,101 @@ private fun Verdict(result: AbResult) {
             }
 
             Spacer(Modifier.height(10.dp))
-            Text(interpret(result), style = MaterialTheme.typography.bodySmall)
+            Text(interpret(result, control), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
+/**
+ * What the two Wi-Fi radios did while the advertisement count was being taken.
+ *
+ * Shown from the moment a baseline starts rather than only at the end, because the commonest
+ * way this experiment fails is having no control at all - one band with nothing audible in
+ * it - and finding that out after running the oven for two minutes is annoying.
+ */
+@Composable
+private fun ControlCard(
+    control: ControlRadios,
+    low: AbResult,
+    high: AbResult,
+    phase: AbComparison.Phase,
+) {
+    val verdict = ControlBand.judge(low, high)
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (verdict) {
+                ControlVerdict.ONLY_LOW_FELL -> MaterialTheme.colorScheme.errorContainer
+                ControlVerdict.BOTH_FELL -> MaterialTheme.colorScheme.tertiaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "The control band · ${verdict.label}",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(control.describe(), style = MaterialTheme.typography.bodySmall)
+
+            if (control.usable) {
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Stat(
+                        "2.4 GHz",
+                        String.format(Locale.US, "%.0f", nowOrBaseline(low, phase)),
+                        "dBm · ${low.baseline.samples + low.test.samples} scans",
+                    )
+                    Stat(
+                        "5 GHz",
+                        String.format(Locale.US, "%.0f", nowOrBaseline(high, phase)),
+                        "dBm · ${high.baseline.samples + high.test.samples} scans",
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                ControlBand.explain(verdict, low, high),
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            if (control.usable) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "A scan that does not contain a pinned radio is recorded at " +
+                        "${ControlBand.FLOOR_DBM.toInt()} dBm - below what this phone can " +
+                        "hear - rather than skipped, so a radio that keeps vanishing counts " +
+                        "against its own phase instead of quietly improving it.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Whichever phase is running, so the card reads as live rather than as a summary. */
+private fun nowOrBaseline(result: AbResult, phase: AbComparison.Phase): Double = when (phase) {
+    AbComparison.Phase.TEST -> result.test.mean
+    else -> result.baseline.mean
+}
+
 /** Plain words, including the case where the oven turned out to be well sealed. */
-private fun interpret(result: AbResult): String {
+private fun interpret(result: AbResult, control: ControlVerdict): String {
     val change = result.percentChange
+
+    // The control outranks the count. A drop with both bands down is not a finding about
+    // an oven whatever the advertisement rate did, and saying so first is the point of
+    // having a control at all.
+    if (control == ControlVerdict.BOTH_FELL) {
+        return "The advertisement count fell, but so did 5 GHz, and an oven cannot touch " +
+            "5 GHz. Something changed between the two phases that was not the oven - " +
+            "almost always the phone or the source moving. This one does not count."
+    }
+
     return when {
         result.significance == Significance.INSUFFICIENT ->
             "Not enough of either phase to compare. Record at least five seconds of each, " +
@@ -391,8 +564,18 @@ private fun interpret(result: AbResult): String {
         change < -50 ->
             "The oven swallowed about ${abs(change).roundToInt()}% of the advertisements " +
                 "reaching this phone. That is a magnetron leaking hard into 2.45 GHz, " +
-                "right where Bluetooth and 2.4 GHz Wi-Fi live. Anything on 5 GHz would " +
-                "have been untouched."
+                "right where Bluetooth and 2.4 GHz Wi-Fi live." +
+                when (control) {
+                    ControlVerdict.ONLY_LOW_FELL ->
+                        " The 5 GHz radio in the same room did not move, which is the " +
+                            "cleanest version of this result you can get."
+                    ControlVerdict.NEITHER_FELL ->
+                        " Neither Wi-Fi band moved, though, so this hit the Bluetooth " +
+                            "source rather than the whole band."
+                    else ->
+                        " Whether 5 GHz escaped is not measured here yet - run each phase " +
+                            "for a minute and the control band will say."
+                }
 
         change < 0 ->
             "About ${abs(change).roundToInt()}% fewer advertisements got through with the " +

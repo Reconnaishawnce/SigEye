@@ -40,6 +40,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
     <application
+        android:name=".SigEyeApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

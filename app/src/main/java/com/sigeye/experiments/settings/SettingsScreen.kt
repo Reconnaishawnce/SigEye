@@ -33,20 +33,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.CrashLog
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
 import com.sigeye.core.SettingsStore
+import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.presence.Density
 import com.sigeye.core.analysis.presence.Environment
-import com.sigeye.core.SweepExport
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.CaptureStore
 import com.sigeye.ui.BackupWarning
 import com.sigeye.ui.Field
 import com.sigeye.ui.Section
-import kotlinx.coroutines.delay
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "settings-detect"
 
@@ -181,6 +182,9 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(16.dp))
         CaptureSection()
+
+        Spacer(Modifier.height(16.dp))
+        CrashSection()
 
         Spacer(Modifier.height(10.dp))
         Section(
@@ -363,6 +367,81 @@ private fun DensitySection(
  * at a desk drives the whole app exactly as the room did - which turns "it looked wrong on
  * the train" from a thing nobody can chase into a file somebody can open.
  */
+/**
+ * Crash traces, which are written without asking and sent only when asked.
+ *
+ * This is the whole of the app's crash reporting, and the point of it is that there is no
+ * network anywhere in it. A crash on somebody else's phone used to be invisible forever;
+ * now there is a file, and they can decide whether to send it.
+ */
+@Composable
+private fun CrashSection() {
+    val context = LocalContext.current
+    var reports by remember { mutableStateOf(CrashLog.reports(context)) }
+
+    Section(
+        title = "If it falls over",
+        summary = if (reports.isEmpty()) {
+            "Nothing has crashed on this phone."
+        } else {
+            "${reports.size} crash${if (reports.size == 1) "" else "es"} recorded."
+        },
+    ) {
+        Text(
+            "When the app crashes it writes the stack trace to a file on this phone. " +
+                "Nothing is sent anywhere and there is no crash reporting service - that " +
+                "would mean a network call at the worst possible moment, and this app does " +
+                "not make network calls at all. The file sits here until you send it or " +
+                "delete it.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+
+        if (reports.isEmpty()) return@Section
+
+        Spacer(Modifier.height(10.dp))
+        reports.take(5).forEach { report ->
+            Field(report.stamp(), report.headline)
+        }
+        if (reports.size > 5) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${reports.size - 5} older ones, kept up to ${CrashLog.KEEP}.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "A trace names the line it crashed on, this phone's model and Android version, " +
+                "and can contain a Bluetooth address if the crash happened somewhere " +
+                "holding one. Read it before you send it - it is a text file and it is " +
+                "meant to be read.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = {
+                CrashLog.bundle(context)?.let {
+                    SweepExport.share(context, it, mime = "text/plain", title = "Send the crash log")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Send them somewhere") }
+
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(
+            onClick = {
+                CrashLog.clear(context)
+                reports = CrashLog.reports(context)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Delete them") }
+    }
+}
+
 @Composable
 private fun CaptureSection() {
     val context = LocalContext.current
