@@ -48,7 +48,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.DeviceNote
-import com.sigeye.core.DeviceRanking
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
@@ -67,6 +66,8 @@ import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.SourceOrder
+import com.sigeye.ui.rememberSources
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -79,36 +80,8 @@ private const val TICK_MS = 500L
 /** Slow enough that a row stays under the finger long enough to be tapped. */
 private const val PICKER_REFRESH_MS = 2_500L
 
-private data class Candidate(
-    val address: String,
-    val name: String?,
-    val vendor: String?,
-    val rssi: Int,
-    val lastSeenMs: Long,
-    val sightings: Int,
-) {
-    /** Anything better than raw hex. */
-    val hasIdentity: Boolean get() = !name.isNullOrBlank() || !vendor.isNullOrBlank()
-
-    fun label(nickname: String?): String =
-        nickname ?: name?.takeIf { it.isNotBlank() } ?: vendor ?: address
-}
 
 /** Adapts what this screen knows about a device to the shared ordering. */
-private fun pickerRank(
-    candidate: Candidate,
-    notes: Map<String, DeviceNote>,
-    watched: Set<String>,
-): Int {
-    val key = candidate.address.uppercase(Locale.US)
-    val note = notes[key]
-    return DeviceRanking.rank(
-        watched = watched.contains(key),
-        nickname = note?.nickname,
-        lists = note?.lists.orEmpty(),
-        hasIdentity = candidate.hasIdentity,
-    )
-}
 
 @Composable
 fun MotionScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -192,9 +165,16 @@ private fun Live() {
     // A plain map rather than Compose state: writing it back on every advertisement
     // recomposed the screen continuously and reshuffled the list under the finger, which
     // made a device almost impossible to tap.
-    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
     var pickerPaused by remember { mutableStateOf(false) }
-    var frozenCandidates by remember { mutableStateOf<List<Candidate>>(emptyList()) }
+    // The same devices as every other picker, with this screen's own rows on top: motion
+    // is measured on a link between two things, so several are chosen with checkboxes
+    // rather than one by tapping.
+    val frozenCandidates = rememberSources(
+        order = SourceOrder.RANKED,
+        minSightings = 2,
+        limit = 30,
+        paused = pickerPaused || running,
+    )
 
     // The radio is held by this screen, so a sleeping display ends the measurement.
     KeepScreenOn(running)
@@ -205,39 +185,10 @@ private fun Live() {
         onDispose { BleScanHub.release(HUB_TAG) }
     }
 
-    LaunchedEffect(Unit) {
-        BleScanHub.adverts.collect { advert ->
-            detector.observe(advert.address, advert.rssi, advert.atMs)
-            synchronized(candidateTable) {
-                val existing = candidateTable[advert.address]
-                candidateTable[advert.address] = Candidate(
-                    address = advert.address,
-                    name = advert.name?.takeIf { it.isNotBlank() } ?: existing?.name,
-                    vendor = advert.vendor ?: existing?.vendor,
-                    rssi = advert.rssi,
-                    lastSeenMs = advert.atMs,
-                    sightings = (existing?.sightings ?: 0) + 1,
-                )
-            }
-        }
-    }
 
     // Snapshotted on a slow timer so a row stays put long enough to be tapped, and
     // ordered so the devices you can actually reason about are not buried under a wall of
     // hex. Watched and listed things first, then anything with a name, then the rest.
-    LaunchedEffect(pickerPaused, running, notes, watchedAddresses) {
-        while (!pickerPaused && !running) {
-            val now = System.currentTimeMillis()
-            frozenCandidates = synchronized(candidateTable) { candidateTable.values.toList() }
-                .filter { now - it.lastSeenMs < 20_000 && it.sightings >= 2 }
-                .sortedWith(
-                    compareBy<Candidate> { pickerRank(it, notes, watchedAddresses) }
-                        .thenByDescending { it.rssi },
-                )
-                .take(30)
-            delay(PICKER_REFRESH_MS)
-        }
-    }
 
     LaunchedEffect(
         sensitivity, sigmaFloor, levelWeight, jitterWeight,

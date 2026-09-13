@@ -45,6 +45,8 @@ import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PauseBar
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
+import com.sigeye.ui.SourceOrder
+import com.sigeye.ui.rememberSources
 import kotlinx.coroutines.delay
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
@@ -57,18 +59,6 @@ private const val TARGET_SECONDS = 15
 
 private enum class Stage { PICK, OUTSIDE, INSIDE, RESULT }
 
-private data class Candidate(
-    val address: String,
-    val name: String?,
-    val vendor: String?,
-    val rssi: Int,
-    val sightings: Int,
-    val firstSeenMs: Long,
-    val lastSeenMs: Long,
-) {
-    val rate: Double
-        get() = sightings * 1000.0 / (lastSeenMs - firstSeenMs).coerceAtLeast(1L)
-}
 
 @Composable
 fun FaradayScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -115,13 +105,12 @@ private fun Live() {
     var stage by remember { mutableStateOf(Stage.PICK) }
     var target by remember { mutableStateOf<String?>(null) }
     var targetLabel by remember { mutableStateOf("-") }
-    // A plain map, deliberately not Compose state. Writing a new immutable map on every
-    // advertisement copied the whole thing per packet and recomposed the screen hundreds
-    // of times a second, which starved the coroutine doing the recording - and in this
-    // experiment that coroutine is the measurement.
-    val candidateTable = remember { LinkedHashMap<String, Candidate>() }
-    var frozen by remember { mutableStateOf<List<Candidate>>(emptyList()) }
     var paused by remember { mutableStateOf(false) }
+    val frozen = rememberSources(
+        order = SourceOrder.SIGNAL,
+        limit = 20,
+        paused = paused || stage != Stage.PICK,
+    )
     var result by remember { mutableStateOf(comparison.result()) }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
     // Counted off the Compose thread and published on the phase timer, for the same
@@ -139,38 +128,6 @@ private fun Live() {
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
         onDispose { BleScanHub.release(HUB_TAG) }
-    }
-
-    // Candidates are only needed while one is being picked, so nothing is collected for
-    // them once the measurement starts.
-    LaunchedEffect(stage) {
-        if (stage != Stage.PICK) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
-            synchronized(candidateTable) {
-                val existing = candidateTable[advert.address]
-                candidateTable[advert.address] = Candidate(
-                    address = advert.address,
-                    name = advert.name ?: existing?.name,
-                    vendor = advert.vendor,
-                    rssi = advert.rssi,
-                    sightings = (existing?.sightings ?: 0) + 1,
-                    firstSeenMs = existing?.firstSeenMs ?: advert.atMs,
-                    lastSeenMs = advert.atMs,
-                )
-            }
-        }
-    }
-
-    // The picker list, snapshotted on a timer and freezable so a row can be tapped.
-    LaunchedEffect(paused, stage) {
-        while (stage == Stage.PICK && !paused) {
-            delay(700)
-            val now = System.currentTimeMillis()
-            frozen = synchronized(candidateTable) { candidateTable.values.toList() }
-                .filter { now - it.lastSeenMs < 12_000 && it.sightings >= 3 }
-                .sortedByDescending { it.rssi }
-                .take(20)
-        }
     }
 
     // Recording, keyed so it restarts cleanly when the phase or the target changes.

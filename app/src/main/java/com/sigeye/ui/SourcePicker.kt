@@ -99,20 +99,26 @@ enum class SourceOrder {
  * hub for the measurement afterwards anyway, and a component that acquired it separately
  * would leave two claims where there should be one.
  */
+/**
+ * The list of what is in range, without deciding how it should look.
+ *
+ * Split out from the picker because three screens need the same devices and a different
+ * row. Bluetooth Explorer wants to say which of them will accept a connection, Faraday
+ * wants its own pausing, and the motion detector picks several at once with checkboxes
+ * rather than one by tapping. Forcing those into one presentation would be worse than the
+ * duplication it replaced.
+ *
+ * What was actually duplicated is here: collecting the stream, keeping one entry per
+ * address, deciding how long silence means gone, and sorting. That part has one
+ * implementation now, and the rows on top of it can be whatever each screen needs.
+ */
 @Composable
-fun SourcePicker(
-    onPick: (Source) -> Unit,
-    modifier: Modifier = Modifier,
-    heading: String = "Pick something to measure",
-    hint: String? = null,
+fun rememberSources(
     order: SourceOrder = SourceOrder.RANKED,
-    warnOnRandom: Boolean = false,
-    /** Below this many packets a second, the row is shown but marked as a poor subject. */
-    wantsRate: Double? = null,
     minSightings: Int = 3,
     limit: Int = 25,
     paused: Boolean = false,
-) {
+): List<Source> {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
     val settings = remember { SettingsStore.get(context) }
@@ -161,6 +167,34 @@ fun SourcePicker(
                 .take(limit)
         }
     }
+
+    return shown
+}
+
+/**
+ * The common case: a list you tap once to choose from.
+ *
+ * Built on [rememberSources], so a screen that needs different rows can take the same
+ * devices without taking the same presentation.
+ */
+@Composable
+fun SourcePicker(
+    onPick: (Source) -> Unit,
+    modifier: Modifier = Modifier,
+    heading: String = "Pick something to measure",
+    hint: String? = null,
+    order: SourceOrder = SourceOrder.RANKED,
+    warnOnRandom: Boolean = false,
+    /** Below this many packets a second, the row is shown but marked as a poor subject. */
+    wantsRate: Double? = null,
+    minSightings: Int = 3,
+    limit: Int = 25,
+    paused: Boolean = false,
+) {
+    val context = LocalContext.current
+    val book = remember { DeviceBook.get(context) }
+    val notes by book.notes.collectAsStateWithLifecycle()
+    val shown = rememberSources(order, minSightings, limit, paused)
 
     Text(heading, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     hint?.let {
