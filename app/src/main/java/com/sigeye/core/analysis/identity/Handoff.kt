@@ -163,6 +163,18 @@ object Handoffs {
     /** More than this many options is a menu nobody can read on a street corner. */
     const val MAX_OPTIONS = 3
 
+    /**
+     * More plausible successors than this and there is no question worth asking.
+     *
+     * This is the one that was wrong, and it produced the worst moment in the app: a
+     * dialog offering three devices at six percent each, while a hundred and fifty others
+     * fitted just as well. Nobody standing on a street can break that tie, the app
+     * certainly cannot, and putting it to somebody implies there is an answer in there.
+     *
+     * When this many match, the honest output is that the trail is cold.
+     */
+    const val TOO_MANY = 6
+
     // ------------------------------------------------------------------ how it left
 
     /** Readings needed in the closing window before the shape of the ending means anything. */
@@ -316,8 +328,22 @@ object Handoffs {
             )
         }
 
-        val total = scored.sumOf { it.second.points }.toDouble()
-        val options = scored.take(MAX_OPTIONS).map { (identity, score) ->
+        if (scored.size > TOO_MANY) {
+            return Handoff.Gone(
+                departure,
+                "${scored.size} devices appeared at about the right moment and match about " +
+                    "as well as each other. That is a crowd rather than a rotation - " +
+                    "nothing here can pick between them and neither could you.",
+            )
+        }
+
+        // Over what is actually being shown, not over everything considered. Shares that
+        // summed to eighteen percent across three options, because thirteen others were
+        // quietly in the denominator, is how this got put in front of somebody as three
+        // six percent guesses.
+        val shown = scored.take(MAX_OPTIONS)
+        val total = shown.sumOf { it.second.points }.toDouble()
+        val options = shown.map { (identity, score) ->
             Successor(
                 address = identity.address,
                 score = score,

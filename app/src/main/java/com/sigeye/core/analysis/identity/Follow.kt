@@ -328,6 +328,18 @@ private const val AUTO_MUTE_PACKETS = 12
 private const val TARGET_PRESENT_MS = 10_000L
 
 /**
+ * How long a follow runs before rotations are chased at all.
+ *
+ * Long enough for the pool to be real. In the first seconds there is nothing in it, which
+ * makes the survivor count trivially small and every device in the street an unexplained
+ * arrival - so the rotation logic opened at the one moment it had least to go on.
+ */
+private const val BRIDGE_AFTER_MS = 90_000L
+
+/** Silence past which a device counts as on its way out rather than merely between packets. */
+private const val QUIET_AFTER_MS = 12_000L
+
+/**
  * How many readings of each trail survive being saved.
  *
  * Four hundred is well over a minute at one a second, which is longer than any probe, so in
@@ -545,6 +557,18 @@ data class FollowState(
 
     /** How many rotations have been followed so far this session. */
     val stitches: Int = 0,
+
+    /**
+     * Devices that have gone quiet but are not out yet.
+     *
+     * The drop-off is the whole elimination and it is invisible: a device stops being heard
+     * and then nothing happens on screen for a minute. Somebody watching a still number
+     * assumes it is stuck.
+     */
+    val goingQuiet: Int = 0,
+
+    /** How long until the next one is retired, or null when nothing is on its way out. */
+    val nextDropInMs: Long? = null,
 
     /** The level above which devices are being muted outright, or null when they are not. */
     val autoMuting: Int? = null,
@@ -868,6 +892,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     // ------------------------------------------------------------------- listening
 
+    @Synchronized
     fun observe(
         address: String,
         rssi: Int,
@@ -936,11 +961,13 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * Idempotent: pausing an already-paused session does nothing, because the gap started
      * when it was first put down and has not ended.
      */
+    @Synchronized
     fun pause(atMs: Long) {
         if (blindSince == null) blindSince = atMs
     }
 
     /** Starts the clock again, and remembers how long it was stopped for. */
+    @Synchronized
     fun resume(atMs: Long) {
         val since = blindSince ?: return
         blindSince = null
@@ -966,6 +993,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     // ---------------------------------------------------------------------- stages
 
+    @Synchronized
     fun startBaseline(atMs: Long) {
         baselineStartedAtMs = atMs
         baselineEndedAtMs = null
@@ -979,6 +1007,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * when the baseline is taken before the person you are waiting for turns up, the follow
      * starts when they do.
      */
+    @Synchronized
     fun endBaseline(atMs: Long) {
         baselineEndedAtMs = atMs
         journal.add(Moment.BaselineDone(atMs, tracked.size))
@@ -990,11 +1019,19 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * Everything heard up to this instant is in; everything first heard after it is not.
      * That is the whole reason the number can only fall.
      */
+    @Synchronized
     fun startFollowing(atMs: Long) {
         if (baselineEndedAtMs == null) baselineEndedAtMs = atMs
         followStartedAtMs = atMs
         tracked.values.forEach { entry ->
-            entry.inPool = entry.firstSeenMs <= atMs
+            // Heard enough to be a device rather than a blip, and heard before now. Both
+            // halves are decided at this instant and never revisited, which is what makes
+            // the count able only to fall. Without the packet test the pool was fixed here
+            // but the visible count was not: devices already in the pool kept crossing the
+            // minimum packet threshold for the next minute and appearing one by one, so
+            // the number climbed after the baseline and looked like the opposite of what
+            // this experiment does.
+            entry.inPool = entry.firstSeenMs <= atMs && entry.packets >= tuning.minPackets
             entry.droppedAtMs = null
             entry.returnedAtMs = null
         }
@@ -1016,6 +1053,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * replacement was never in the pool. This reopens the pool to everything currently
      * audible without forgetting anything.
      */
+    @Synchronized
     fun rebaseline(atMs: Long) {
         probes.clear()
         blind.clear()
@@ -1045,6 +1083,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * Only one runs at a time - starting one ends whatever was running - because the two
      * are different walks and a device cannot be doing both.
      */
+    @Synchronized
     fun beginProbe(kind: Probe, atMs: Long) {
         endProbe(atMs)
         journal.add(Moment.ProbeRan(atMs, kind, probes.size))
@@ -1058,12 +1097,14 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * when they drew level and no sensor on the phone does. The last tap wins - somebody who
      * taps early and corrects themselves meant the second one.
      */
+    @Synchronized
     fun markClosest(atMs: Long) {
         val index = probes.indexOfLast { it.running && it.kind == Probe.WALK_BY }
         if (index < 0) return
         probes[index] = probes[index].copy(midAtMs = atMs)
     }
 
+    @Synchronized
     fun endProbe(atMs: Long) {
         val index = probes.indexOfLast { it.running }
         if (index < 0) return
@@ -1072,6 +1113,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     // ------------------------------------------------------------------ the target
 
+    @Synchronized
     fun lock(address: String) {
         val key = address.uppercase(Locale.US)
         targetKey = key
@@ -1080,16 +1122,19 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     }
 
     /** Records something the operator saw and the radio could not. */
+    @Synchronized
     fun mark(mark: Mark, atMs: Long, note: String? = null) {
         journal.add(Moment.Marked(atMs, mark, note?.takeIf { it.isNotBlank() }))
     }
 
+    @Synchronized
     fun unlock() {
         targetKey = null
         targetChanges.clear()
         phase = if (followStartedAtMs == null) FollowPhase.BASELINE else FollowPhase.FOLLOWING
     }
 
+    @Synchronized
     fun reacquire(newAddress: String, atMs: Long) {
         val old = targetKey ?: return
         reacquire(old, newAddress, atMs)
@@ -1110,6 +1155,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * @return true when the move was made. False means the new address is not one this
      *   session has heard, which is a caller bug rather than a refusal.
      */
+    @Synchronized
     fun reacquire(oldAddress: String, newAddress: String, atMs: Long): Boolean {
         val old = oldAddress.uppercase(Locale.US)
         val key = newAddress.uppercase(Locale.US)
@@ -1158,6 +1204,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     // ----------------------------------------------------------------- the finding
 
+    @Synchronized
     fun candidates(nowMs: Long): List<FollowCandidate> {
         // A running circle is scored live, because the screen shows a count during the lap.
         // A running walk-by is not, because half a walk has no far end to compare against.
@@ -1165,7 +1212,9 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         val walkRuns = probes.filter { it.kind == Probe.WALK_BY && it.complete }
 
         return tracked.entries
-            .filter { it.value.packets >= tuning.minPackets }
+            // Pool membership was settled when the follow started, so a device in it is
+            // never re-tested - only new arrivals have to earn their way onto the list.
+            .filter { it.value.inPool || it.value.packets >= tuning.minPackets }
             .filterNot { ignored.contains(it.key) }
             .map { (address, entry) ->
                 // From the shape accumulated over the whole follow rather than one packet:
@@ -1228,10 +1277,50 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * Drained rather than read: an answered question does not come back, and one the caller
      * has already been shown is not shown again until the situation changes.
      */
+    /**
+     * Pool devices that have stopped being heard but have not been retired yet.
+     *
+     * Counted so the screen can say the elimination is still happening. A number that sits
+     * still for a minute while the app is working reads as a number that has stopped.
+     */
+    private fun goingQuiet(nowMs: Long): Int {
+        if (followStartedAtMs == null) return 0
+        return tracked.count { (key, entry) ->
+            entry.inPool &&
+                entry.droppedAtMs == null &&
+                !ignored.contains(key) &&
+                silenceMs(entry.lastSeenMs, nowMs) > QUIET_AFTER_MS
+        }
+    }
+
+    /** How long until the next pool device is retired. */
+    private fun nextDropInMs(nowMs: Long): Long? {
+        if (followStartedAtMs == null) return null
+        return tracked.entries
+            .filter { (key, entry) ->
+                entry.inPool && entry.droppedAtMs == null && !ignored.contains(key)
+            }
+            .map { (_, entry) -> tuning.dropAfterMs - silenceMs(entry.lastSeenMs, nowMs) }
+            .filter { it in 0..tuning.dropAfterMs }
+            .minOrNull()
+    }
+
+    @Synchronized
     fun questions(): List<Handoff.Ask> = pending.values.toList()
 
     /** Rotations taken without asking, newest last, for a screen that wants to show them. */
+    @Synchronized
     fun stitches(): List<Stitch> = stitched.toList()
+
+    /**
+     * A frozen copy of the record.
+     *
+     * The live [journal] is written from the scanning service's thread. Handing it to a
+     * screen to iterate is how a follow crashes halfway through a walk, which is exactly
+     * what it did.
+     */
+    @Synchronized
+    fun journalCopy(): Journal = Journal().also { it.restore(journal.snapshot()) }
 
     /**
      * Recent levels per address, for working out which devices share a pocket.
@@ -1239,10 +1328,12 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * Handed out rather than scored here, because who looks like the target is a reading of
      * a follow rather than part of one - and the session has no business deciding it.
      */
+    @Synchronized
     fun trails(): Map<String, List<Pair<Long, Int>>> =
         tracked.mapValues { (_, entry) -> entry.recent.toList() }
 
     /** Takes the pending mutes away, so the caller can apply them to the shared list. */
+    @Synchronized
     fun drainNewMutes(): List<String> {
         if (newMutes.isEmpty()) return emptyList()
         val taken = newMutes.toList()
@@ -1275,6 +1366,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * @param toAddress null to say none of the options were it, which drops the device
      *   rather than leaving the question open forever.
      */
+    @Synchronized
     fun answer(oldAddress: String, toAddress: String?, nowMs: Long): Boolean {
         val key = oldAddress.uppercase(Locale.US)
         pending.remove(key) ?: return false
@@ -1304,6 +1396,12 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      */
     private fun bridge(nowMs: Long) {
         val started = followStartedAtMs ?: return
+
+        // Not in the opening seconds. A follow that has just started has almost nothing
+        // in its pool yet, so the count is trivially under the threshold and every device
+        // in the street is an unexplained arrival. That is how a rotation question ended
+        // up being asked about a crowd.
+        if (nowMs - started < BRIDGE_AFTER_MS) return
 
         val living = tracked.entries.count { (key, entry) ->
             entry.inPool && entry.droppedAtMs == null && !ignored.contains(key)
@@ -1374,6 +1472,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             }
     }
 
+    @Synchronized
     fun state(nowMs: Long): FollowState {
         sweep(nowMs)
         autoMute(nowMs)
@@ -1412,6 +1511,8 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             tuning = tuning,
             blindMs = followStartedAtMs?.let { blindMsBetween(it, nowMs) } ?: 0L,
             questions = pending.values.toList(),
+            goingQuiet = goingQuiet(nowMs),
+            nextDropInMs = nextDropInMs(nowMs),
             autoMuting = tuning.autoMuteAboveDbm,
             bridging = followStartedAtMs != null && candidates.count { it.stillIn } <=
                 tuning.bridgeAtOrBelow,
@@ -1509,6 +1610,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * with forty devices in range is thousands of pairs, so each keeps its most recent
      * [TRAIL_CAP] - which is more than any of them needs at one reading a second.
      */
+    @Synchronized
     fun snapshot(): JSONObject {
         val devices = JSONArray()
         tracked.forEach { (address, entry) ->
@@ -1566,6 +1668,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     }
 
     /** Puts a snapshot back. Anything unreadable is skipped rather than failing the load. */
+    @Synchronized
     fun restore(json: JSONObject) {
         tracked.clear()
         probes.clear()
@@ -1704,6 +1807,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         }
     }
 
+    @Synchronized
     fun csv(): String = buildString {
         appendLine("# SigEye follow")
         appendLine("baseline_ended_ms,${baselineEndedAtMs ?: ""}")

@@ -201,18 +201,33 @@ class HandoffTest {
 
     @Test
     fun `only three options are offered, best first`() {
-        // A menu of nine on a street corner is not a decision, it is a wall.
+        // A menu on a street corner is not a decision, it is a wall.
         val previous = identity("AA", t0, t0 + 60_000)
-        val many = (1..9).map {
+        val several = (1..Handoffs.TOO_MANY).map {
             identity("C$it", t0 + 60_000 + it * 100L, t0 + 75_000, rssi = -60.0 - it)
         }
 
-        val ask = Handoffs.decide(previous, departed(t0 + 60_000), many, t0 + 80_000)
+        val ask = Handoffs.decide(previous, departed(t0 + 60_000), several, t0 + 80_000)
             as Handoff.Ask
 
-        assertEquals(3, ask.options.size)
+        assertEquals(Handoffs.MAX_OPTIONS, ask.options.size)
         assertTrue(ask.options[0].score.points >= ask.options[1].score.points)
         assertTrue(ask.options[1].score.points >= ask.options[2].score.points)
+    }
+
+    @Test
+    fun `past a certain number of equally good matches there is no question to ask`() {
+        // Trimming a crowd to its first three and calling that a choice was the worst
+        // moment in the app: three options at six percent each, with the rest of the
+        // street fitting just as well and not shown at all.
+        val previous = identity("AA", t0, t0 + 60_000)
+        val crowd = (1..Handoffs.TOO_MANY + 1).map {
+            identity("C$it", t0 + 60_000 + it * 100L, t0 + 75_000, rssi = -60.0 - it)
+        }
+
+        val handoff = Handoffs.decide(previous, departed(t0 + 60_000), crowd, t0 + 80_000)
+
+        assertTrue("$handoff", handoff is Handoff.Gone)
     }
 
     @Test

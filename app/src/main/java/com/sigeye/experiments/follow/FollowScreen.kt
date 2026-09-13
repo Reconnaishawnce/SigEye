@@ -98,6 +98,15 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "follow"
+
+/**
+ * How many devices the radar will draw.
+ *
+ * The loudest, because the radar is for watching something approach rather than for
+ * counting. Above this it stops being readable and starts being expensive: every blip is a
+ * text measure and a trail redraw on every frame.
+ */
+private const val RADAR_BLIPS = 24
 private const val TICK_MS = 1_000L
 
 /** A minute of bars, one a second. */
@@ -267,6 +276,14 @@ private fun Live(
     /** Rotations followed so far, mirrored out of the session for the screen to show. */
     var stitchLog by remember { mutableStateOf<List<Stitch>>(emptyList()) }
 
+    /**
+     * A frozen copy of the record, taken on the tick.
+     *
+     * Never the live journal. It is written from the scanning service's thread, and a
+     * screen iterating it while that happens is how a follow died halfway through a walk.
+     */
+    var journal by remember { mutableStateOf(Journal()) }
+
     /** Which rotation question is on screen, and which have been put off. */
     var asking by remember { mutableStateOf<String?>(null) }
     val deferred = remember { mutableStateListOf<String>() }
@@ -428,8 +445,17 @@ private fun Live(
                 candidates = next.candidates,
                 tuning = next.tuning,
                 nowMs = now,
-                trails = session().trails(),
+                // Only when there are few enough for the pocket test to run at all.
+                // Copying two hundred readings for each of three hundred devices twice a
+                // second, to feed a function that returns early above twenty, is most of a
+                // megabyte of garbage a second for nothing.
+                trails = if (next.stillIn.size in 2..Scoring.COMPANION_LIMIT) {
+                    session().trails()
+                } else {
+                    emptyMap()
+                },
             ).associateBy { it.address }
+            journal = session().journalCopy()
 
             // Rotations the session followed on its own. The screen's job is to say so and
             // to keep anything holding an address in step - it is not the screen's decision
@@ -667,7 +693,7 @@ private fun Live(
             state = state,
             scores = scores,
             kindFilter = kindFilter.toList(),
-            journal = session().journal,
+            journal = journal,
             marks = marked,
             onMark = { mark ->
                 session().mark(mark, System.currentTimeMillis())
@@ -682,7 +708,7 @@ private fun Live(
                     content = CaseFile.write(
                         name = followName,
                         state = state,
-                        journal = session().journal,
+                        journal = journal,
                         scores = scores.values.toList(),
                         stitches = stitchLog,
                     ),
@@ -1257,6 +1283,28 @@ private fun Following(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            // The elimination is a minute of silence per device, and a minute is a long
+            // time to watch a number not move. Saying what is on its way out turns a
+            // stalled-looking screen into one that is visibly working.
+            Spacer(Modifier.height(8.dp))
+            if (state.goingQuiet > 0) {
+                Text(
+                    "${state.goingQuiet} going quiet" +
+                        (state.nextDropInMs?.let { " · next drops in ${it / 1000}s" } ?: ""),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            } else {
+                Text(
+                    "Every one of these has been heard within the last " +
+                        "${state.tuning.dropAfterMs / 1000} seconds. A device has to go " +
+                        "that long without a packet before it is out.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (state.bridging) {
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -1302,8 +1350,12 @@ private fun Following(
     // it sits in is how close it is right now rather than how close it has been on average.
     // Somebody drifting to the back of a carriage moves outward while you watch.
     Spacer(Modifier.height(14.dp))
+    // The loudest only. Three hundred blips is not a radar, it is a grey disc, and it
+    // costs a text measure and a trail redraw each every frame - which on a phone already
+    // holding a scan is where the stutter comes from.
     RadarPanel(
-        targets = state.stillIn.map { candidate ->
+        targets = state.stillIn.sortedByDescending { it.recentRssi }.take(RADAR_BLIPS)
+            .map { candidate ->
             RadarTarget(
                 address = candidate.address,
                 label = candidate.label ?: candidate.vendor ?: candidate.address.takeLast(8),
