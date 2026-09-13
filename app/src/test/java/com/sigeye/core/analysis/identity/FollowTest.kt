@@ -80,7 +80,7 @@ class FollowTest {
         tick(start + 300_000L, "5A:01")
         tick(start + 400_000L, "5A:01")
 
-        assertEquals(listOf(5, 5, 3, 2, 1), counts)
+        assertEquals(listOf(5, 3, 2, 1, 1), counts)
         assertEquals(
             "it never climbed",
             counts,
@@ -113,13 +113,15 @@ class FollowTest {
         session.hear("5A:01", start + 60_000L)
         session.hear("5A:02", start + 60_000L)
 
-        // 5A:02 goes quiet, and is dropped.
-        session.hear("5A:01", start + 150_000L)
-        assertEquals(listOf("5A:01"), session.state(start + 150_000L).stillIn.map { it.address })
+        // 5A:01 keeps answering. 5A:02 goes quiet and is dropped.
+        session.hear("5A:01", start + 110_000L)
+        session.hear("5A:01", start + 170_000L)
+        assertEquals(listOf("5A:01"), session.state(start + 171_000L).stillIn.map { it.address })
 
         // Then it turns up again. Noted, not reinstated.
-        session.hear("5A:02", start + 300_000L)
-        val state = session.state(start + 300_000L)
+        session.hear("5A:01", start + 230_000L)
+        session.hear("5A:02", start + 230_000L)
+        val state = session.state(start + 231_000L)
 
         assertEquals(listOf("5A:01"), state.stillIn.map { it.address })
         assertEquals(listOf("5A:02"), state.returned.map { it.address })
@@ -255,10 +257,12 @@ class FollowTest {
     fun `re-baselining reopens the pool without forgetting the room`() {
         val session = following("5A:01", "5A:02")
         session.hear("5A:01", start + 60_000L)
-        assertEquals(1, session.state(start + 150_000L).stillIn.size)
+        // 5A:02 has been silent since the baseline and is out; 5A:01 was heard forty
+        // seconds ago and is not.
+        assertEquals(1, session.state(start + 100_000L).stillIn.size)
 
-        session.rebaseline(start + 160_000L)
-        val after = session.state(start + 160_000L)
+        session.rebaseline(start + 110_000L)
+        val after = session.state(start + 110_000L)
 
         assertEquals("nobody forgotten", 2, after.candidates.size)
         assertEquals("and nobody in the pool until it starts again", 0, after.poolSize)
@@ -294,7 +298,9 @@ class FollowTest {
     fun `a couple of dropped packets is not being lost`() {
         val session = following("5A:01")
         session.lock("5A:01")
+        session.hear("5A:01", start + 40_000L)
 
+        // Ten seconds of silence against a forty-five second threshold.
         assertEquals(FollowPhase.HOLDING, session.state(start + 50_000L).phase)
     }
 
