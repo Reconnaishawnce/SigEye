@@ -12,6 +12,18 @@ data class ScanUiState(
     val baseline: Double = 0.0,
     val phase: Phase = Phase.ENROLL,
     val secondsUntilArmed: Int = 0,
+    /**
+     * Wall-clock moment the alerts are due to arm.
+     *
+     * Arming itself is counted in closed bins, and [secondsUntilArmed] is that count in
+     * seconds - which means it only moves when a bin closes, once every several seconds.
+     * That is the right number for the engine and a terrible one to watch: the countdown
+     * on screen sat still and then jumped. This is the same deadline as a timestamp, so a
+     * screen can tick it smoothly, and the two only ever disagree by less than one bin.
+     */
+    val armsAtMs: Long = 0,
+    /** When this run began, for the same reason. */
+    val startedAtMs: Long = 0,
     val armingProgress: Float = 0f,
     val totalAdvertisements: Long = 0,
     /** Live delivery rate, and the healthy rate learned after the last scan restart. */

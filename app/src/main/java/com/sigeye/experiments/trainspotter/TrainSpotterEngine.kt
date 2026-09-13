@@ -50,6 +50,8 @@ class TrainSpotterEngine(
                 baseline = 0.0,
                 phase = Phase.ENROLL,
                 secondsUntilArmed = config.armedAfterBins * config.binSeconds,
+                armsAtMs = nowMs + config.armedAfterBins * config.binMillis,
+                startedAtMs = nowMs,
                 armingProgress = 0f,
                 advertsPerSecond = 0.0,
                 referenceRate = 0.0,

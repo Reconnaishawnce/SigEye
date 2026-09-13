@@ -3,6 +3,7 @@ package com.sigeye.experiments.trainspotter
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,9 +23,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,27 +36,30 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.ScanService
 import com.sigeye.core.analysis.presence.TrainLog
+import com.sigeye.ui.CountUp
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
+import com.sigeye.ui.LiveBars
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
-import com.sigeye.ui.CountUp
+import com.sigeye.ui.Sparkline
 import com.sigeye.ui.TileColumn
+import com.sigeye.ui.barsSpoken
 import com.sigeye.ui.tile
 import com.sigeye.ui.tiles
-import com.sigeye.ui.CountdownRing
-import com.sigeye.ui.Sparkline
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 fun TrainSpotterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -343,6 +350,37 @@ private fun Monitor() {
 @Composable
 private fun ArmingCard(state: ScanUiState) {
     val enrolling = state.phase == Phase.ENROLL
+
+    // Ticked here rather than taken from the engine. Arming is counted in closed bins, so
+    // the engine's own countdown moves once every several seconds and sits still in
+    // between - which on screen reads as a stopped clock. This runs off the wall clock
+    // against the same deadline, and the two cannot disagree by more than one bin.
+    //
+    // The rate is sampled on the same loop rather than keyed on the rate changing. Keying
+    // on the value means a steady rate stops producing bars, so the one time the chart
+    // would go still is the one time the radio is behaving.
+    val latest by rememberUpdatedState(state)
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    val rates = remember(state.startedAtMs) { mutableStateListOf<Float>() }
+
+    LaunchedEffect(state.startedAtMs) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            rates.add(latest.advertsPerSecond.toFloat())
+            while (rates.size > BASELINE_BARS) rates.removeAt(0)
+            delay(SAMPLE_MS)
+        }
+    }
+
+    val totalMs = (state.armsAtMs - state.startedAtMs).coerceAtLeast(1L)
+    val elapsedMs = (nowMs - state.startedAtMs).coerceIn(0L, totalMs)
+    // Never shows zero while it is still waiting. The bins decide when it is armed, not
+    // this clock, and a countdown that reaches zero and then carries on is worse than one
+    // that holds at one second.
+    val remainingSeconds = (((state.armsAtMs - nowMs) + 999L) / 1000L)
+        .coerceAtLeast(1L)
+        .toInt()
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -351,41 +389,77 @@ private fun ArmingCard(state: ScanUiState) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
-                text = if (enrolling) {
-                    "Noting what is already here"
-                } else {
-                    "Learning the normal rate"
-                },
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                text = "ESTABLISHING A BASELINE",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = clock(remainingSeconds) + " left",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(10.dp))
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                CountUp(value = state.activeUnique, fontSize = 72.sp)
+                Text(
+                    text = "devices logged so far",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+            LiveBars(
+                values = rates.toList(),
+                spoken = barsSpoken(rates.toList(), "advertisements a second"),
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = if (enrolling) {
-                    "Every device in range looks new at the start, so nothing is counted " +
-                        "yet. This is not a reading."
-                } else {
-                    "Counting for real now, measuring what a quiet minute looks like " +
-                        "before anything can count as a burst."
-                },
-                style = MaterialTheme.typography.bodySmall,
+                text = format1(state.advertsPerSecond) + " advertisements a second, " +
+                    "right now",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(12.dp))
-            // A draining ring rather than a progress bar: this is a minute of nothing
-            // happening, and the one thing moving on the screen should be worth looking at
-            // from across a room.
-            val totalSeconds = state.config.armedAfterBins * state.config.binSeconds
-            CountdownRing(
-                elapsedMs = (totalSeconds - state.secondsUntilArmed).coerceAtLeast(0) * 1000L,
-                totalMs = totalSeconds * 1000L,
-                label = "until alerts arm",
-                caption = state.activeUnique.toString() + " devices logged so far",
-                modifier = Modifier.fillMaxWidth(),
+
+            Spacer(Modifier.height(14.dp))
+            // Smooth, because it is fed a wall clock rather than a bin count.
+            val progress by animateFloatAsState(
+                targetValue = (elapsedMs.toFloat() / totalMs).coerceIn(0f, 1f),
+                label = "baseline",
+            )
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+            )
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = if (enrolling) {
+                    "Writing down everything already in range. Every device looks new at " +
+                        "the start, so none of it counts yet - otherwise the first bin " +
+                        "would be the biggest burst of the day."
+                } else {
+                    "Now measuring what a quiet minute looks like here. A burst can only " +
+                        "mean something once there is a normal to compare it against, and " +
+                        "normal on a station platform is nothing like normal in a kitchen."
+                },
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }
 }
+
+/** Enough bars to read as a shape, few enough that each one is still worth looking at. */
+private const val BASELINE_BARS = 30
+
+/** Matches how often the service publishes, so every bar is a fresh reading. */
+private const val SAMPLE_MS = 500L
 
 /** Seconds as m:ss, or plain seconds under a minute. */
 private fun clock(seconds: Int): String {
