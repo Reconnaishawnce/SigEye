@@ -118,6 +118,17 @@ data class FollowTuning(
      */
     val bridgeAtOrBelow: Int = 15,
 
+    /**
+     * Mute anything heard above this level outright, or null to leave it alone.
+     *
+     * Off by default and it should stay off unless somebody turns it on, because it is a
+     * rule about geometry rather than about ownership: it mutes whatever is closest to the
+     * phone, and if you are walking beside the person you are following, that can be them.
+     * What makes it worth having anyway is that it works in the first ten seconds, where
+     * the patient test needs three minutes of walking before it can say anything.
+     */
+    val autoMuteAboveDbm: Int? = null,
+
     /** How long to let a follow flounder before suggesting a fresh baseline. */
     val rebaselineAfterMs: Long = 5 * 60_000L,
 
@@ -297,6 +308,14 @@ private const val GAPS_CAP = 120
  * the scanner rather than the device.
  */
 private const val GAP_CAP_MS = 2_000L
+
+/**
+ * Packets a device must have sent before the close-range mute will fire on it.
+ *
+ * One loud reading is somebody walking past with a phone in their hand. Muting on that
+ * removes a stranger for the rest of the follow, silently.
+ */
+private const val AUTO_MUTE_PACKETS = 12
 
 /**
  * How many readings of each trail survive being saved.
@@ -509,6 +528,9 @@ data class FollowState(
 
     /** How many rotations have been followed so far this session. */
     val stitches: Int = 0,
+
+    /** The level above which devices are being muted outright, or null when they are not. */
+    val autoMuting: Int? = null,
 ) {
     /** How many were in range when the follow started. The number that falls from here. */
     val poolSize: Int get() = candidates.count { it.inPool }
@@ -781,16 +803,18 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     private val stitched = mutableListOf<Stitch>()
 
     /**
-     * Addresses that inherited a mute by being the far side of a rotation.
+     * Addresses this session has decided should be muted, waiting to be applied.
      *
-     * Muting your own earbuds is worthless if it lasts fifteen minutes. The mute has to
-     * travel with the device, and it can only travel along a link this session actually
-     * made - never to anything that merely looks similar, which would mute a stranger's
-     * identical earbuds and quietly delete them from the evidence.
+     * Two things end up here. One is a mute inheriting across a rotation: muting your own
+     * earbuds is worthless if it lasts fifteen minutes, so the mute has to travel with the
+     * device - and it travels only along a link this session actually made, never to
+     * anything that merely looks similar, which would mute a stranger's identical earbuds
+     * and quietly delete them from the evidence. The other is [FollowTuning.autoMuteAboveDbm]
+     * firing on something in the innermost ring.
      *
      * Drained by the caller, because the shared ignore list is Android and this is not.
      */
-    private val inheritedMutes = mutableListOf<String>()
+    private val newMutes = mutableListOf<String>()
 
     private var baselineStartedAtMs: Long? = null
     private var baselineEndedAtMs: Long? = null
@@ -1074,7 +1098,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         entry.returnedAtMs = previous.returnedAtMs
 
         // A mute follows the device, not the address it happened to be wearing.
-        if (ignored.contains(old)) inheritedMutes.add(key)
+        if (ignored.contains(old)) newMutes.add(key)
 
         // The old address is dropped rather than left behind. Leaving it would put the same
         // device on the list twice, once as a ghost that stopped answering, and a short list
@@ -1160,12 +1184,31 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     /** Rotations taken without asking, newest last, for a screen that wants to show them. */
     fun stitches(): List<Stitch> = stitched.toList()
 
-    /** Takes the inherited mutes away, so the caller can apply them to the shared list. */
-    fun drainInheritedMutes(): List<String> {
-        if (inheritedMutes.isEmpty()) return emptyList()
-        val taken = inheritedMutes.toList()
-        inheritedMutes.clear()
+    /** Takes the pending mutes away, so the caller can apply them to the shared list. */
+    fun drainNewMutes(): List<String> {
+        if (newMutes.isEmpty()) return emptyList()
+        val taken = newMutes.toList()
+        newMutes.clear()
         return taken
+    }
+
+    /**
+     * Mutes whatever is sitting in the innermost ring, when that has been asked for.
+     *
+     * Deliberately requires a few packets rather than firing on one loud reading. A single
+     * close packet happens when somebody walks past you with a phone in their hand, and
+     * muting on that would remove a stranger for the rest of the follow with no way to
+     * notice it had happened.
+     */
+    private fun autoMute(nowMs: Long) {
+        val threshold = tuning.autoMuteAboveDbm ?: return
+        if (followStartedAtMs == null) return
+        tracked.forEach { (key, entry) ->
+            if (ignored.contains(key) || newMutes.contains(key)) return@forEach
+            if (entry.packets < AUTO_MUTE_PACKETS) return@forEach
+            if (nowMs - entry.lastSeenMs > tuning.dropAfterMs) return@forEach
+            if (entry.recentRssi >= threshold) newMutes.add(key)
+        }
     }
 
     /**
@@ -1270,6 +1313,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
     fun state(nowMs: Long): FollowState {
         sweep(nowMs)
+        autoMute(nowMs)
         bridge(nowMs)
 
         val candidates = candidates(nowMs)
@@ -1298,6 +1342,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             tuning = tuning,
             blindMs = followStartedAtMs?.let { blindMsBetween(it, nowMs) } ?: 0L,
             questions = pending.values.toList(),
+            autoMuting = tuning.autoMuteAboveDbm,
             bridging = followStartedAtMs != null && candidates.count { it.stillIn } <=
                 tuning.bridgeAtOrBelow,
             stitches = stitched.size,

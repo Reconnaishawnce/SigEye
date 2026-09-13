@@ -34,6 +34,10 @@ class FollowSettings(context: Context) {
             carriedDbm = prefs.getInt(KEY_CARRIED, d.carriedDbm),
             carriedSpreadDb = prefs.getFloat(KEY_SPREAD, d.carriedSpreadDb.toFloat()).toDouble(),
             carriedAfterMs = prefs.getLong(KEY_CARRIED_AFTER, d.carriedAfterMs),
+            bridgeAtOrBelow = prefs.getInt(KEY_BRIDGE, d.bridgeAtOrBelow),
+            // Stored as a level with zero standing in for off, because a nullable int has
+            // no natural absent value in these preferences and zero is not a valid RSSI.
+            autoMuteAboveDbm = prefs.getInt(KEY_AUTO_MUTE, 0).takeIf { it != 0 },
         )
     }
 
@@ -50,6 +54,8 @@ class FollowSettings(context: Context) {
             .putInt(KEY_CARRIED, tuning.carriedDbm)
             .putFloat(KEY_SPREAD, tuning.carriedSpreadDb.toFloat())
             .putLong(KEY_CARRIED_AFTER, tuning.carriedAfterMs)
+            .putInt(KEY_BRIDGE, tuning.bridgeAtOrBelow)
+            .putInt(KEY_AUTO_MUTE, tuning.autoMuteAboveDbm ?: 0)
             .apply()
     }
 
@@ -67,5 +73,7 @@ class FollowSettings(context: Context) {
         const val KEY_CARRIED = "carried_dbm"
         const val KEY_SPREAD = "carried_spread_db"
         const val KEY_CARRIED_AFTER = "carried_after_ms"
+        const val KEY_BRIDGE = "bridge_at_or_below"
+        const val KEY_AUTO_MUTE = "auto_mute_above_dbm"
     }
 }

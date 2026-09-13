@@ -82,7 +82,7 @@ object FollowRunner {
     fun tick(nowMs: Long, ignoreList: IgnoreList? = null) {
         _state.value = session.state(nowMs)
         if (ignoreList != null) {
-            val inherited = session.drainInheritedMutes()
+            val inherited = session.drainNewMutes()
             if (inherited.isNotEmpty()) {
                 inherited.forEach(ignoreList::add)
                 session.ignored = ignoreList.addresses.value

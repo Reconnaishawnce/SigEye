@@ -54,13 +54,12 @@ import com.sigeye.core.TargetDevice
 import com.sigeye.core.TargetStore
 import com.sigeye.core.analysis.identity.CandidateWalkBy
 import com.sigeye.core.analysis.identity.FollowCandidate
-import com.sigeye.core.analysis.identity.FollowDecision
 import com.sigeye.core.analysis.identity.FollowPhase
 import com.sigeye.core.analysis.identity.FollowSession
 import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.FollowTuning
-import com.sigeye.core.analysis.identity.Following
-import com.sigeye.core.analysis.identity.LiveAddress
+import com.sigeye.core.analysis.identity.Handoff
+import com.sigeye.core.analysis.identity.Stitch
 import com.sigeye.core.analysis.identity.Probe
 import com.sigeye.core.analysis.identity.ProbeRun
 import com.sigeye.core.ble.BleScanHub
@@ -108,6 +107,24 @@ private const val SAVE_EVERY_S = 15L
  * walk. The circle and the walk-by are the only interruptions, and they are things you
  * chose to do.
  */
+/**
+ * How the person has answered the one question worth asking in the first minute.
+ *
+ * Your own earbuds survive every test in this app by construction: they go where you go, so
+ * they orbit when you orbit and pass when you pass. Left in, they sit at the top of the
+ * short list forever and the follow looks like it worked.
+ *
+ * Three ways out, because they trade against each other and only the operator knows which
+ * trade they want. Nothing here can work out which devices are yours on its own.
+ */
+private enum class OwnKit {
+    /** Not yet offered. */
+    UNASKED,
+
+    /** Offered and settled, one way or another. */
+    DECIDED,
+}
+
 private enum class Step {
     /** Past follows, targets, and the way into a new one. */
     LIBRARY,
@@ -196,7 +213,6 @@ private fun Live(
     val settings = remember { FollowSettings(context) }
     val ignoreList = remember { IgnoreList.get(context) }
     val feedback = remember { Feedback(context) }
-    val live = remember { LinkedHashMap<String, LiveAddress>() }
 
     var tuning by remember { mutableStateOf(settings.load()) }
 
@@ -228,6 +244,19 @@ private fun Live(
     var resumable by remember { mutableStateOf(library.loadInProgress() != null) }
     var wasLost by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    /** How many rotations have already been announced, so each is announced once. */
+    var seenStitches by remember { mutableStateOf(0) }
+
+    /** Rotations followed so far, mirrored out of the session for the screen to show. */
+    var stitchLog by remember { mutableStateOf<List<Stitch>>(emptyList()) }
+
+    /** Which rotation question is on screen, and which have been put off. */
+    var asking by remember { mutableStateOf<String?>(null) }
+    val deferred = remember { mutableStateListOf<String>() }
+
+    /** Where the person is with the question of which devices are their own. */
+    var ownKit by remember { mutableStateOf(OwnKit.UNASKED) }
     val tests = remember { mutableStateListOf<String>() }
 
     // Two different quantities, both measured here rather than read from somewhere that
@@ -264,7 +293,6 @@ private fun Live(
         tuning = restored.tuning
         FollowRunner.adopt(restored)
         ScanService.start(context, ScanService.Mode.FOLLOW)
-        live.clear()
         bars.clear()
         lastWatched = 0
         startedAtMs = restored.state(System.currentTimeMillis()).followStartedAtMs ?: 0L
@@ -285,7 +313,6 @@ private fun Live(
         resumable = false
         tuning = settings.load()
         FollowRunner.begin(tuning)
-        live.clear()
         log = emptyList()
         tests.clear()
         bars.clear()
@@ -329,15 +356,10 @@ private fun Live(
     // session does not carry either.
     LaunchedEffect(Unit) {
         BleScanHub.adverts.collect { advert ->
-            val key = advert.address.uppercase(Locale.US)
-            val entry = live.getOrPut(key) {
-                LiveAddress(advert.shape(), advert.isRandomAddress, advert.atMs, advert.atMs)
-            }
-            if (advert.shape().distinctiveness > entry.shape.distinctiveness) {
-                entry.shape = advert.shape()
-            }
-            entry.observe(advert.rssi, advert.atMs)
-            targetStore.heard(key, advert.atMs)
+            // The session does its own fingerprinting now, from the same packets. This
+            // kept a second parallel copy of every address in range purely to feed a
+            // rotation watcher the session has taken over.
+            targetStore.heard(advert.address.uppercase(Locale.US), advert.atMs)
         }
     }
 
@@ -353,23 +375,38 @@ private fun Live(
             val now = System.currentTimeMillis()
             nowMs = now
 
-            watchForRotations(
-                state = latest,
-                session = session(),
-                live = live,
-                nowMs = now,
-                onMoved = { from, to, message ->
-                    log = listOf(message) + log
-                    feedback.alert(AlertStyle.BOTH, urgent = true)
-                    targetStore.reacquire(from, to, now)
-                },
-            )
-
             // Ticked here as well as on the service, so the screen is live even in the
             // moment before the service has attached. Recomputing the state twice is
             // harmless: it is derived from the session rather than accumulated.
             FollowRunner.tick(now, ignoreList)
             val next = FollowRunner.state.value
+
+            // Rotations the session followed on its own. The screen's job is to say so and
+            // to keep anything holding an address in step - it is not the screen's decision
+            // any more, which is the point of having moved it into the session.
+            val stitches = session().stitches()
+            if (stitches.size > seenStitches) {
+                stitches.drop(seenStitches).forEach { stitch ->
+                    targetStore.reacquire(stitch.fromAddress, stitch.toAddress, now)
+                    log = listOf(
+                        "${stitch.fromAddress} became ${stitch.toAddress}" +
+                            if (stitch.byHand) ", you picked it" else ", followed automatically",
+                    ) + log
+                }
+                seenStitches = stitches.size
+                stitchLog = stitches
+                feedback.alert(AlertStyle.BOTH, urgent = false)
+            }
+
+            // One question at a time. A second dialog stacking on the first during a walk
+            // is how somebody ends up tapping through both without reading either.
+            if (asking == null) {
+                next.questions.firstOrNull { it.departure.address !in deferred }
+                    ?.let { question ->
+                        asking = question.departure.address
+                        feedback.alert(AlertStyle.BOTH, urgent = true)
+                    }
+            }
 
             // One bar a second, of whatever the screen is about at the time.
             bars.add(
@@ -471,6 +508,33 @@ private fun Live(
         )
     }
 
+    // The rotation question. Shown over whatever step the follow is on, because the
+    // answer is time-limited: the successor has to still be audible when it is given.
+    asking?.let { address ->
+        state.questions.firstOrNull { it.departure.address == address }?.let { question ->
+            val name = state.candidates.firstOrNull { it.address == address }
+                ?.let { it.label ?: it.vendor }
+                ?: address
+            RotationDialog(
+                ask = question,
+                label = name,
+                onPick = { to ->
+                    session().answer(address, to, System.currentTimeMillis())
+                    asking = null
+                },
+                onNone = {
+                    session().answer(address, null, System.currentTimeMillis())
+                    log = listOf("$name was none of the options, dropped") + log
+                    asking = null
+                },
+                onLater = {
+                    deferred.add(address)
+                    asking = null
+                },
+            )
+        } ?: run { asking = null }
+    }
+
     if (showSettings) {
         FollowSettingsDialog(
             initial = tuning,
@@ -551,6 +615,16 @@ private fun Live(
 
         Step.FOLLOWING -> Following(
             state = state,
+            ownKit = ownKit,
+            onOwnKit = { ownKit = it },
+            onAutoMute = { level ->
+                val updated = tuning.copy(autoMuteAboveDbm = level)
+                settings.save(updated)
+                tuning = updated
+                session().tuning = updated
+                ownKit = OwnKit.DECIDED
+            },
+            stitchLog = stitchLog,
             bars = bars.toList(),
             targets = targets,
             nowMs = nowMs,
@@ -696,49 +770,6 @@ private fun Live(
                 "quarter of a mile did not come with you, and letting it back in when it " +
                 "reappears would undo the only claim this makes.",
         )
-    }
-}
-
-/**
- * Keeps the short list attached to its devices across address changes.
- *
- * Watched for every candidate on the short list rather than only for a locked target. Five
- * devices being watched is five chances to keep the trail; watching only the one already
- * committed to means the rotation that loses you the target is the one nobody was looking
- * at.
- *
- * The decision stays [Following]'s, refusals and all.
- */
-private fun watchForRotations(
-    state: FollowState,
-    session: FollowSession,
-    live: Map<String, LiveAddress>,
-    nowMs: Long,
-    onMoved: (from: String, to: String, message: String) -> Unit,
-) {
-    val watching = (state.shortlist + listOfNotNull(state.target)).distinctBy { it.address }
-    if (watching.isEmpty()) return
-
-    val known = state.candidates.map { it.address }.toSet()
-    watching.forEach { candidate ->
-        if (nowMs - candidate.lastSeenMs <= Following.SILENCE_MS) return@forEach
-        val previous = live[candidate.address]?.identity(candidate.address) ?: return@forEach
-        val successors = live
-            .filterKeys { it != candidate.address && it !in known }
-            .filterValues { nowMs - it.lastSeenMs <= 15_000 && it.packets >= 8 }
-            .map { (address, entry) -> entry.identity(address) }
-
-        val decision = Following.decide(previous, successors, nowMs)
-        if (decision is FollowDecision.Reacquired) {
-            if (session.reacquire(candidate.address, decision.address, nowMs)) {
-                onMoved(
-                    candidate.address,
-                    decision.address,
-                    "${candidate.label ?: candidate.address} rotated to ${decision.address}, " +
-                        "${decision.score.points} points of evidence",
-                )
-            }
-        }
     }
 }
 
@@ -1095,6 +1126,10 @@ private fun Following(
     bars: List<Float>,
     targets: List<TargetDevice>,
     nowMs: Long,
+    ownKit: OwnKit,
+    onOwnKit: (OwnKit) -> Unit,
+    onAutoMute: (Int) -> Unit,
+    stitchLog: List<Stitch>,
     rebaselinePrompt: Boolean,
     onDismissRebaseline: () -> Unit,
     onRebaseline: () -> Unit,
@@ -1136,12 +1171,27 @@ private fun Following(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (state.narrowed) {
+            if (state.bridging) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Short list. Every one of these is being watched for an address change.",
+                    buildString {
+                        append("Following every one of these through its address changes")
+                        if (state.stitches > 0) {
+                            append(" · ${state.stitches} followed so far")
+                        }
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
+                )
+            } else {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Rotation following starts at ${state.tuning.bridgeAtOrBelow} left. " +
+                        "Below that a wrong link would still be visible; above it, " +
+                        "watching a whole crowd for rotations would tangle strangers " +
+                        "together.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -1183,6 +1233,49 @@ private fun Following(
             "radar for good, so every blip here is live - and the ring is where it is now, " +
             "not where it has been on average.",
     )
+
+    if (ownKit == OwnKit.UNASKED && state.autoMuting == null) {
+        Spacer(Modifier.height(12.dp))
+        OwnKitChooser(
+            tuning = state.tuning,
+            onSkip = { onOwnKit(OwnKit.DECIDED) },
+            onAutoMute = onAutoMute,
+        )
+    }
+
+    state.autoMuting?.let { level ->
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Muting anything heard above $level dBm. That is a rule about distance rather " +
+                "than about ownership - if you end up walking beside them, it can mute " +
+                "them. Turn it off in settings once your own kit has been ruled out.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+    }
+
+    if (stitchLog.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Section(
+            title = "Rotations followed",
+            summary = "${stitchLog.size} address " +
+                (if (stitchLog.size == 1) "change" else "changes") + " carried across.",
+        ) {
+            Text(
+                "Each of these is a device that changed address and was followed to the new " +
+                    "one. Every one is also a chance to have been wrong, which is why the " +
+                    "ones the app was not sure about were put to you instead.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(8.dp))
+            stitchLog.asReversed().forEach { stitch ->
+                Field(
+                    "${stitch.fromAddress.takeLast(8)} to ${stitch.toAddress.takeLast(8)}",
+                    if (stitch.byHand) "you picked it" else "followed automatically",
+                )
+            }
+        }
+    }
 
     if (state.carried.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
@@ -2127,4 +2220,73 @@ private fun Holding(
 
     Spacer(Modifier.height(12.dp))
     Grey("Let it go", onUnlock)
+}
+
+/**
+ * The three ways out of the problem that your own pocket is always the best candidate.
+ *
+ * Offered once, near the start, because every minute it goes unanswered is a minute of
+ * evidence built on a list with your earbuds at the top of it.
+ */
+@Composable
+private fun OwnKitChooser(
+    tuning: FollowTuning,
+    onSkip: () -> Unit,
+    onAutoMute: (Int) -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "What about your own devices?",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Whatever is in your own pockets survives every test here by construction. " +
+                    "It orbits when you orbit and passes when you pass, because it goes " +
+                    "where you go. Left in, it sits at the top of the short list forever " +
+                    "and the follow looks like it worked.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onSkip,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Find them as I walk") }
+            Text(
+                "The patient one. After about ${tuning.carriedAfterMs / 60_000} minutes of " +
+                    "walking, anything that has barely moved relative to you is offered up " +
+                    "as probably yours, and you say whether it is. Costs nothing and can " +
+                    "tell the difference between your pocket and theirs, which the quick " +
+                    "way cannot.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = { onAutoMute(tuning.carriedDbm) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Mute anything above ${tuning.carriedDbm} dBm now") }
+            Text(
+                "The quick one, working from the first ten seconds. It is a rule about " +
+                    "distance rather than ownership, so it will mute them too if you end " +
+                    "up walking beside them. The level is editable in settings.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(10.dp))
+            TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+                Text("Nothing on me, move on")
+            }
+        }
+    }
 }
