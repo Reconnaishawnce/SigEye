@@ -212,7 +212,7 @@ ten seconds would be a much better first sixty seconds.
 
 ## Per-experiment depth
 
-### 21. Crowd Counter's `devicesPerPerson = 2.0` is a guess with no way to improve it
+### 21. Crowd Counter's `devicesPerPerson = 2.0` is a guess with no way to improve it — *done*
 
 The doc comment says "calibrate it against a headcount you actually know" — and then the
 app gives no way to do that. Add a calibration mode: enter a real headcount, and the app
@@ -310,7 +310,7 @@ exactly where it was.
 
 | # | Where it stands |
 |---|---|
-| 21. Crowd Counter's people factor | **Open.** `Environment.devicesPerPerson` is still a constant per environment, 1.5 to 2.5, with no way to correct it from a headcount somebody actually took. |
+| 21. Crowd Counter's people factor | **Done.** You enter a headcount, the app averages the present device count over thirty seconds and divides. Counts pool by total devices over total people, so a count of forty outweighs a count of two, and they are kept per place and per RSSI floor because a factor measured at -70 is not the same measurement as one taken at -95. |
 | 22. Faraday's noise floor | **Done.** Thirty seconds of watching the signal do nothing before the first reading, and the verdict is stated in units of that wander rather than in bare decibels. |
 | 23. Microwave's control band | **Done in turn 13.** Two radios pinned by BSSID and followed through both phases. 2.4 falling alone is the finding; both falling is a failed run and it says so. The unearned "5 GHz would have been untouched" line is gone. |
 | 24. Train Spotter's threshold | **Done.** The recorded bins are replayed against every candidate threshold and the marked trains say which one to use. Misses and unmarked alerts are counted separately, because only the first is unambiguously an error. |

@@ -55,7 +55,11 @@ data class PopulationConfig(
      *
      * Not a constant of nature. A commuter carries a phone, earbuds and maybe a watch,
      * each advertising separately; a room also contains televisions and printers that
-     * belong to nobody. Calibrate it against a headcount you actually know.
+     * belong to nobody.
+     *
+     * This default is only a starting point. [com.sigeye.core.analysis.presence.CrowdCalibration]
+     * solves for the real one from headcounts somebody took, which is the only way this
+     * number stops being a guess.
      */
     val devicesPerPerson: Double = 2.0,
     /** Forget devices unseen for this long, so memory does not grow without bound. */

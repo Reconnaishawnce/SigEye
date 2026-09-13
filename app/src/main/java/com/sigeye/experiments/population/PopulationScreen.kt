@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.CalibrationStore
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.IgnoreList
@@ -116,6 +117,7 @@ fun PopulationScreen(
 private fun Live(dwell: Boolean) {
     val context = LocalContext.current
     val book = remember { DeviceBook.get(context) }
+    val calibrations = remember { CalibrationStore.get(context) }
     val tracker = remember { PopulationTracker() }
 
     val health by BleScanHub.health.collectAsStateWithLifecycle()
@@ -124,9 +126,9 @@ private fun Live(dwell: Boolean) {
 
     var snapshot by remember { mutableStateOf<PopulationSnapshot?>(null) }
     var rssiFloor by remember { mutableStateOf(-85f) }
-    // Seeded from the surroundings profile in Settings rather than a flat 2.0. It is a
-    // starting point and stays a slider - the profile is a guess about where you are, and
-    // a headcount you actually know beats it.
+    // Seeded from the surroundings profile in Settings rather than a flat 2.0, and that
+    // is all the profile is: a guess about where you are. A headcount you actually took
+    // beats it outright, which is what the calibration section below is for.
     var perPerson by remember {
         mutableStateOf(SettingsStore.get(context).tuning.devicesPerPerson.toFloat())
     }
@@ -308,6 +310,18 @@ private fun Live(dwell: Boolean) {
         }
     }
 
+    if (!dwell) {
+        Spacer(Modifier.height(12.dp))
+        CalibrationSection(
+            store = calibrations,
+            rssiFloor = rssiFloor.roundToInt(),
+            presenceSeconds = tracker.config.presenceSeconds,
+            factorInUse = perPerson.toDouble(),
+            presentDevices = snap.presentNow,
+            onApply = { perPerson = it.toFloat() },
+        )
+    }
+
     Spacer(Modifier.height(12.dp))
     Row(
         Modifier.fillMaxWidth(),
@@ -355,9 +369,10 @@ private fun Live(dwell: Boolean) {
                 steps = 17,
             )
             Text(
-                "Calibrate it: stand with a group you have counted and adjust until the " +
-                    "estimate matches. Two is a reasonable start - a phone plus earbuds - " +
-                    "but a café full of laptops and a quiet street differ a lot.",
+                "Setting this by hand is a guess, however careful. Take a headcount instead " +
+                    "and the app works it out from what the radio heard while you counted. " +
+                    "The slider is here for when you already know the answer - a room you " +
+                    "have measured before, or a group whose kit you can list.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
