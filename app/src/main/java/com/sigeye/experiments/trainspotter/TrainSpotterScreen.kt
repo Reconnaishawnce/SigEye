@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
@@ -45,6 +44,7 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
+import com.sigeye.ui.CountUp
 import com.sigeye.ui.CountdownRing
 import com.sigeye.ui.Sparkline
 import java.io.File
@@ -141,10 +141,10 @@ private fun Monitor() {
     ) {
         val alerting = state.lastAlertMs > 0 &&
             System.currentTimeMillis() - state.lastAlertMs < 60_000
-        Text(
-            text = state.currentCount.toString(),
-            fontSize = 88.sp,
-            fontWeight = FontWeight.Bold,
+        // Runs up to the new count rather than jumping to it. Forty new devices arriving
+        // in one five second bin is a train, and it should look like one.
+        CountUp(
+            value = state.currentCount,
             color = if (alerting) {
                 MaterialTheme.colorScheme.error
             } else {

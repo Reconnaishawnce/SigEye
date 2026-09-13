@@ -25,14 +25,14 @@ class FavoriteStore private constructor(context: Context) {
 
     fun isFavourite(id: String): Boolean = _ids.value.contains(id)
 
-    fun toggle(id: String) = update(Favorites.toggle(_ids.value, id))
+    fun toggle(id: String) = update(Ordering.toggle(_ids.value, id))
 
-    fun moveUp(id: String) = update(Favorites.moveUp(_ids.value, id))
+    fun moveUp(id: String) = update(Ordering.moveUp(_ids.value, id))
 
-    fun moveDown(id: String) = update(Favorites.moveDown(_ids.value, id))
+    fun moveDown(id: String) = update(Ordering.moveDown(_ids.value, id))
 
     /** Puts the recommended set back, for someone who has arranged themselves into a corner. */
-    fun reset() = update(Favorites.seed(Experiments.featuredIds, knownIds()))
+    fun reset() = update(Ordering.seed(Experiments.featuredIds, knownIds()))
 
     private fun update(next: List<String>) {
         _ids.value = next
@@ -45,7 +45,7 @@ class FavoriteStore private constructor(context: Context) {
     private fun load(): List<String> {
         val known = knownIds()
         if (!prefs.getBoolean(KEY_SEEDED, false)) {
-            val seeded = Favorites.seed(Experiments.featuredIds, known)
+            val seeded = Ordering.seed(Experiments.featuredIds, known)
             prefs.edit()
                 .putString(KEY_IDS, seeded.joinToString(SEPARATOR))
                 .putBoolean(KEY_SEEDED, true)
@@ -56,7 +56,7 @@ class FavoriteStore private constructor(context: Context) {
             ?.split(SEPARATOR)
             ?.filter { it.isNotBlank() }
             .orEmpty()
-        return Favorites.sanitise(stored, known)
+        return Ordering.sanitise(stored, known)
     }
 
     private fun knownIds(): Set<String> = Experiments.all
