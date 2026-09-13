@@ -320,6 +320,14 @@ private const val GAP_CAP_MS = 2_000L
 private const val AUTO_MUTE_PACKETS = 12
 
 /**
+ * How soon after the baseline a follow has to start for the target to have been present.
+ *
+ * Anything longer and the operator spent time waiting at a door, which is the other case
+ * and the one where an arrival is the strongest evidence there is.
+ */
+private const val TARGET_PRESENT_MS = 10_000L
+
+/**
  * How many readings of each trail survive being saved.
  *
  * Four hundred is well over a minute at one a second, which is longer than any probe, so in
@@ -812,6 +820,16 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     private val stitched = mutableListOf<Stitch>()
 
     /**
+     * What happened, in order, so a follow can be replayed, marked and exported.
+     *
+     * On the session rather than the screen for the same reason everything else is: a
+     * follow is half an hour of walking with the phone in a pocket, and a record that only
+     * existed while somebody was looking at it would be a record of the parts that did not
+     * matter.
+     */
+    val journal = Journal()
+
+    /**
      * Addresses this session has decided should be muted, waiting to be applied.
      *
      * Two things end up here. One is a mute inheriting across a rotation: muting your own
@@ -963,6 +981,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      */
     fun endBaseline(atMs: Long) {
         baselineEndedAtMs = atMs
+        journal.add(Moment.BaselineDone(atMs, tracked.size))
     }
 
     /**
@@ -980,6 +999,13 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             entry.returnedAtMs = null
         }
         phase = FollowPhase.FOLLOWING
+        journal.add(
+            Moment.Following(
+                atMs = atMs,
+                pool = tracked.values.count { it.inPool },
+                targetPresent = atMs - (baselineEndedAtMs ?: atMs) < TARGET_PRESENT_MS,
+            ),
+        )
     }
 
     /**
@@ -1021,6 +1047,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      */
     fun beginProbe(kind: Probe, atMs: Long) {
         endProbe(atMs)
+        journal.add(Moment.ProbeRan(atMs, kind, probes.size))
         probes.add(ProbeRun(probes.size, kind, atMs))
     }
 
@@ -1046,8 +1073,15 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
     // ------------------------------------------------------------------ the target
 
     fun lock(address: String) {
-        targetKey = address.uppercase(Locale.US)
+        val key = address.uppercase(Locale.US)
+        targetKey = key
         phase = FollowPhase.HOLDING
+        journal.add(Moment.Held(System.currentTimeMillis(), key, tracked[key]?.label))
+    }
+
+    /** Records something the operator saw and the radio could not. */
+    fun mark(mark: Mark, atMs: Long, note: String? = null) {
+        journal.add(Moment.Marked(atMs, mark, note?.takeIf { it.isNotBlank() }))
     }
 
     fun unlock() {
@@ -1250,7 +1284,9 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         }
         val moved = reacquire(key, toAddress, nowMs)
         if (moved) {
-            stitched.add(Stitch(key, toAddress.uppercase(Locale.US), nowMs, byHand = true))
+            val to = toAddress.uppercase(Locale.US)
+            stitched.add(Stitch(key, to, nowMs, byHand = true))
+            journal.add(Moment.Rotated(nowMs, key, to, byHand = true))
         }
         return moved
     }
@@ -1319,6 +1355,9 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                             stitched.add(
                                 Stitch(key, handoff.to.address, nowMs, byHand = false),
                             )
+                            journal.add(
+                                Moment.Rotated(nowMs, key, handoff.to.address, byHand = false),
+                            )
                         }
                     }
 
@@ -1339,6 +1378,13 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         sweep(nowMs)
         autoMute(nowMs)
         bridge(nowMs)
+        if (followStartedAtMs != null) {
+            journal.sample(
+                atMs = nowMs,
+                stillIn = tracked.values.count { it.inPool && it.droppedAtMs == null },
+                pool = tracked.values.count { it.inPool },
+            )
+        }
 
         val candidates = candidates(nowMs)
         val target = targetKey?.let { key -> candidates.firstOrNull { it.address == key } }
@@ -1515,6 +1561,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             .put("blind", gaps)
             .put("blindSince", blindSince ?: JSONObject.NULL)
             .put("probes", probeArray)
+            .put("journal", journal.snapshot())
             .put("devices", devices)
     }
 
@@ -1535,6 +1582,8 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
 
         val changes = json.optJSONArray("changes") ?: JSONArray()
         (0 until changes.length()).forEach { targetChanges.add(changes.getLong(it)) }
+
+        journal.restore(json.optJSONArray("journal"))
 
         val gaps = json.optJSONArray("blind") ?: JSONArray()
         (0 until gaps.length()).forEach { index ->

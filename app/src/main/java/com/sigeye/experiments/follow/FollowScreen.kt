@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.AlertStyle
+import com.sigeye.core.CsvExport
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
@@ -57,6 +58,7 @@ import com.sigeye.core.Takeaway
 import com.sigeye.core.TargetDevice
 import com.sigeye.core.TargetStore
 import com.sigeye.core.analysis.identity.CandidateWalkBy
+import com.sigeye.core.analysis.identity.CaseFile
 import com.sigeye.core.analysis.identity.FollowCandidate
 import com.sigeye.core.analysis.identity.FollowPhase
 import com.sigeye.core.analysis.identity.FollowSession
@@ -64,6 +66,8 @@ import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.FollowTuning
 import com.sigeye.core.analysis.identity.CandidateScore
 import com.sigeye.core.analysis.identity.Handoff
+import com.sigeye.core.analysis.identity.Journal
+import com.sigeye.core.analysis.identity.Mark
 import com.sigeye.core.analysis.identity.Odds
 import com.sigeye.core.analysis.identity.Scoring
 import com.sigeye.core.analysis.identity.Stitch
@@ -266,6 +270,9 @@ private fun Live(
     /** Which rotation question is on screen, and which have been put off. */
     var asking by remember { mutableStateOf<String?>(null) }
     val deferred = remember { mutableStateListOf<String>() }
+
+    /** How many marks have been made, so the section can say so without reading the journal. */
+    var marked by remember { mutableStateOf(0) }
 
     /** Kinds of device the list is narrowed to, or empty for all of them. */
     val kindFilter = remember { mutableStateListOf<DeviceKind>() }
@@ -660,6 +667,27 @@ private fun Live(
             state = state,
             scores = scores,
             kindFilter = kindFilter.toList(),
+            journal = session().journal,
+            marks = marked,
+            onMark = { mark ->
+                session().mark(mark, System.currentTimeMillis())
+                marked++
+                feedback.alert(AlertStyle.BUZZ)
+            },
+            onCaseFile = {
+                CsvExport.shareText(
+                    context = context,
+                    folder = "follow",
+                    prefix = "case",
+                    content = CaseFile.write(
+                        name = followName,
+                        state = state,
+                        journal = session().journal,
+                        scores = scores.values.toList(),
+                        stitches = stitchLog,
+                    ),
+                )
+            },
             onKindFilter = { kind ->
                 if (kind in kindFilter) kindFilter.remove(kind) else kindFilter.add(kind)
             },
@@ -1180,6 +1208,10 @@ private fun Following(
     scores: Map<String, CandidateScore>,
     kindFilter: List<DeviceKind>,
     onKindFilter: (DeviceKind) -> Unit,
+    journal: Journal,
+    marks: Int,
+    onMark: (Mark) -> Unit,
+    onCaseFile: () -> Unit,
     ownKit: OwnKit,
     onOwnKit: (OwnKit) -> Unit,
     onAutoMute: (Int) -> Unit,
@@ -1305,6 +1337,29 @@ private fun Following(
                 "them. Turn it off in settings once your own kit has been ruled out.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.tertiary,
+        )
+    }
+
+    Spacer(Modifier.height(12.dp))
+    MarkRow(onMark = onMark, marks = marks)
+
+    Spacer(Modifier.height(12.dp))
+    Section(
+        title = "Replay",
+        summary = "Scrub back through the walk and see when it narrowed.",
+    ) {
+        Replay(journal)
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = onCaseFile, modifier = Modifier.fillMaxWidth()) {
+            Text("Export the case file")
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "One document: what happened, what was found, what argues against it, and the " +
+                "count every five seconds. Written so somebody who was not there can " +
+                "disagree with it.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 
