@@ -289,6 +289,21 @@ private fun Live(
         stepStartedMs = System.currentTimeMillis()
     }
 
+    /**
+     * Starts the census running.
+     *
+     * The session is fed by [ScanService] and by nothing else, so until the service is in
+     * FOLLOW mode the baseline is a countdown in front of an empty list. This used to be
+     * called only once the baseline had finished, which meant the census counted nothing
+     * and every device in the room then looked like an arrival.
+     */
+    fun beginBaseline() {
+        ScanService.start(context, ScanService.Mode.FOLLOW)
+        bars.clear()
+        lastWatched = 0
+        goTo(Step.BASELINE)
+    }
+
     fun resume() {
         val saved = library.loadInProgress() ?: return
         val restored = FollowSession(settings.load())
@@ -591,7 +606,7 @@ private fun Live(
                 startedAtMs = now
                 session().startBaseline(now)
                 tests += "baseline"
-                goTo(Step.BASELINE)
+                beginBaseline()
             },
             onCancel = { goTo(Step.LIBRARY) },
         )
@@ -655,7 +670,7 @@ private fun Live(
                 bars.clear()
                 tests += "re-baseline"
                 dismissedRebaseline = false
-                goTo(Step.BASELINE)
+                beginBaseline()
             },
             onCircle = {
                 session().beginProbe(Probe.ORBIT, System.currentTimeMillis())

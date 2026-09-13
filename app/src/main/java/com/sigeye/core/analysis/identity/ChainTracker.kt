@@ -131,7 +131,25 @@ class ChainTracker(
      * one popular shape - every iPhone in a cafe looks alike - collapse the whole room
      * into a single imaginary device.
      */
+    /**
+     * Forgets addresses no chain will ever reach for again.
+     *
+     * Never anything inside a chain: a chain is a record of where a device went, and
+     * dropping a link would leave a claim with nothing behind it. Never a seed either,
+     * since a watchlisted device going quiet for an hour is exactly the case this is for.
+     */
+    fun prune(nowMs: Long) {
+        val chained = chains.values.flatten().map { it.address }.toSet()
+        live.entries.removeAll { (address, entry) ->
+            address !in chained &&
+                address !in seeds &&
+                entry.chainId == null &&
+                nowMs - entry.lastSeenMs > FORGET_MS
+        }
+    }
+
     fun tick(nowMs: Long) {
+        prune(nowMs)
         val finished = live.entries
             .filter { !it.value.closed && nowMs - it.value.lastSeenMs > silenceMs }
             .filter { it.value.isRandom && it.value.packets >= MIN_PACKETS }
@@ -254,5 +272,14 @@ class ChainTracker(
 
     companion object {
         const val MIN_PACKETS = 8
+
+        /**
+         * How long an address with no chain is kept after it was last heard.
+         *
+         * Generous, because a chain can start from a seed that has been quiet a while, and
+         * still bounded, because a concourse produces thousands of addresses an hour and
+         * every one of them was being kept and re-sorted on every tick.
+         */
+        const val FORGET_MS = 10 * 60_000L
     }
 }

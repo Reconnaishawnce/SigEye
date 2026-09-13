@@ -103,45 +103,20 @@ class RotationHunt(
     private val silenceMs: Long = 20_000L,
 ) {
 
+    /**
+     * One address being listened to, plus how much of its payload changes.
+     *
+     * A second copy of the observation logic lived here, which is the thing [LiveAddress]
+     * exists to prevent and which its own comment warns about. The copies had already
+     * drifted: when the gap list was bounded in one, the other went on growing.
+     */
     private class Watched(
-        var shape: AdvertShape,
-        val isRandom: Boolean,
-        val firstSeenMs: Long,
-        var lastSeenMs: Long,
-        var packets: Int = 0,
-        val gaps: MutableList<Long> = mutableListOf(),
-        val recent: ArrayDeque<Int> = ArrayDeque(),
-        var bestRssi: Int = -127,
+        shape: AdvertShape,
+        isRandom: Boolean,
+        firstSeenMs: Long,
+        lastSeenMs: Long,
         val payload: PayloadVariance = PayloadVariance(),
-    ) {
-        fun observe(rssi: Int, atMs: Long) {
-            if (packets > 0) gaps.add(atMs - lastSeenMs)
-            lastSeenMs = atMs
-            packets++
-            if (rssi > bestRssi) bestRssi = rssi
-            recent.addLast(rssi)
-            while (recent.size > 20) recent.removeFirst()
-        }
-
-        val recentRssi: Double get() = if (recent.isEmpty()) -127.0 else recent.average()
-
-        fun identity(address: String): Identity {
-            val base = Fingerprint.baseIntervalMs(gaps)
-            return Identity(
-                address = address,
-                shape = shape,
-                isRandom = isRandom,
-                firstSeenMs = firstSeenMs,
-                lastSeenMs = lastSeenMs,
-                packets = packets,
-                medianGapMs = base,
-                recentRssi = recentRssi,
-                bestRssi = bestRssi,
-                intervalJitter = Fingerprint.intervalJitter(gaps, base),
-                rssiSpread = Fingerprint.spread(recent.toList()),
-            )
-        }
-    }
+    ) : LiveAddress(shape, isRandom, firstSeenMs, lastSeenMs)
 
     private val everything = LinkedHashMap<String, Watched>()
     private var trackedAddress: String? = null
@@ -202,7 +177,30 @@ class RotationHunt(
         }
     }
 
+    /**
+     * Forgets addresses nothing is going to ask about again.
+     *
+     * Every address ever heard was kept for the life of the screen, and in a station that
+     * is thousands of them within the hour. Never the one being followed, the one it
+     * started as, or anything already named in a rotation - those are the record, and a
+     * rotation whose far side had been forgotten would be a claim with nothing behind it.
+     */
+    fun prune(nowMs: Long) {
+        val keep = buildSet {
+            trackedAddress?.let { add(it) }
+            originalAddress?.let { add(it) }
+            rotations.forEach {
+                add(it.fromAddress)
+                add(it.toAddress)
+            }
+        }
+        everything.entries.removeAll { (address, watched) ->
+            address !in keep && nowMs - watched.lastSeenMs > FORGET_MS
+        }
+    }
+
     fun tick(nowMs: Long) {
+        prune(nowMs)
         if (stage == HuntStage.LEARN && nowMs - learnStartedMs >= learnMs) {
             stage = HuntStage.WATCH
         }
@@ -359,6 +357,9 @@ class RotationHunt(
         )
     }
 
+    /** How many addresses are being held in memory, which is the thing that has to stay small. */
+    val addressCount: Int get() = everything.size
+
     /** Candidates worth offering as something to follow. */
     fun candidates(nowMs: Long): List<Identity> = everything
         .filter { (_, watched) ->
@@ -371,6 +372,14 @@ class RotationHunt(
     companion object {
         /** Enough packets to have an interval and a shape worth comparing. */
         const val MIN_CANDIDATE_PACKETS = 6
+
+        /**
+         * How long an address is kept after it was last heard.
+         *
+         * Comfortably longer than the handover window, so nothing that might still be a
+         * successor is thrown away, and short enough that a crowd does not accumulate.
+         */
+        const val FORGET_MS = 5 * 60_000L
 
         /**
          * How far the signal has to fall for a walk-away test to mean anything.
