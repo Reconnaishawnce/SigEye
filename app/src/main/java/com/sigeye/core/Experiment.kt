@@ -1053,14 +1053,44 @@ object Experiments {
      * is - so the categories stay, and the tier decides where a card sits inside one and
      * what badge it carries.
      */
-    fun byCategory(): List<Pair<Experiment.Category, List<Experiment>>> =
+    fun byCategory(
+        includeUnbuilt: Boolean = true,
+    ): List<Pair<Experiment.Category, List<Experiment>>> =
         Experiment.Category.entries
             .map { category ->
                 category to all
                     .filter { it.category == category }
+                    .filter { includeUnbuilt || it.status.openable }
                     .sortedBy { it.status.ordinal }
             }
             .filter { it.second.isNotEmpty() }
+
+    /** The wish list: described, wanted, not built. */
+    fun unbuilt(): List<Experiment> = all.filter { !it.status.openable }
+
+    /**
+     * Experiments matching a search.
+     *
+     * Over the title, the blurb and what it teaches, because somebody looking for "walls"
+     * will not think of the word "penetration" and somebody looking for "tracking" does
+     * not know it is filed under privacy. Working experiments first - a search that offers
+     * an unbuilt one above a built one is offering a dead end.
+     */
+    fun search(query: String): List<Experiment> {
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty()) return emptyList()
+        return all
+            .filter { experiment ->
+                experiment.title.lowercase().contains(needle) ||
+                    experiment.blurb.lowercase().contains(needle) ||
+                    experiment.teaches.lowercase().contains(needle)
+            }
+            .sortedWith(
+                compareBy<Experiment> { it.status.ordinal }
+                    .thenBy { !it.title.lowercase().startsWith(needle) }
+                    .thenBy { it.title },
+            )
+    }
 
     fun count(status: Experiment.Status): Int = all.count { it.status == status }
 

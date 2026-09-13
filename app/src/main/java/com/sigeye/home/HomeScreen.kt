@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CheckLevel
+import com.sigeye.core.Contact
 import com.sigeye.core.Experiment
 import com.sigeye.core.Experiments
 import com.sigeye.core.FavouriteStore
@@ -53,6 +56,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
     val welcomed by firstRun.dismissed.collectAsStateWithLifecycle()
     val backupWarned by firstRun.backupWarned.collectAsStateWithLifecycle()
     var arranging by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
 
     // After the welcome card has been put away, not alongside it. Two dialogs at once is
     // one dialog too many, and this is the one that must actually be read.
@@ -91,7 +95,13 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(14.dp))
         if (!welcomed) {
-            Welcome { firstRun.dismiss() }
+            Welcome(
+                onDismiss = { firstRun.dismiss() },
+                onTryIt = {
+                    firstRun.dismiss()
+                    onOpen(Experiments.RADAR)
+                },
+            )
             Spacer(Modifier.height(10.dp))
         }
         RadioStatus()
@@ -99,39 +109,78 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         PreflightCard()
         Spacer(Modifier.height(14.dp))
 
-        FavouritesSection(
-            favourites = favourites,
-            editing = arranging,
-            store = store,
-            onEditToggle = { arranging = !arranging },
-            onOpen = onOpen,
-        )
+        SearchField(query = query, onQuery = { query = it })
+        Spacer(Modifier.height(14.dp))
 
-        Experiments.byCategory().forEach { (category, experiments) ->
+        val matches = remember(query) { Experiments.search(query) }
+
+        if (query.isNotBlank()) {
             Text(
-                text = category.label,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = category.blurb,
+                text = if (matches.isEmpty()) {
+                    "Nothing matches \"$query\"."
+                } else {
+                    "${matches.size} match${if (matches.size == 1) "" else "es"}"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
-
-            experiments.forEach { experiment ->
+            matches.forEach { experiment ->
                 ExperimentCard(
                     experiment = experiment,
                     favourite = favouriteIds.contains(experiment.id),
                     onToggleFavourite = { store.toggle(experiment.id) },
-                    onClick = {
-                        if (experiment.status.openable) onOpen(experiment.id)
-                    },
+                    onClick = { if (experiment.status.openable) onOpen(experiment.id) },
                 )
                 Spacer(Modifier.height(10.dp))
             }
-            Spacer(Modifier.height(14.dp))
+            if (matches.isEmpty()) {
+                SuggestIt(Contact.Kind.EXPERIMENT, "Ask for it")
+            }
+        } else {
+            FavouritesSection(
+                favourites = favourites,
+                editing = arranging,
+                store = store,
+                onEditToggle = { arranging = !arranging },
+                onOpen = onOpen,
+            )
+
+            // The wish list is pulled out of the categories and put at the end. Mixed in,
+            // an unbuilt experiment looks like a broken one - you tap it and nothing
+            // happens - and it pushes the things that do work further down the page.
+            Experiments.byCategory(includeUnbuilt = false).forEach { (category, experiments) ->
+                Text(
+                    text = category.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = category.blurb,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+
+                experiments.forEach { experiment ->
+                    ExperimentCard(
+                        experiment = experiment,
+                        favourite = favouriteIds.contains(experiment.id),
+                        onToggleFavourite = { store.toggle(experiment.id) },
+                        onClick = {
+                            if (experiment.status.openable) onOpen(experiment.id)
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
+            WishList(
+                experiments = Experiments.unbuilt(),
+                favourite = { favouriteIds.contains(it) },
+                onToggleFavourite = { store.toggle(it) },
+            )
         }
 
         Text(
@@ -140,7 +189,10 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = { onOpen("settings") }) { Text("Settings") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { onOpen("settings") }) { Text("Settings") }
+            SuggestIt(Contact.Kind.BUG, "Report a bug")
+        }
         Spacer(Modifier.height(32.dp))
     }
 }
@@ -154,7 +206,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
  * good with one tap.
  */
 @Composable
-private fun Welcome(onDismiss: () -> Unit) {
+private fun Welcome(onDismiss: () -> Unit, onTryIt: () -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -193,7 +245,13 @@ private fun Welcome(onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Spacer(Modifier.height(4.dp))
-            TextButton(onClick = onDismiss) { Text("Got it") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Straight into the one experiment that shows something moving within
+                // seconds of being opened. A welcome card followed by a permission wall
+                // on whatever the user happens to tap is a worse first minute than this.
+                Button(onClick = onTryIt) { Text("Show me something now") }
+                TextButton(onClick = onDismiss) { Text("Later") }
+            }
         }
     }
 }
@@ -633,5 +691,97 @@ private fun ExperimentCard(
                 }
             }
         }
+    }
+}
+
+// ----------------------------------------------------------------------------- search
+
+/**
+ * A filter across every experiment.
+ *
+ * Twenty-eight experiments in five categories plus a favourites list is past the point
+ * where scrolling finds the one about the microwave. Matching runs over the title, the
+ * blurb and what the experiment teaches, because somebody looking for "walls" will not
+ * think of the word "penetration" and somebody looking for "tracking" will not know it is
+ * filed under privacy.
+ */
+@Composable
+private fun SearchField(query: String, onQuery: (String) -> Unit) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQuery,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text("Search experiments") },
+        placeholder = { Text("walls, trains, who is here...") },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                TextButton(onClick = { onQuery("") }) { Text("Clear") }
+            }
+        },
+    )
+}
+
+// --------------------------------------------------------------------------- wish list
+
+/**
+ * What does not exist yet, and a way to argue for it.
+ *
+ * Kept in the app rather than only in a roadmap file, the way Phyphox lists everything it
+ * ships and everything it means to. Down here rather than mixed into the categories,
+ * though: an unbuilt experiment among the working ones reads as a broken one, because you
+ * tap it and nothing happens.
+ */
+@Composable
+private fun WishList(
+    experiments: List<Experiment>,
+    favourite: (String) -> Boolean,
+    onToggleFavourite: (String) -> Unit,
+) {
+    Text(
+        text = "Wish list",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+    )
+    Text(
+        text = "Described, wanted, not built. Say if you want one of these sooner, or " +
+            "something that is not on it.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(10.dp))
+
+    experiments.forEach { experiment ->
+        ExperimentCard(
+            experiment = experiment,
+            favourite = favourite(experiment.id),
+            onToggleFavourite = { onToggleFavourite(experiment.id) },
+            onClick = {},
+        )
+        Spacer(Modifier.height(10.dp))
+    }
+
+    SuggestIt(Contact.Kind.EXPERIMENT, "Suggest an experiment")
+    Spacer(Modifier.height(14.dp))
+}
+
+/**
+ * A mail app, opened with the boring half already filled in.
+ *
+ * Build, phone and Android version go in. Nothing the app has seen does - an app that
+ * records the people around you should not put any of that in an email unasked.
+ */
+@Composable
+private fun SuggestIt(kind: Contact.Kind, label: String) {
+    val context = LocalContext.current
+    var noMailApp by remember { mutableStateOf(false) }
+
+    TextButton(onClick = { noMailApp = !Contact.send(context, kind) }) { Text(label) }
+    if (noMailApp) {
+        Text(
+            text = "No mail app on this phone. The address is ${Contact.ADDRESS}.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

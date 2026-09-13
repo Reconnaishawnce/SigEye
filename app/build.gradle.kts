@@ -70,6 +70,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Wanted for the version name, which goes in a bug report - a report that does not
+        // say which build it came from is a report nobody can act on.
+        buildConfig = true
     }
 
     packaging {
