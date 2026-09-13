@@ -19,12 +19,6 @@ object Vendors {
     /** Axon Enterprise's only IEEE block. Body cameras, docks, TASERs, fleet gear. */
     const val AXON_OUI = "00:25:DF"
 
-    /** Flock Safety's only IEEE block. */
-    const val FLOCK_OUI = "B4:1E:52"
-
-    /** XUNTONG, the manufacturer ID seen in Flock external battery advertisements. */
-    const val FLOCK_BATTERY_COMPANY_ID = 0x09C8
-
     /** HID Global's Bluetooth SIG company identifier. */
     const val HID_COMPANY_ID = 0x0124
 
@@ -81,9 +75,6 @@ object Vendors {
     fun isAxon(address: String): Boolean =
         !isRandomAddress(address) && ouiOf(address) == AXON_OUI
 
-    fun isFlock(address: String): Boolean =
-        !isRandomAddress(address) && ouiOf(address) == FLOCK_OUI
-
     fun isHid(address: String): Boolean =
         !isRandomAddress(address) && HID_OUIS.contains(ouiOf(address))
 
@@ -98,14 +89,6 @@ object Vendors {
         isAxon(address) ->
             "Axon Enterprise hardware. That block covers body cameras, docks, TASERs and " +
                 "fleet gear alike, and presence is not recording."
-
-        isFlock(address) ->
-            "Flock Safety hardware, by IEEE block."
-
-        companyId == FLOCK_BATTERY_COMPANY_ID || name?.startsWith("Penguin-") == true ->
-            "Possible Flock Safety external battery. These relay battery health to the " +
-                "camera over Bluetooth, so one nearby suggests a camera - but solar " +
-                "Falcon units have no external battery and stay silent."
 
         isHid(address) || companyId == HID_COMPANY_ID ->
             "HID access control hardware. Signo and iCLASS SE readers advertise " +

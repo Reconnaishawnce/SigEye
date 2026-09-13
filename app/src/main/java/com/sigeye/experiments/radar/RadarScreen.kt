@@ -51,6 +51,8 @@ import com.sigeye.ui.NewListDialog
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.radar.RadarPanel
+import com.sigeye.core.analysis.identity.DeviceQuery
+import com.sigeye.ui.QuickFilter
 import com.sigeye.ui.radar.RadarTarget
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -142,6 +144,7 @@ private fun Live(onLocate: (String) -> Unit) {
     var selected by remember { mutableStateOf<String?>(null) }
     var showList by remember { mutableStateOf(false) }
     var showNewList by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
 
     DisposableEffect(Unit) {
         BleScanHub.init(context)
@@ -160,12 +163,25 @@ private fun Live(onLocate: (String) -> Unit) {
     // Positions are recomputed slowly and then eased into place by the radar. Updating on
     // every packet made blips jitter constantly, which read as noise rather than motion -
     // a device you are walking towards should glide inward, not vibrate.
-    LaunchedEffect(filter, rules, notes) {
+    LaunchedEffect(filter, rules, notes, query) {
         while (true) {
             val now = System.currentTimeMillis()
             latest.entries.removeAll { now - it.value.atMs > STALE_MS }
             targets = latest.values
                 .filter { matches(it, filter, book, watchStore) }
+                // The typed filter narrows the radar itself, not just the list under it.
+                // A blip you have filtered out should not still be circling.
+                .filter { advert ->
+                    DeviceQuery.matches(
+                        DeviceQuery.Subject(
+                            address = advert.address,
+                            nickname = notes[advert.address.uppercase()]?.nickname,
+                            name = advert.name,
+                            vendor = advert.vendor,
+                        ),
+                        query,
+                    )
+                }
                 .mapNotNull { advert ->
                     val reading = readings[advert.address] ?: return@mapNotNull null
                     RadarTarget(
@@ -224,6 +240,9 @@ private fun Live(onLocate: (String) -> Unit) {
     }
 
     Spacer(Modifier.height(10.dp))
+    QuickFilter(query = query, onQuery = { query = it })
+
+    Spacer(Modifier.height(10.dp))
     RadarPanel(
         targets = targets,
         selected = selected,
@@ -238,6 +257,15 @@ private fun Live(onLocate: (String) -> Unit) {
             health.advertsPerSecond,
         ),
     )
+
+    if (query.isNotBlank() && targets.isEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            DeviceQuery.emptyNote(query, latest.size),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 
     Spacer(Modifier.height(8.dp))
     OutlinedButton(

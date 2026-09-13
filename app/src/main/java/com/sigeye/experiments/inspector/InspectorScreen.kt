@@ -56,7 +56,9 @@ import com.sigeye.core.ble.Identity
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchRule
 import com.sigeye.experiments.watchlist.WatchStore
+import com.sigeye.core.analysis.identity.DeviceQuery
 import com.sigeye.ui.ExperimentHeader
+import com.sigeye.ui.QuickFilter
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import kotlinx.coroutines.delay
@@ -116,6 +118,7 @@ private fun Live(onLocate: (String) -> Unit) {
     val ignored by ignoreList.addresses.collectAsStateWithLifecycle()
 
     var sort by remember { mutableStateOf(SortMode.STRONGEST) }
+    var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<String?>(null) }
     var onlyList by remember { mutableStateOf<String?>(null) }
     var devices by remember { mutableStateOf<List<SeenDevice>>(emptyList()) }
@@ -147,6 +150,17 @@ private fun Live(onLocate: (String) -> Unit) {
 
     val visible = devices
         .filter { onlyList == null || book.listsOf(it.address).contains(onlyList) }
+        .filter { device ->
+            DeviceQuery.matches(
+                DeviceQuery.Subject(
+                    address = device.address,
+                    nickname = notes[device.address.uppercase()]?.nickname,
+                    name = device.name,
+                    vendor = device.vendor,
+                ),
+                query,
+            )
+        }
         .sortedBy(sort, ::nameOf)
 
     health.error?.let { message -> Banner(message, error = true) }
@@ -156,6 +170,9 @@ private fun Live(onLocate: (String) -> Unit) {
     devices.firstNotNullOfOrNull { device ->
         Vendors.surveillanceNote(device.address, device.companyId, device.name)
     }?.let { note -> Banner(note, error = true) }
+
+    QuickFilter(query = query, onQuery = { query = it })
+    Spacer(Modifier.height(8.dp))
 
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

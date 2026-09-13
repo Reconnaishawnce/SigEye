@@ -132,33 +132,6 @@ data class WatchRule(
                 cooldownSeconds = 300,
             ),
             WatchRule(
-                id = "flock-oui",
-                label = "Flock Safety hardware",
-                kind = MatchKind.OUI,
-                value = Vendors.FLOCK_OUI,
-                minRssi = -95,
-                cooldownSeconds = 300,
-            ),
-            // Flock external batteries relay health to the camera over BLE. Older
-            // firmware named them "Penguin-NNNN"; newer firmware dropped the name but
-            // kept XUNTONG manufacturer data, so both are worth watching.
-            WatchRule(
-                id = "flock-battery-company",
-                label = "Flock battery (XUNTONG)",
-                kind = MatchKind.COMPANY_ID,
-                value = "0x09C8",
-                minRssi = -95,
-                cooldownSeconds = 300,
-            ),
-            WatchRule(
-                id = "flock-battery-name",
-                label = "Flock battery (Penguin name)",
-                kind = MatchKind.NAME_CONTAINS,
-                value = "Penguin-",
-                minRssi = -95,
-                cooldownSeconds = 300,
-            ),
-            WatchRule(
                 id = "hid-company",
                 label = "HID access reader",
                 kind = MatchKind.COMPANY_ID,
