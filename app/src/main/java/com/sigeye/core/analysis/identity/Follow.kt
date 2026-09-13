@@ -88,6 +88,17 @@ data class FollowTuning(
 
     /** How long a target may be silent before it is called lost rather than quiet. */
     val lostAfterMs: Long = 45_000L,
+
+    /**
+     * Above this, a device is close enough to be on you rather than on them.
+     *
+     * Deliberately strict. Something that sits this loud for the whole of a walk is almost
+     * certainly in your own pocket or bag - the earbuds you forgot about, a watch, a tag -
+     * and calling it out saves it occupying a place on the short list forever. Strict
+     * because the bad failure is the other way round: telling somebody their actual target
+     * is their own kit would end the follow.
+     */
+    val carriedDbm: Int = -55,
 ) {
     companion object {
         val DEFAULT = FollowTuning()
@@ -185,6 +196,15 @@ data class OrbitScore(
     }
 }
 
+/** How much of a new reading goes into the smoothed level. */
+private const val RECENT_ALPHA = 0.3
+
+/** Below this many readings there is no "the whole time" to speak of. */
+private const val CARRIED_MIN_PACKETS = 30
+
+/** How much of the time a device has to be pocket-loud before it is called yours. */
+private const val CARRIED_FRACTION = 0.85
+
 /** One device a follow is considering. */
 data class FollowCandidate(
     val address: String,
@@ -193,6 +213,16 @@ data class FollowCandidate(
     val isRandom: Boolean,
     val packets: Int,
     val meanRssi: Double,
+    /**
+     * Level now rather than on average, so a blip on a radar moves as somebody approaches.
+     *
+     * Exponentially weighted, because an unsmoothed reading twitches several dB between
+     * consecutive packets with nothing moving, and a radar blip that jitters is a radar
+     * blip nobody can read.
+     */
+    val recentRssi: Double,
+    /** What fraction of its readings were loud enough to be in your own pocket. */
+    val closeFraction: Double,
     val firstSeenMs: Long,
     val lastSeenMs: Long,
     /** Addresses this device has worn during the follow, oldest first. */
@@ -217,6 +247,22 @@ data class FollowCandidate(
     val walkByTrail: List<Pair<Long, Int>> = emptyList(),
 ) {
     val stillIn: Boolean get() = inPool && droppedAtMs == null
+
+    /**
+     * Almost certainly something you are carrying rather than something they are.
+     *
+     * The device that sits in the innermost ring the entire time and never moves is the one
+     * in your own bag. It survives every test by construction - it goes everywhere you go -
+     * so without saying so it would sit at the top of the short list for the whole follow
+     * and never be eliminated by anything.
+     *
+     * Needs both: loud on average across the follow, and loud right now. A device that was
+     * in your pocket and has since been left behind should fall out like anything else.
+     */
+    fun carried(tuning: FollowTuning): Boolean =
+        packets >= CARRIED_MIN_PACKETS &&
+            closeFraction >= CARRIED_FRACTION &&
+            recentRssi >= tuning.carriedDbm
 
     val rotations: Int get() = (addresses.size - 1).coerceAtLeast(0)
 
@@ -298,6 +344,9 @@ data class FollowState(
     val returned: List<FollowCandidate> get() = candidates.filter { it.returnedAtMs != null }
 
     val arrivals: List<FollowCandidate> get() = candidates.filter { it.arrived }
+
+    /** Still with you because it is in your own bag, rather than because it is on them. */
+    val carried: List<FollowCandidate> get() = stillIn.filter { it.carried(tuning) }
 
     val orbited: Boolean get() = probes.any { it.kind == Probe.ORBIT && !it.running }
 
@@ -387,6 +436,8 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         var lastSeenMs: Long = firstSeenMs
         var packets: Int = 0
         var rssiTotal: Double = 0.0
+        var recentRssi: Double = 0.0
+        var closeReadings: Int = 0
         val addresses: MutableList<String> = mutableListOf()
 
         var inPool: Boolean = false
@@ -443,6 +494,12 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         entry.lastSeenMs = atMs
         entry.packets++
         entry.rssiTotal += rssi
+        entry.recentRssi = if (entry.packets == 1) {
+            rssi.toDouble()
+        } else {
+            entry.recentRssi * (1 - RECENT_ALPHA) + rssi * RECENT_ALPHA
+        }
+        if (rssi >= tuning.carriedDbm) entry.closeReadings++
 
         probes.lastOrNull()?.takeIf { it.running }?.let { probe ->
             when (probe.kind) {
@@ -595,6 +652,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         entry.orbitArcs.addAll(previous.orbitArcs)
         entry.orbitRssi.addAll(previous.orbitRssi)
         entry.walkByTrail.addAll(previous.walkByTrail)
+        entry.closeReadings += previous.closeReadings
         entry.arrived = previous.arrived
         // The new address inherits the old one's place in the pool. A rotation is the one
         // way a device can legitimately appear mid-follow and still be the thing you were
@@ -637,6 +695,12 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                     isRandom = entry.isRandom,
                     packets = entry.packets,
                     meanRssi = entry.meanRssi,
+                    recentRssi = entry.recentRssi,
+                    closeFraction = if (entry.packets == 0) {
+                        0.0
+                    } else {
+                        entry.closeReadings.toDouble() / entry.packets
+                    },
                     firstSeenMs = entry.firstSeenMs,
                     lastSeenMs = entry.lastSeenMs,
                     addresses = entry.addresses.toList(),

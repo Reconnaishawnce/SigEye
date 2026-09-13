@@ -31,6 +31,7 @@ class FollowSettings(context: Context) {
             rebaselineAfterMs = prefs.getLong(KEY_REBASELINE, d.rebaselineAfterMs),
             minPackets = prefs.getInt(KEY_MIN_PACKETS, d.minPackets),
             lostAfterMs = prefs.getLong(KEY_LOST, d.lostAfterMs),
+            carriedDbm = prefs.getInt(KEY_CARRIED, d.carriedDbm),
         )
     }
 
@@ -44,6 +45,7 @@ class FollowSettings(context: Context) {
             .putLong(KEY_REBASELINE, tuning.rebaselineAfterMs)
             .putInt(KEY_MIN_PACKETS, tuning.minPackets)
             .putLong(KEY_LOST, tuning.lostAfterMs)
+            .putInt(KEY_CARRIED, tuning.carriedDbm)
             .apply()
     }
 
@@ -58,5 +60,6 @@ class FollowSettings(context: Context) {
         const val KEY_REBASELINE = "rebaseline_after_ms"
         const val KEY_MIN_PACKETS = "min_packets"
         const val KEY_LOST = "lost_after_ms"
+        const val KEY_CARRIED = "carried_dbm"
     }
 }

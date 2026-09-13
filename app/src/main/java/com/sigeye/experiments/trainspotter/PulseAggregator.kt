@@ -29,6 +29,21 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
      */
     private var firstEverSinceAsk = 0
     private var advertsSinceAsk = 0
+
+    /**
+     * When each counted-new address turned up, for the sliding window.
+     *
+     * Bins remain the unit of record - the CSV, the labels, the baseline and the history
+     * chart are all still bins, and days of ground-truth taps are recorded against them.
+     * What bins are bad at is deciding, in two ways. A burst landing across a boundary is
+     * cut in half and neither half clears a threshold the whole would have cleared easily,
+     * which is a silent miss. And a train arriving a moment after a bin closes waits the
+     * best part of the bin length to be noticed.
+     *
+     * So the deciding is done on a window of the same length that ends *now*, recomputed
+     * every tick. Same span, same threshold, no boundaries.
+     */
+    private val newAtMs = ArrayDeque<Long>()
     private val bins = ArrayDeque<Bin>()
 
     private var currentBinStart = Long.MIN_VALUE
@@ -97,6 +112,7 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
         totalAdvertisements = 0
         firstEverSinceAsk = 0
         advertsSinceAsk = 0
+        newAtMs.clear()
     }
 
     /**
@@ -116,10 +132,39 @@ class PulseAggregator(config: PulseConfig = PulseConfig.DEFAULT) {
         val isNew = previous == null || nowMs - previous > config.windowMillis
         if (isNew && phase() != Phase.ENROLL) {
             currentNew++
+            newAtMs.addLast(nowMs)
             return true
         }
         return false
     }
+
+    /**
+     * New addresses in the last bin-length, counted up to this instant.
+     *
+     * The same span a bin covers, so the baseline and the spike factor mean exactly what
+     * they meant before and no threshold has to be re-tuned. The only difference is where
+     * the window ends.
+     */
+    fun rollingNew(nowMs: Long): Int {
+        val cutoff = nowMs - config.binMillis
+        while (newAtMs.isNotEmpty() && newAtMs.first() <= cutoff) newAtMs.removeFirst()
+        // A clock that jumped backwards would otherwise hold entries from the future here
+        // until real time caught up with them.
+        while (newAtMs.isNotEmpty() && newAtMs.last() > nowMs) newAtMs.removeLast()
+        return newAtMs.size
+    }
+
+    /**
+     * Whether a count has fallen far enough back for the alert to re-arm.
+     *
+     * Overlapping windows mean one burst sits above the threshold for a whole bin-length of
+     * them, so without this a single train would fire the alert once per tick. Coming back
+     * down well below the line rather than just below it stops a count hovering on the
+     * threshold from chattering.
+     */
+    fun hasFallenBack(count: Int, baseline: Double): Boolean =
+        count < config.spikeMinCount ||
+            count < baseline.coerceAtLeast(1.0) * config.spikeFactor * PulseConfig.RELEASE_FRACTION
 
     /**
      * Closes the bin that was accumulating and starts a fresh one.

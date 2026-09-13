@@ -42,6 +42,17 @@ data class ScanUiState(
     val sampleMs: Long = 0,
     /** Increments once per publish, so a reader can tell two identical samples apart. */
     val sampleSeq: Int = 0,
+    /**
+     * New addresses in the last bin-length, ending now.
+     *
+     * The live number, and what the alert is decided on. [currentCount] is still the count
+     * in the bin being accumulated and still what gets written to the CSV, but it resets to
+     * zero every time a bin closes - so as something to watch it is a sawtooth, and as
+     * something to decide on it splits bursts across boundaries.
+     */
+    val rollingNew: Int = 0,
+    /** True while the rolling window is over the line. */
+    val rollingSpike: Boolean = false,
     val referenceRate: Double = 0.0,
     val ignoredCount: Int = 0,
     val lastAlertMs: Long = 0,

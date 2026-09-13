@@ -64,5 +64,13 @@ data class PulseConfig(
 
     companion object {
         val DEFAULT = PulseConfig()
+
+        /**
+         * How far below the line the rolling count has to fall before the alert re-arms.
+         *
+         * Seven tenths. Tight enough that a second train a minute later is still reported,
+         * loose enough that a count sitting on the threshold does not chatter.
+         */
+        const val RELEASE_FRACTION = 0.7
     }
 }

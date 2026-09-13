@@ -73,6 +73,8 @@ import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.RotationCountdown
 import com.sigeye.ui.Section
 import com.sigeye.ui.TakeawayButton
+import com.sigeye.ui.radar.RadarPanel
+import com.sigeye.ui.radar.RadarTarget
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -969,6 +971,68 @@ private fun Following(
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+
+    // Only what is still in. A dropped device leaves the radar and does not come back,
+    // which is what makes this readable: every blip on it is a live candidate, and the ring
+    // it sits in is how close it is right now rather than how close it has been on average.
+    // Somebody drifting to the back of a carriage moves outward while you watch.
+    Spacer(Modifier.height(14.dp))
+    RadarPanel(
+        targets = state.stillIn.map { candidate ->
+            RadarTarget(
+                address = candidate.address,
+                label = candidate.label ?: candidate.vendor ?: candidate.address.takeLast(8),
+                smoothedRssi = candidate.recentRssi,
+                flagged = candidate.carried(state.tuning),
+                watched = targets.any { it.address.equals(candidate.address, true) },
+            )
+        },
+        selected = null,
+        onSelect = {},
+        showSelectionCard = false,
+        footnote = "Only devices still with them. Something that drops out leaves the " +
+            "radar for good, so every blip here is live - and the ring is where it is now, " +
+            "not where it has been on average.",
+    )
+
+    if (state.carried.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    if (state.carried.size == 1) {
+                        "One of these is probably yours"
+                    } else {
+                        "${state.carried.size} of these are probably yours"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Sitting in the innermost ring the whole way and never moving. That is " +
+                        "what something in your own pocket looks like - earbuds, a watch, a " +
+                        "tag - and it survives every test by construction, because it goes " +
+                        "everywhere you go. Worth ruling out before you read anything into " +
+                        "the rest of the list.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(6.dp))
+                state.carried.forEach { candidate ->
+                    Field(
+                        candidate.label ?: candidate.vendor ?: candidate.address,
+                        "${candidate.recentRssi.roundToInt()} dBm, " +
+                            "${(candidate.closeFraction * 100).roundToInt()}% of the time",
+                    )
+                }
+            }
+        }
+    }
 
     if (rebaselinePrompt) {
         Spacer(Modifier.height(12.dp))

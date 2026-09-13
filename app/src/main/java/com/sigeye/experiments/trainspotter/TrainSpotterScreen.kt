@@ -153,15 +153,15 @@ private fun Monitor() {
         // Runs up to the new count rather than jumping to it. Forty new devices arriving
         // in one five second bin is a train, and it should look like one.
         CountUp(
-            value = state.currentCount,
-            color = if (alerting) {
+            value = state.rollingNew,
+            color = if (alerting || state.rollingSpike) {
                 MaterialTheme.colorScheme.error
             } else {
                 MaterialTheme.colorScheme.primary
             },
         )
         Text(
-            text = "new devices this " + state.config.binSeconds + "s bin",
+            text = "new devices in the last " + state.config.binSeconds + " seconds",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

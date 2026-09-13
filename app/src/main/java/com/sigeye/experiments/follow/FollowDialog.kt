@@ -44,6 +44,7 @@ fun FollowSettingsDialog(
     var listable by remember { mutableFloatStateOf(initial.listableAt.toFloat()) }
     var rebaselineMinutes by remember { mutableFloatStateOf(initial.rebaselineAfterMs / 60_000f) }
     var minPackets by remember { mutableFloatStateOf(initial.minPackets.toFloat()) }
+    var carriedDbm by remember { mutableFloatStateOf(initial.carriedDbm.toFloat()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -127,6 +128,19 @@ fun FollowSettingsDialog(
                         "candidate at all. One packet from a passing car is not a device in " +
                         "the room, and counting it inflates the denominator.",
                 ) { minPackets = it }
+
+                Setting(
+                    label = "Probably yours above",
+                    value = carriedDbm,
+                    range = -75f..-40f,
+                    steps = 34,
+                    display = carriedDbm.roundToInt().toString() + " dBm",
+                    detail = "A device this loud for almost the whole follow is in your own " +
+                        "pocket rather than theirs, and gets called out rather than left at " +
+                        "the top of the list. Move it down if your own kit is being missed, " +
+                        "and up if it is flagging theirs - which is the worse mistake of " +
+                        "the two.",
+                ) { carriedDbm = it }
             }
         },
         confirmButton = {
@@ -142,6 +156,7 @@ fun FollowSettingsDialog(
                             rebaselineAfterMs = (rebaselineMinutes.roundToInt() * 60_000L),
                             minPackets = minPackets.roundToInt(),
                             lostAfterMs = initial.lostAfterMs,
+                            carriedDbm = carriedDbm.roundToInt(),
                         ),
                     )
                 },

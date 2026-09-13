@@ -33,6 +33,15 @@ class TrainSpotterEngine(
     private var lastAlertMs = 0L
     private var lastPublishMs = System.currentTimeMillis()
 
+    /**
+     * False between an alert firing and the count coming back down.
+     *
+     * A Schmitt trigger, because the windows overlap: one burst is above the line in every
+     * window that contains it, and firing on each of those would be one train reported
+     * eight times.
+     */
+    private var armed = true
+
     fun start(nowMs: Long) {
         config = settings.load()
         aggregator.reconfigure(config)
@@ -40,6 +49,7 @@ class TrainSpotterEngine(
         csv.pruneOlderThan(CSV_RETENTION_DAYS)
         BleScanHub.cycleMillis = config.scanCycleMillis
         lastAlertMs = 0L
+        armed = true
         nextCloseAtMs = nowMs + config.binMillis
 
         PulseState.update {
@@ -96,14 +106,35 @@ class TrainSpotterEngine(
                         "baseline=${"%.1f".format(bin.baseline)} " +
                         "phase=${bin.phase.csv()} spike=${bin.spike}",
                 )
-                if (bin.spike) maybeAlert(bin, nowMs)
                 onBinClosed()
             }
+        }
+
+        // The decision, on a window that ends now rather than at the last boundary. The
+        // bin's own spike flag is still computed and still written to the CSV, because the
+        // recorded history and the labels in it are all bin-shaped and have to stay
+        // comparable with what was recorded before this existed.
+        evaluateRolling(nowMs)
+    }
+
+    private fun evaluateRolling(nowMs: Long) {
+        if (!aggregator.isWarm()) return
+        val rolling = aggregator.rollingNew(nowMs)
+        val baseline = aggregator.computeBaseline()
+
+        if (aggregator.isSpike(rolling, baseline)) {
+            if (armed) {
+                armed = false
+                alert(rolling, baseline, nowMs)
+            }
+        } else if (aggregator.hasFallenBack(rolling, baseline)) {
+            armed = true
         }
     }
 
     fun publish(health: ScanHealth) {
         val publishedAtMs = System.currentTimeMillis()
+        val rolling = aggregator.rollingNew(publishedAtMs)
         PulseState.update {
             it.copy(
                 running = true,
@@ -120,6 +151,8 @@ class TrainSpotterEngine(
                 sampleNew = aggregator.takeNewSinceLastAsk(),
                 sampleMs = (publishedAtMs - lastPublishMs).coerceAtLeast(1L),
                 sampleSeq = it.sampleSeq + 1,
+                rollingNew = rolling,
+                rollingSpike = aggregator.isSpike(rolling, aggregator.computeBaseline()),
                 referenceRate = health.referenceRate,
                 scanRestarts = health.restarts,
                 error = health.error,
@@ -134,11 +167,28 @@ class TrainSpotterEngine(
         PulseState.update { it.copy(running = false, currentCount = 0) }
     }
 
-    private fun maybeAlert(bin: Bin, nowMs: Long) {
+    /**
+     * Fires once for a burst, subject to the cooldown.
+     *
+     * The [Bin] handed to the notification is synthesised from the window rather than taken
+     * from the history, because the window is what the decision was made on and the
+     * notification should say what was actually seen. It is never added to the history.
+     */
+    private fun alert(count: Int, baseline: Double, nowMs: Long) {
         if (nowMs - lastAlertMs < config.alertCooldownMillis) return
         lastAlertMs = nowMs
         PulseState.update { it.copy(lastAlertMs = nowMs) }
-        onSpike(bin)
+        onSpike(
+            Bin(
+                startMs = nowMs - config.binMillis,
+                newCount = count,
+                activeUnique = aggregator.activeUnique(),
+                baseline = baseline,
+                spike = true,
+                phase = aggregator.phase(),
+                label = "",
+            ),
+        )
     }
 
     companion object {
