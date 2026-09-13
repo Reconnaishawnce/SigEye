@@ -40,8 +40,8 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.ProximityEstimator
-import com.sigeye.core.analysis.ProximityReading
+import com.sigeye.core.analysis.rf.ProximityEstimator
+import com.sigeye.core.analysis.rf.ProximityReading
 import com.sigeye.core.ble.Advert
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.experiments.watchlist.WatchStore

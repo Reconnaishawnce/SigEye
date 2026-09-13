@@ -94,7 +94,7 @@ and takes a list of `Diagnostic`.
 
 ## Shared machinery
 
-### 7. `core/analysis/` is thirty-one flat files
+### 7. `core/analysis/` is thirty-one flat files — *done*
 
 The `Track` / `RotationTrack` collision was a symptom, not an accident. The package now
 holds beacon decoding, path loss fitting, convoy detection, forensic recording, fingerprint

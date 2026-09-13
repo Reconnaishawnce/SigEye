@@ -1,8 +1,8 @@
 package com.sigeye.core
 
 import android.content.Context
-import com.sigeye.core.analysis.JourneyDevice
-import com.sigeye.core.analysis.JourneyLeg
+import com.sigeye.core.analysis.presence.JourneyDevice
+import com.sigeye.core.analysis.presence.JourneyLeg
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray

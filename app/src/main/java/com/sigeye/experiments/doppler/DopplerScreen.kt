@@ -39,10 +39,10 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.FitQuality
-import com.sigeye.core.analysis.PathLossFit
-import com.sigeye.core.analysis.PathLossResult
-import com.sigeye.core.analysis.WalkSample
+import com.sigeye.core.analysis.rf.FitQuality
+import com.sigeye.core.analysis.rf.PathLossFit
+import com.sigeye.core.analysis.rf.PathLossResult
+import com.sigeye.core.analysis.rf.WalkSample
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.StepSensor
 import com.sigeye.ui.Diagnostic

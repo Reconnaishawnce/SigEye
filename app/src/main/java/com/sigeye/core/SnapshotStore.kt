@@ -1,8 +1,8 @@
 package com.sigeye.core
 
 import android.content.Context
-import com.sigeye.core.analysis.Sighting
-import com.sigeye.core.analysis.Snapshot
+import com.sigeye.core.analysis.presence.Sighting
+import com.sigeye.core.analysis.record.Snapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray

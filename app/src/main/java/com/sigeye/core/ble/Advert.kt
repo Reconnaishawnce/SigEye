@@ -2,7 +2,7 @@ package com.sigeye.core.ble
 
 import android.bluetooth.le.ScanResult
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.AdvertShape
+import com.sigeye.core.analysis.identity.AdvertShape
 
 /**
  * One decoded BLE advertisement, shared by every experiment.

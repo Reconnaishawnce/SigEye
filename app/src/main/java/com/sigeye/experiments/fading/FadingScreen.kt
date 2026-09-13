@@ -44,10 +44,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.FadeSample
-import com.sigeye.core.analysis.FadingAnalysis
-import com.sigeye.core.analysis.FadingCharacter
-import com.sigeye.core.analysis.FadingStats
+import com.sigeye.core.analysis.rf.FadeSample
+import com.sigeye.core.analysis.rf.FadingAnalysis
+import com.sigeye.core.analysis.rf.FadingCharacter
+import com.sigeye.core.analysis.rf.FadingStats
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PauseBar

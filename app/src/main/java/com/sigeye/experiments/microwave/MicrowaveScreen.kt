@@ -37,9 +37,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.AbComparison
-import com.sigeye.core.analysis.AbResult
-import com.sigeye.core.analysis.Significance
+import com.sigeye.core.analysis.rf.AbComparison
+import com.sigeye.core.analysis.rf.AbResult
+import com.sigeye.core.analysis.rf.Significance
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.PermissionGate

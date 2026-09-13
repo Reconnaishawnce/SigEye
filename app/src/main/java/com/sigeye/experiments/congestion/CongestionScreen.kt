@@ -43,11 +43,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.AdvertChannelLoad
-import com.sigeye.core.analysis.ChannelLoad
-import com.sigeye.core.analysis.Occupant
-import com.sigeye.core.analysis.Reception
-import com.sigeye.core.analysis.Spectrum
+import com.sigeye.core.analysis.rf.AdvertChannelLoad
+import com.sigeye.core.analysis.rf.ChannelLoad
+import com.sigeye.core.analysis.rf.Occupant
+import com.sigeye.core.analysis.rf.Reception
+import com.sigeye.core.analysis.rf.Spectrum
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.wifi.AccessPoint
 import com.sigeye.core.wifi.WifiScanHub

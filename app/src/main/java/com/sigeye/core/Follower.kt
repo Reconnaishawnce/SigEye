@@ -1,10 +1,10 @@
 package com.sigeye.core
 
-import com.sigeye.core.analysis.FollowDecision
-import com.sigeye.core.analysis.FollowRefusal
-import com.sigeye.core.analysis.Following
-import com.sigeye.core.analysis.Identity
-import com.sigeye.core.analysis.LiveAddress
+import com.sigeye.core.analysis.identity.FollowDecision
+import com.sigeye.core.analysis.identity.FollowRefusal
+import com.sigeye.core.analysis.identity.Following
+import com.sigeye.core.analysis.identity.Identity
+import com.sigeye.core.analysis.identity.LiveAddress
 import com.sigeye.core.ble.Advert
 import com.sigeye.core.ble.shape
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -53,11 +53,11 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.MotionConfig
-import com.sigeye.core.analysis.MotionDetector
-import com.sigeye.core.analysis.MotionEvent
-import com.sigeye.core.analysis.MotionReading
-import com.sigeye.core.analysis.MotionState
+import com.sigeye.core.analysis.presence.MotionConfig
+import com.sigeye.core.analysis.presence.MotionDetector
+import com.sigeye.core.analysis.presence.MotionEvent
+import com.sigeye.core.analysis.presence.MotionReading
+import com.sigeye.core.analysis.presence.MotionState
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.experiments.watchlist.MatchKind
 import com.sigeye.experiments.watchlist.WatchStore

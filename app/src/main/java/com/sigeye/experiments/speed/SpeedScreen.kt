@@ -40,10 +40,10 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.PassQuality
-import com.sigeye.core.analysis.PassResult
-import com.sigeye.core.analysis.PassWatcher
-import com.sigeye.core.analysis.WatcherStats
+import com.sigeye.core.analysis.presence.PassQuality
+import com.sigeye.core.analysis.presence.PassResult
+import com.sigeye.core.analysis.presence.PassWatcher
+import com.sigeye.core.analysis.presence.WatcherStats
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.Diagnostic

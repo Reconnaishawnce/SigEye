@@ -8,7 +8,7 @@ import android.content.IntentFilter
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
-import com.sigeye.core.analysis.Spectrum
+import com.sigeye.core.analysis.rf.Spectrum
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 

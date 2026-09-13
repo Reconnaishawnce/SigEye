@@ -1,10 +1,10 @@
 package com.sigeye.core
 
 import android.content.Context
-import com.sigeye.core.analysis.ConvoyTracker
-import com.sigeye.core.analysis.ForensicRecorder
-import com.sigeye.core.analysis.PlaceProfile
-import com.sigeye.core.analysis.TrackDetail
+import com.sigeye.core.analysis.presence.ConvoyTracker
+import com.sigeye.core.analysis.record.ForensicRecorder
+import com.sigeye.core.analysis.presence.PlaceProfile
+import com.sigeye.core.analysis.record.TrackDetail
 import com.sigeye.core.ble.Advert
 import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub

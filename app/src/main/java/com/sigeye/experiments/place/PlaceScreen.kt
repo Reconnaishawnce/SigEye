@@ -40,8 +40,8 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Recordings
 import com.sigeye.core.ScanService
-import com.sigeye.core.analysis.PlaceReport
-import com.sigeye.core.analysis.Resident
+import com.sigeye.core.analysis.presence.PlaceReport
+import com.sigeye.core.analysis.presence.Resident
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel

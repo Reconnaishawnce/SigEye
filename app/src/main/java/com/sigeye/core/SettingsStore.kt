@@ -1,9 +1,9 @@
 package com.sigeye.core
 
 import android.content.Context
-import com.sigeye.core.analysis.Density
-import com.sigeye.core.analysis.Environment
-import com.sigeye.core.analysis.Tuning
+import com.sigeye.core.analysis.presence.Density
+import com.sigeye.core.analysis.presence.Environment
+import com.sigeye.core.analysis.presence.Tuning
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 

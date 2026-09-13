@@ -37,8 +37,8 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
 import com.sigeye.core.SettingsStore
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.Density
-import com.sigeye.core.analysis.Environment
+import com.sigeye.core.analysis.presence.Density
+import com.sigeye.core.analysis.presence.Environment
 import com.sigeye.core.SweepExport
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.CaptureStore

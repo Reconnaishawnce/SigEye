@@ -1,7 +1,7 @@
 package com.sigeye.core
 
 import android.content.Context
-import com.sigeye.core.analysis.Handover
+import com.sigeye.core.analysis.identity.Handover
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray

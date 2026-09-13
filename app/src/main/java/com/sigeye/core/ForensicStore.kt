@@ -1,8 +1,8 @@
 package com.sigeye.core
 
 import android.content.Context
-import com.sigeye.core.analysis.SavedDevice
-import com.sigeye.core.analysis.SavedSession
+import com.sigeye.core.analysis.record.SavedDevice
+import com.sigeye.core.analysis.record.SavedSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray

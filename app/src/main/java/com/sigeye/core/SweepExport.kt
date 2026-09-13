@@ -3,7 +3,7 @@ package com.sigeye.core
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
-import com.sigeye.core.analysis.HeadingSample
+import com.sigeye.core.analysis.rf.HeadingSample
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date

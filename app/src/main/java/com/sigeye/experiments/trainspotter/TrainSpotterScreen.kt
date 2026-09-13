@@ -39,7 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.ScanService
-import com.sigeye.core.analysis.TrainLog
+import com.sigeye.core.analysis.presence.TrainLog
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
 import com.sigeye.ui.PermissionGate

@@ -36,10 +36,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.BandPair
-import com.sigeye.core.analysis.DualBand
-import com.sigeye.core.analysis.Penetration
-import com.sigeye.core.analysis.Radio
+import com.sigeye.core.analysis.rf.BandPair
+import com.sigeye.core.analysis.rf.DualBand
+import com.sigeye.core.analysis.rf.Penetration
+import com.sigeye.core.analysis.rf.Radio
 import com.sigeye.core.wifi.WifiScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel

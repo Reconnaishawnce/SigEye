@@ -20,8 +20,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
-import com.sigeye.core.analysis.Sector
-import com.sigeye.core.analysis.SweepResult
+import com.sigeye.core.analysis.rf.Sector
+import com.sigeye.core.analysis.rf.SweepResult
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin

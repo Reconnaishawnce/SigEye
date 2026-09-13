@@ -33,8 +33,8 @@ import com.sigeye.core.FollowStore
 import com.sigeye.core.Permissions
 import com.sigeye.core.Recordings
 import com.sigeye.core.Subject
-import com.sigeye.core.analysis.Following
-import com.sigeye.core.analysis.Handover
+import com.sigeye.core.analysis.identity.Following
+import com.sigeye.core.analysis.identity.Handover
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel

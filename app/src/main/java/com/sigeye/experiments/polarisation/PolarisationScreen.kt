@@ -35,9 +35,9 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
-import com.sigeye.core.analysis.PolarSweep
-import com.sigeye.core.analysis.Polarisation
-import com.sigeye.core.analysis.PolarisationResult
+import com.sigeye.core.analysis.rf.PolarSweep
+import com.sigeye.core.analysis.rf.Polarisation
+import com.sigeye.core.analysis.rf.PolarisationResult
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.RollSensor
 import com.sigeye.ui.Diagnostic

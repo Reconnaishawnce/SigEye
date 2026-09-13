@@ -45,9 +45,9 @@ import com.sigeye.core.SavedJourney
 import com.sigeye.core.ScanService
 import com.sigeye.core.SnapshotStore
 import com.sigeye.core.SweepExport
-import com.sigeye.core.analysis.ConvoyReport
-import com.sigeye.core.analysis.FollowConfidence
-import com.sigeye.core.analysis.Follower
+import com.sigeye.core.analysis.presence.ConvoyReport
+import com.sigeye.core.analysis.presence.FollowConfidence
+import com.sigeye.core.analysis.presence.Follower
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.AlertPicker
 import com.sigeye.ui.DeviceActions

@@ -44,11 +44,11 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.SettingsStore
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.DwellClass
-import com.sigeye.core.analysis.PopulationConfig
-import com.sigeye.core.analysis.PopulationSnapshot
-import com.sigeye.core.analysis.PopulationTracker
-import com.sigeye.core.analysis.TrackedDevice
+import com.sigeye.core.analysis.presence.DwellClass
+import com.sigeye.core.analysis.presence.PopulationConfig
+import com.sigeye.core.analysis.presence.PopulationSnapshot
+import com.sigeye.core.analysis.presence.PopulationTracker
+import com.sigeye.core.analysis.presence.TrackedDevice
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.DetailField
 import com.sigeye.ui.DeviceActions
