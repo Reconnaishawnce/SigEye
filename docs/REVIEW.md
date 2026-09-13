@@ -120,12 +120,17 @@ means a recomposition per packet — hundreds a second in a busy room. Most scre
 avoid this by buffering and publishing on a ticker; the rest should. It is the difference
 between a screen that costs battery and one that costs a lot of battery.
 
-### 10. Four core classes have no tests
+### 10. Two core classes have no tests
 
-`AbComparison`, `LiveAddress`, `RotationLab` and `SweepSession`. `LiveAddress` is now
-shared by two trackers and is where every identity is built — it is the worst one to have
-untested. `RotationLab` does the cohort and rhythm aggregation the whole Rotation Lab
-screen rests on.
+*Corrected after the fact: this said four. `AbComparison` and `SweepSession` are both
+tested in `AbAndSweepSessionTest.kt`, and I missed them because I looked for a file named
+after each class. The finding below is what was actually true.*
+
+`LiveAddress` and `RotationLab`. `LiveAddress` is now shared by two trackers and is where
+every identity in the app is built — it is the worse of the two to have left untested,
+because if the interval it reports were wrong, Defeating Randomisation, Rotation Lab and
+Persistent Tracking would all be wrong together and in the same direction. `RotationLab`
+does the cohort and rhythm aggregation the whole Rotation Lab screen rests on.
 
 ### 11. No test covers a screen at all
 
