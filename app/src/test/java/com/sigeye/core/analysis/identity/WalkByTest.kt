@@ -208,6 +208,7 @@ class WalkByTest {
         val base = FollowCandidate(
             address = "AA", label = null, vendor = null, isRandom = true,
             packets = 40, meanRssi = -60.0, recentRssi = -60.0, closeFraction = 0.0,
+            spreadDb = 30.0,
             firstSeenMs = start, lastSeenMs = now, addresses = listOf("AA"),
             inPool = true,
         )
