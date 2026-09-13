@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis.rf
 
+import com.sigeye.core.analysis.Stats
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -84,8 +85,8 @@ object FadingAnalysis {
             sdDb = sqrt(variance),
             minDbm = values.min(),
             maxDbm = values.max(),
-            p10Dbm = percentile(sorted, 0.10),
-            p90Dbm = percentile(sorted, 0.90),
+            p10Dbm = Stats.percentile(sorted, 0.10),
+            p90Dbm = Stats.percentile(sorted, 0.90),
             ricianK = ricianK(values),
             spanSeconds = span(samples),
         )
@@ -114,15 +115,6 @@ object FadingAnalysis {
         if (g >= 1.0) return 0.0
         val u = 1.0 - g
         return (u + sqrt(u)) / g
-    }
-
-    private fun percentile(sorted: List<Double>, fraction: Double): Double {
-        if (sorted.isEmpty()) return 0.0
-        if (sorted.size == 1) return sorted[0]
-        val position = fraction * (sorted.size - 1)
-        val low = position.toInt()
-        val high = (low + 1).coerceAtMost(sorted.lastIndex)
-        return sorted[low] + (sorted[high] - sorted[low]) * (position - low)
     }
 
     private fun span(samples: List<FadeSample>): Double {

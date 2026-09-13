@@ -35,7 +35,7 @@ class FollowTest {
         // Everybody in the lobby survives the lobby. The screen has to admit that or it is
         // asserting a finding it does not have.
         val session = FollowSession()
-        session.beginLeg("lobby", moving = false, atMs = start)
+        session.beginLeg("lobby", kind = LegKind.STILL, atMs = start)
         listOf("5A:01", "5A:02", "5A:03").forEach { session.hear(it, start) }
         session.endLeg(start + 60_000)
 
@@ -49,12 +49,12 @@ class FollowTest {
     fun `traveling together cuts what stayed behind`() {
         val session = FollowSession()
 
-        session.beginLeg("the office", moving = false, atMs = start)
+        session.beginLeg("the office", kind = LegKind.STILL, atMs = start)
         listOf("5A:01", "5A:02", "5A:03", "5A:04").forEach { session.hear(it, start) }
         session.endLeg(start + 60_000)
 
         // A mile later, only the one that came along is still audible.
-        session.beginLeg("the walk", moving = true, atMs = start + 120_000)
+        session.beginLeg("the walk", kind = LegKind.TOGETHER, atMs = start + 120_000)
         session.hear("5A:01", start + 120_000)
         session.endLeg(start + 300_000)
 
@@ -68,12 +68,12 @@ class FollowTest {
     @Test
     fun `a moving leg is worth more than a standing one`() {
         val session = FollowSession()
-        session.beginLeg("stood about", moving = false, atMs = start)
+        session.beginLeg("stood about", kind = LegKind.STILL, atMs = start)
         session.hear("5A:01", start)
         session.hear("5A:02", start)
         session.endLeg(start + 30_000)
 
-        session.beginLeg("walked", moving = true, atMs = start + 40_000)
+        session.beginLeg("walked", kind = LegKind.TOGETHER, atMs = start + 40_000)
         session.hear("5A:02", start + 40_000)
         session.endLeg(start + 90_000)
 
@@ -86,16 +86,16 @@ class FollowTest {
     @Test
     fun `a device that drops out and comes back has not survived the leg it missed`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.hear("5A:02", start)
         session.endLeg(start + 60_000)
 
-        session.beginLeg("two", moving = true, atMs = start + 70_000)
+        session.beginLeg("two", kind = LegKind.TOGETHER, atMs = start + 70_000)
         session.hear("5A:01", start + 70_000)
         session.endLeg(start + 130_000)
 
-        session.beginLeg("three", moving = true, atMs = start + 140_000)
+        session.beginLeg("three", kind = LegKind.TOGETHER, atMs = start + 140_000)
         session.hear("5A:01", start + 140_000)
         session.hear("5A:02", start + 140_000)
         session.endLeg(start + 200_000)
@@ -111,7 +111,7 @@ class FollowTest {
     @Test
     fun `a device heard once is not a candidate`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start, packets = 1)
         session.hear("5A:02", start, packets = 10)
         session.endLeg(start + 60_000)
@@ -130,8 +130,8 @@ class FollowTest {
     @Test
     fun `beginning a leg closes the one before it`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = false, atMs = start)
-        session.beginLeg("two", moving = true, atMs = start + 10_000)
+        session.beginLeg("one", kind = LegKind.STILL, atMs = start)
+        session.beginLeg("two", kind = LegKind.TOGETHER, atMs = start + 10_000)
         val legs = session.state(start + 20_000).legs
         assertEquals(2, legs.size)
         assertEquals(start + 10_000, legs.first().endedAtMs)
@@ -143,7 +143,7 @@ class FollowTest {
     @Test
     fun `locking a candidate moves the session to holding`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         val state = session.state(start + 5_000)
@@ -154,7 +154,7 @@ class FollowTest {
     @Test
     fun `a target that has gone quiet is reported lost, not still held`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         val state = session.state(start + 5 * 60_000L)
@@ -165,7 +165,7 @@ class FollowTest {
     @Test
     fun `a couple of dropped packets is not being lost`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         assertEquals(FollowPhase.HOLDING, session.state(start + 20_000).phase)
@@ -174,7 +174,7 @@ class FollowTest {
     @Test
     fun `unlocking goes back to narrowing rather than starting over`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         session.unlock()
@@ -189,10 +189,10 @@ class FollowTest {
     @Test
     fun `a re-acquired target carries its history onto the new address`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.endLeg(start + 60_000)
-        session.beginLeg("two", moving = true, atMs = start + 70_000)
+        session.beginLeg("two", kind = LegKind.TOGETHER, atMs = start + 70_000)
         session.hear("5A:01", start + 70_000)
         session.lock("5A:01")
 
@@ -212,7 +212,7 @@ class FollowTest {
         // A device that has never changed address while being watched could do it at any
         // moment. A countdown to a made-up deadline is worse than no countdown.
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         assertNull(session.state(start + 10_000).expectedReturnMs)
@@ -221,7 +221,7 @@ class FollowTest {
     @Test
     fun `one rotation is enough to expect the next, on the specification default`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         session.hear("5B:02", start + 100_000)
@@ -239,7 +239,7 @@ class FollowTest {
     @Test
     fun `a measured rhythm beats the default once there is one`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
 
@@ -258,7 +258,7 @@ class FollowTest {
     @Test
     fun `re-acquiring something never heard from changes nothing`() {
         val session = FollowSession()
-        session.beginLeg("one", moving = true, atMs = start)
+        session.beginLeg("one", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.lock("5A:01")
         session.reacquire("FF:FF", start + 10_000)
@@ -268,7 +268,7 @@ class FollowTest {
     @Test
     fun `the export carries the legs and the survivors`() {
         val session = FollowSession()
-        session.beginLeg("the walk", moving = true, atMs = start)
+        session.beginLeg("the walk", kind = LegKind.TOGETHER, atMs = start)
         session.hear("5A:01", start)
         session.endLeg(start + 60_000)
         val csv = session.csv()

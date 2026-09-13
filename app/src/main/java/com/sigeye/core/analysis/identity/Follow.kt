@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis.identity
 
+import com.sigeye.core.analysis.Stats
 import java.util.Locale
 
 /** Where a follow session has got to. */
@@ -17,18 +18,134 @@ enum class FollowPhase(val label: String) {
     LOST("Lost"),
 }
 
-/** One stretch of the session: a place stood in, or a distance travelled. */
+/**
+ * What kind of test a leg is.
+ *
+ * The kind is not decoration. Standing in a room with somebody proves nothing about which
+ * device is theirs, circling them tests whether a device stays at the same distance from
+ * you, and walking together tests whether it comes along. Three different questions, and a
+ * screen that treats them the same is telling the person holding it that a minute in a
+ * lobby is worth a mile of travel.
+ */
+enum class LegKind(val label: String, val weight: Int) {
+    /** Standing about. Cuts whatever walks past, and very little else. */
+    STILL("Standing still", 1),
+
+    /** A slow circle around the person. Cuts what is not centred on them. */
+    ORBIT("Circling them", 2),
+
+    /** Walking together. Cuts everything that stayed behind, which is nearly everything. */
+    TOGETHER("Walking together", 3),
+    ;
+
+    /** True when the phone travels during the leg, which is what makes it discriminating. */
+    val moving: Boolean get() = this == TOGETHER
+}
+
+/** One stretch of the session: a place stood in, a circle walked, or a distance travelled. */
 data class FollowLeg(
     val index: Int,
     val label: String,
     val startedAtMs: Long,
     val endedAtMs: Long?,
-    /** True when the phone was moving during it, which is what makes a leg discriminating. */
-    val moving: Boolean,
+    val kind: LegKind,
 ) {
     val running: Boolean get() = endedAtMs == null
 
+    val moving: Boolean get() = kind.moving
+
     fun durationMs(nowMs: Long): Long = (endedAtMs ?: nowMs) - startedAtMs
+}
+
+/**
+ * What a circle around somebody said about one device.
+ *
+ * Walk a slow circle a few paces out and the geometry does the work. A device on the person
+ * at the centre stays the same distance from you the whole way round, so it is heard in
+ * every arc and its level barely moves. A device across the room is near you on one side of
+ * the circle and far on the other, so its level swings and it often drops out entirely for
+ * an arc or two.
+ *
+ * Three separate things have to be true, and each one rules out a different impostor:
+ *
+ * - **Heard in every arc.** Anything that misses an arc was shadowed or out of range from
+ *   somewhere on the circle, and nothing on the person can be.
+ * - **Loud.** A device forty metres away is also flat, because walking five paces across a
+ *   forty-metre baseline changes nothing. Loudness is what separates flat-and-close from
+ *   flat-and-far.
+ * - **Flat.** The level itself, spread between the tenth and ninetieth percentile.
+ *
+ * **What this does not rule out, and the screen has to say so.** Anything else the person
+ * is carrying passes too - their watch, their earbuds, their card. That is not a failure,
+ * those are also them. A fixed object at the exact centre of the circle passes as well,
+ * which is why the instruction is to circle a person rather than a table. And the person's
+ * own body absorbs a few dB of their phone's signal from whichever side it is on, so a
+ * genuine target is never perfectly flat - the threshold is loose on purpose.
+ */
+data class OrbitScore(
+    val arcsHeard: Int,
+    val arcsTotal: Int,
+    val packets: Int,
+    val meanRssi: Double,
+    /** Tenth to ninetieth percentile of the level during the circle, in dB. */
+    val spreadDb: Double,
+) {
+    val continuous: Boolean get() = arcsTotal > 0 && arcsHeard >= arcsTotal
+
+    val near: Boolean get() = meanRssi >= NEAR_DBM
+
+    /**
+     * Too few packets to have a shape at all.
+     *
+     * Two readings seven seconds apart are not flat, they are sparse, and a spread of zero
+     * computed from them would put a device that was barely there at the top of the list.
+     */
+    val sparse: Boolean get() = packets < MIN_PACKETS
+
+    val flat: Boolean get() = !sparse && spreadDb <= FLAT_DB
+
+    val centred: Boolean get() = continuous && near && flat
+
+    fun describe(): String = when {
+        !continuous -> "dropped out for ${arcsTotal - arcsHeard} of $arcsTotal arcs"
+        sparse -> "only $packets packets round the whole circle"
+        !near -> "heard all the way round but faint, ${meanRssi.toInt()} dBm"
+        !flat -> "swung ${spreadDb.toInt()} dB round the circle, so it is off to one side"
+        else -> "stayed within ${spreadDb.toInt()} dB all the way round"
+    }
+
+    companion object {
+        /**
+         * Loud enough to be on the person you are walking round rather than across the room.
+         *
+         * Five paces is roughly four metres, and a phone advertising at its usual power
+         * lands well above this from there. Set low rather than tight: an RPA in a back
+         * pocket with a body in the way is a genuinely weak signal, and losing the real
+         * target is a worse failure here than keeping an extra candidate.
+         */
+        const val NEAR_DBM = -78.0
+
+        /**
+         * How much the level may swing and still count as the same distance.
+         *
+         * Generous, because the person turning puts their own torso between the phone and
+         * you for part of the circle, and that alone is worth the better part of ten dB.
+         */
+        const val FLAT_DB = 14.0
+
+        /**
+         * How long an arc is.
+         *
+         * A comfortable circle at five paces out takes something like a minute, so this
+         * cuts it into about eight pieces - enough that missing one is a real gap rather
+         * than a dropped packet, and few enough that a device advertising once a second
+         * has several chances in each.
+         */
+        const val ARC_MS = 7_500L
+
+        /** Below this, a device is sparse rather than flat. */
+        const val MIN_PACKETS = 6
+    }
 }
 
 /** One device that has survived the tests so far. */
@@ -45,6 +162,8 @@ data class FollowCandidate(
     val lastSeenMs: Long,
     /** Addresses this device has worn during the session, oldest first. */
     val addresses: List<String>,
+    /** Null until a circle has been walked. */
+    val orbit: OrbitScore? = null,
 ) {
     val survivedAll: Boolean get() = legsPossible > 0 && legsSeen == legsPossible
 
@@ -57,12 +176,19 @@ data class FollowCandidate(
      * stand in a room together says only that a device is in that room; staying in range
      * across a mile of city says it is traveling with them, and there are very few things
      * that can be.
+     *
+     * Passing the circle is worth less than a single moving leg, deliberately. A circle is
+     * one room and one minute, and a device on a shelf at the middle of it passes; a mile
+     * of travel is a claim almost nothing survives by accident. The ordering that has to
+     * come out of this is: came with you and centred, then came with you, then centred
+     * only.
      */
-    val weight: Int get() = legsSeen + movingLegsSeen * 2
+    val weight: Int get() = legsSeen + movingLegsSeen * 2 + if (orbit?.centred == true) 1 else 0
 
     fun describe(): String = buildString {
         append("$legsSeen of $legsPossible legs")
         if (movingLegsSeen > 0) append(", $movingLegsSeen while moving")
+        orbit?.let { append(", ${it.describe()}") }
         if (rotations > 0) append(", followed through $rotations rotation")
         if (rotations > 1) append("s")
     }
@@ -87,6 +213,12 @@ data class FollowState(
     val expectedReturnMs: Long?,
 ) {
     val survivors: Int get() = candidates.count { it.survivedAll }
+
+    /** True once a circle has been walked, so the screen knows whether to report one. */
+    val orbited: Boolean get() = legs.any { it.kind == LegKind.ORBIT }
+
+    /** Survivors the circle also said are centred on you. */
+    val centred: Int get() = candidates.count { it.survivedAll && it.orbit?.centred == true }
 
     /** How much the elimination has actually narrowed things down. */
     fun narrowing(): String = when {
@@ -134,6 +266,10 @@ class FollowSession {
         val movingLegs: MutableSet<Int> = mutableSetOf()
         val addresses: MutableList<String> = mutableListOf()
 
+        /** Arcs of the circle this device was heard in, and the levels it was heard at. */
+        val orbitArcs: MutableSet<Int> = mutableSetOf()
+        val orbitRssi: MutableList<Int> = mutableListOf()
+
         val meanRssi: Double get() = if (packets == 0) -127.0 else rssiTotal / packets
     }
 
@@ -169,19 +305,44 @@ class FollowSession {
         legs.lastOrNull()?.takeIf { it.running }?.let { leg ->
             entry.legs.add(leg.index)
             if (leg.moving) entry.movingLegs.add(leg.index)
+            if (leg.kind == LegKind.ORBIT) {
+                entry.orbitArcs.add(arcOf(leg, atMs))
+                entry.orbitRssi.add(rssi)
+            }
         }
     }
 
     /**
+     * Which slice of the circle a packet landed in.
+     *
+     * Counted from the start of the leg in fixed-length arcs rather than as a fraction of
+     * the whole, because the whole is not known until the leg ends and the count has to be
+     * right while it is still running.
+     */
+    private fun arcOf(leg: FollowLeg, atMs: Long): Int =
+        ((atMs - leg.startedAtMs) / OrbitScore.ARC_MS).toInt().coerceAtLeast(0)
+
+    /**
+     * How many arcs a circle of this length has, rounded up.
+     *
+     * Rounded up rather than down so a lap that runs a few seconds past a boundary is not
+     * scored as if the last sliver were a whole arc nobody could fill. A lap of exactly
+     * eight arcs has eight, not nine: the instant the leg ends belongs to the next one.
+     */
+    private fun arcsIn(durationMs: Long): Int =
+        ((durationMs + OrbitScore.ARC_MS - 1) / OrbitScore.ARC_MS).toInt().coerceAtLeast(0)
+
+    /**
      * Starts a stretch of the session.
      *
-     * @param moving whether the phone is traveling during it. A standing leg cuts what
-     *   walks past; a moving leg cuts everything that stayed behind, which is nearly
-     *   everything.
+     * A second circle would overwrite the first one's arcs rather than add to it, so it is
+     * refused: the arcs of two circles walked at different radii are not the same
+     * measurement, and silently mixing them would make the flatness test meaningless.
      */
-    fun beginLeg(label: String, moving: Boolean, atMs: Long) {
+    fun beginLeg(label: String, kind: LegKind, atMs: Long) {
+        if (kind == LegKind.ORBIT && legs.any { it.kind == LegKind.ORBIT }) return
         endLeg(atMs)
-        legs.add(FollowLeg(legs.size, label, atMs, null, moving))
+        legs.add(FollowLeg(legs.size, label, atMs, null, kind))
         if (phase == FollowPhase.CENSUS) phase = FollowPhase.NARROWING
     }
 
@@ -199,6 +360,8 @@ class FollowSession {
      */
     fun candidates(nowMs: Long, minPackets: Int = MIN_PACKETS): List<FollowCandidate> {
         val possible = legs.size
+        val orbitLeg = legs.firstOrNull { it.kind == LegKind.ORBIT }
+        val arcs = orbitLeg?.let { arcsIn(it.durationMs(nowMs)) } ?: 0
         return tracked.entries
             .filter { it.value.packets >= minPackets }
             .map { (address, entry) ->
@@ -214,12 +377,29 @@ class FollowSession {
                     meanRssi = entry.meanRssi,
                     lastSeenMs = entry.lastSeenMs,
                     addresses = entry.addresses.toList(),
+                    orbit = if (orbitLeg == null) null else scoreOrbit(entry, arcs),
                 )
             }
             .sortedWith(
                 compareByDescending<FollowCandidate> { it.weight }
                     .thenByDescending { it.meanRssi },
             )
+    }
+
+    /** What the circle said about one device. */
+    private fun scoreOrbit(entry: Tracked, arcs: Int): OrbitScore {
+        val levels = entry.orbitRssi.map { it.toDouble() }.sorted()
+        return OrbitScore(
+            arcsHeard = entry.orbitArcs.size,
+            arcsTotal = arcs,
+            packets = levels.size,
+            meanRssi = if (levels.isEmpty()) -127.0 else levels.average(),
+            spreadDb = if (levels.size < 2) {
+                0.0
+            } else {
+                Stats.percentile(levels, 0.9) - Stats.percentile(levels, 0.1)
+            },
+        )
     }
 
     fun lock(address: String) {
@@ -303,13 +483,13 @@ class FollowSession {
     fun csv(): String = buildString {
         appendLine("# SigEye follow session")
         appendLine("legs,${legs.size}")
-        appendLine("leg,label,moving,started_ms,ended_ms")
+        appendLine("leg,label,kind,started_ms,ended_ms")
         legs.forEach {
-            appendLine("${it.index},${it.label.replace(',', ' ')},${it.moving}," +
+            appendLine("${it.index},${it.label.replace(',', ' ')},${it.kind.name}," +
                 "${it.startedAtMs},${it.endedAtMs ?: ""}")
         }
         appendLine("address,label,vendor,random,legs_seen,legs_possible,moving_legs," +
-            "packets,mean_rssi,addresses")
+            "packets,mean_rssi,orbit_arcs,orbit_arcs_total,orbit_spread_db,addresses")
         candidates(System.currentTimeMillis()).forEach { candidate ->
             appendLine(
                 listOf(
@@ -322,6 +502,10 @@ class FollowSession {
                     candidate.movingLegsSeen.toString(),
                     candidate.packets.toString(),
                     String.format(Locale.US, "%.1f", candidate.meanRssi),
+                    candidate.orbit?.arcsHeard?.toString() ?: "",
+                    candidate.orbit?.arcsTotal?.toString() ?: "",
+                    candidate.orbit?.takeIf { !it.sparse }
+                        ?.let { String.format(Locale.US, "%.1f", it.spreadDb) } ?: "",
                     candidate.addresses.joinToString(" "),
                 ).joinToString(","),
             )

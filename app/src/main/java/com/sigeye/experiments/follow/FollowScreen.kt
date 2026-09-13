@@ -31,9 +31,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sigeye.core.AlertStyle
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
-import com.sigeye.core.AlertStyle
 import com.sigeye.core.Feedback
 import com.sigeye.core.Permissions
 import com.sigeye.core.SweepExport
@@ -43,8 +43,9 @@ import com.sigeye.core.analysis.identity.FollowPhase
 import com.sigeye.core.analysis.identity.FollowSession
 import com.sigeye.core.analysis.identity.FollowState
 import com.sigeye.core.analysis.identity.Following
-import com.sigeye.core.analysis.identity.RotationRhythm
+import com.sigeye.core.analysis.identity.LegKind
 import com.sigeye.core.analysis.identity.LiveAddress
+import com.sigeye.core.analysis.identity.RotationRhythm
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
 import com.sigeye.ui.CountdownBar
@@ -56,10 +57,10 @@ import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
-import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private const val HUB_TAG = "follow"
 private const val TICK_MS = 1_000L
@@ -195,10 +196,10 @@ private fun Live(onLocate: (String) -> Unit) {
             state = state,
             legName = legName,
             onLegName = { legName = it },
-            onBeginLeg = { moving ->
+            onBeginLeg = { kind ->
                 session.beginLeg(
-                    legName.ifBlank { if (moving) "FollowLeg ${state.legs.size + 1}" else "Stopped" },
-                    moving,
+                    legName.ifBlank { kind.label },
+                    kind,
                     System.currentTimeMillis(),
                 )
                 legName = ""
@@ -269,6 +270,11 @@ private fun Live(onLocate: (String) -> Unit) {
             Diagnostic("In range", "${state.watching}", "addresses heard"),
             Diagnostic("Legs", "${state.legs.size}", "recorded"),
             Diagnostic("Moving legs", "${state.legs.count { it.moving }}", "the useful ones"),
+            Diagnostic(
+                "Centred",
+                if (state.orbited) "${state.centred}" else "no circle",
+                "survived the circle",
+            ),
             Diagnostic("Survivors", "${state.survivors}", "in every leg"),
             Diagnostic(
                 "Target",
@@ -330,7 +336,7 @@ private fun Narrowing(
     state: FollowState,
     legName: String,
     onLegName: (String) -> Unit,
-    onBeginLeg: (Boolean) -> Unit,
+    onBeginLeg: (LegKind) -> Unit,
     onEndLeg: () -> Unit,
     onLock: (FollowCandidate) -> Unit,
 ) {
@@ -355,12 +361,27 @@ private fun Narrowing(
         }
     } else {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onBeginLeg(true) }, modifier = Modifier.weight(1f)) {
-                Text("Start moving")
+            Button(onClick = { onBeginLeg(LegKind.TOGETHER) }, modifier = Modifier.weight(1f)) {
+                Text("Walk together")
             }
-            OutlinedButton(onClick = { onBeginLeg(false) }, modifier = Modifier.weight(1f)) {
-                Text("Standing still")
-            }
+            OutlinedButton(
+                onClick = { onBeginLeg(LegKind.STILL) },
+                modifier = Modifier.weight(1f),
+            ) { Text("Stand still") }
+        }
+        if (!state.orbited) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { onBeginLeg(LegKind.ORBIT) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Walk a circle around them") }
+            Text(
+                "About five paces out, one slow lap, roughly a minute. Anything on the " +
+                    "person stays the same distance from you the whole way round. Anything " +
+                    "across the room does not.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 
@@ -369,8 +390,7 @@ private fun Narrowing(
         state.legs.forEach { leg ->
             Field(
                 leg.label,
-                (if (leg.moving) "moving" else "still") +
-                    if (leg.running) " · running" else "",
+                leg.kind.label.lowercase(Locale.US) + if (leg.running) " · running" else "",
             )
         }
     }
