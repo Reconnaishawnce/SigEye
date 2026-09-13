@@ -11,7 +11,7 @@ import com.sigeye.core.CrashLog
  * class exists for that one line, and should stay that small: work done here runs before
  * anything is on screen and is paid for on every cold start.
  */
-class SigEyeApp : Application() {
+class SigEyeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
