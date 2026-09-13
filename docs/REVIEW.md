@@ -220,7 +220,7 @@ solves for the factor from what it can see and remembers it per place. That turn
 weakest number in the app into a measured one, and it is exactly the Doppler Walk trick
 applied to people.
 
-### 22. Faraday Cage Test should measure the noise floor first
+### 22. Faraday Cage Test should measure the noise floor first — *done*
 
 The measurement is a before-and-after on one source. It has no idea what the room's own
 variance is, so a 4 dB "blocking" result from a crisp packet is indistinguishable from
@@ -234,7 +234,7 @@ A microwave flattening 2.4 GHz is dramatic and unfalsifiable as presented. Watch
 difference is the finding rather than the drop. `WifiScanHub` already provides both bands
 and Wall Penetration already pairs them.
 
-### 24. Train Spotter still uses a hand-tuned threshold
+### 24. Train Spotter still uses a hand-tuned threshold — *done*
 
 It has a ground-truth button — press it when a train actually passes — and it does nothing
 with the labels beyond writing them to CSV. The app could fit the threshold to the labels
@@ -311,9 +311,9 @@ exactly where it was.
 | # | Where it stands |
 |---|---|
 | 21. Crowd Counter's people factor | **Open.** `Environment.devicesPerPerson` is still a constant per environment, 1.5 to 2.5, with no way to correct it from a headcount somebody actually took. |
-| 22. Faraday's noise floor | **Open.** Still a straight before-and-after with no idea what the room's own variance is. `FadingAnalysis` computes exactly the number needed and is not called. |
+| 22. Faraday's noise floor | **Done.** Thirty seconds of watching the signal do nothing before the first reading, and the verdict is stated in units of that wander rather than in bare decibels. |
 | 23. Microwave's control band | **Done in turn 13.** Two radios pinned by BSSID and followed through both phases. 2.4 falling alone is the finding; both falling is a failed run and it says so. The unearned "5 GHz would have been untouched" line is gone. |
-| 24. Train Spotter's threshold | **Open.** The ground-truth button still only writes labels to CSV. Days of labelled data are being collected for a step nobody built. |
+| 24. Train Spotter's threshold | **Done.** The recorded bins are replayed against every candidate threshold and the marked trains say which one to use. Misses and unmarked alerts are counted separately, because only the first is unambiguously an error. |
 | 25. Rotation Lab left running | **Done.** A `ScanService.Mode` now, sharing the pattern Follow Me uses: the lab lives in `Recordings`, the service feeds and ticks it, and the screen reads it. The phone can be in a pocket on a train for half an hour, which is the measurement the paper needs. |
 | 26. Speed Estimator's cross-check | **Open.** No GPS comparison. |
 | 27. Bluetooth Explorer's rule about writes | **Done in turn 13.** On the screen, in the KDoc, and enforced by `GattWriteRuleTest`, which reads the source and fails the build on a mutating call. |

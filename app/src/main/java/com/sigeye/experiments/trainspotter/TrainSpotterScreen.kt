@@ -330,6 +330,18 @@ private fun Monitor() {
         )
     }
 
+    // What the trains you marked say the threshold should be. The ground-truth button has
+    // been here since this was written and the labels went into the CSV and nowhere else.
+    Spacer(Modifier.height(12.dp))
+    ThresholdCard(
+        config = state.config,
+        onApply = { factor ->
+            val store = SettingsStore(context)
+            store.save(store.load().copy(spikeFactor = factor))
+            ScanService.reloadConfig(context)
+        },
+    )
+
     if (showSettings) {
         SettingsDialog(
             store = remember { SettingsStore(context) },
