@@ -83,7 +83,7 @@ data class Follower(
      * How much to make of it.
      *
      * Deliberately conservative, because the failure mode here is frightening somebody
-     * about their own headphones. A randomised address can never rate above weak - it is a
+     * about their own headphones. A randomized address can never rate above weak - it is a
      * different address every quarter of an hour, so seeing "it" twice across an hour is
      * either a coincidence or a device that is not rotating, and there is no way to tell
      * which from the outside.
@@ -115,7 +115,7 @@ data class Follower(
         }
         if (isRandom) {
             out.add(
-                "The address is randomised, which normally changes every fifteen minutes " +
+                "The address is randomized, which normally changes every fifteen minutes " +
                     "or so. Seeing the same one across several legs means either it is " +
                     "not rotating - which trackers and fitted equipment often do not - or " +
                     "the legs were close enough together for one address to cover them. " +
@@ -191,7 +191,7 @@ data class ConvoyReport(
  * Whether anything has been coming with you.
  *
  * Record a leg in one place, another somewhere else, a third somewhere else again, and
- * anything that appears in all of them was travelling rather than living in any of them.
+ * anything that appears in all of them was traveling rather than living in any of them.
  * That is the whole idea, and it is much weaker than it sounds for three reasons that this
  * class exists to be honest about.
  *
@@ -199,7 +199,7 @@ data class ConvoyReport(
  * their contents simply because they overlap, so short journeys produce long lists of
  * innocent devices. Hence the refusal to draw conclusions below a real span.
  *
- * Randomised addresses defeat it. A phone following you changes address every quarter of an
+ * Randomized addresses defeat it. A phone following you changes address every quarter of an
  * hour and appears as a stranger in every leg. What this can actually catch is things with
  * fixed addresses - fitted equipment, tyre sensors, cheap trackers, and anything whose
  * maker did not bother - which is a real and useful category but not the whole threat.
@@ -372,7 +372,7 @@ class ConvoyTracker {
      * @param mine addresses filed as belonging to the user, which follow them by design.
      * @param minPackets how many readings inside a leg count as having really been there,
      *   so a single stray packet from three streets away does not make something a
-     *   travelling companion.
+     *   traveling companion.
      */
     fun report(mine: Set<String> = emptySet(), minPackets: Int = 3): ConvoyReport {
         val mineUpper = mine.map { it.uppercase(Locale.US) }.toSet()

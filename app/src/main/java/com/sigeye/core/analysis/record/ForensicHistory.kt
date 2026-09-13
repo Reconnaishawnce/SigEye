@@ -10,7 +10,7 @@ data class SavedDevice(
     val isRandom: Boolean = false,
     val packets: Int = 0,
     val peakRssi: Int = -127,
-    val behaviour: String = "",
+    val behavior: String = "",
 )
 
 /** A recording kept for later comparison. */
@@ -82,7 +82,7 @@ data class SessionDiff(
         append(inBoth.size).append(" in both")
         if (randomBefore + randomAfter > 0) {
             append(". ").append(randomBefore + randomAfter)
-                .append(" randomised addresses were left out - they change on their own ")
+                .append(" randomized addresses were left out - they change on their own ")
                 .append("and cannot be matched between recordings")
         }
         append('.')
@@ -149,7 +149,7 @@ object ForensicHistory {
     /**
      * Compares a live recording against one that was saved.
      *
-     * Randomised addresses are excluded from the matching and counted separately, exactly
+     * Randomized addresses are excluded from the matching and counted separately, exactly
      * as the snapshot comparison does - a recording of the same street an hour apart would
      * otherwise report every phone in it as both departed and newly arrived.
      */
@@ -189,7 +189,7 @@ object ForensicHistory {
                     isRandom = track.isRandom,
                     packets = track.packets,
                     peakRssi = track.peakRssi,
-                    behaviour = track.behaviour.name,
+                    behavior = track.behavior.name,
                 )
             },
         )

@@ -171,7 +171,7 @@ class RotationLab(
                 // The first link has no change before it, so a chain of n addresses gives
                 // n-1 change times and n-2 periods. Three addresses is the first point at
                 // which a period exists at all.
-                rhythm = RotationRhythm.analyse(changeTimes),
+                rhythm = RotationRhythm.analyze(changeTimes),
                 weakestLink = chain.weakestLink,
                 lastRssi = chain.lastRssi,
                 lastSeenMs = seen[chain.current]?.lastSeenMs ?: 0L,

@@ -64,37 +64,37 @@ fun BodyDiagram(
 
     Box(modifier.fillMaxWidth().aspectRatio(1f)) {
         Canvas(Modifier.fillMaxSize()) {
-            val centre = Offset(size.width / 2f, size.height / 2f)
+            val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension / 2f * 0.78f
 
-            drawCircle(color = ring, radius = radius, center = centre, style = Stroke(width = 1.5f))
-            drawCompassLabels(measurer, centre, radius, labels)
+            drawCircle(color = ring, radius = radius, center = center, style = Stroke(width = 1.5f))
+            drawCompassLabels(measurer, center, radius, labels)
 
             // The wedge your torso is blocking: behind you, so heading + 180.
             drawShadowWedge(
-                centre = centre,
+                center = center,
                 radius = radius,
                 bearing = headingDegrees + 180f,
-                colour = shadowColour,
+                color = shadowColour,
                 strong = blocking,
             )
 
             sourceBearingDegrees?.let {
-                drawSource(measurer, centre, radius, it, sourceColour, blocking)
+                drawSource(measurer, center, radius, it, sourceColour, blocking)
                 // The straight path from source to you, broken where your body sits.
-                drawPath(centre, radius, it, sourceColour, blocking)
+                drawPath(center, radius, it, sourceColour, blocking)
             }
 
-            drawPerson(centre, headingDegrees, bodyColour, phoneColour, strength)
+            drawPerson(center, headingDegrees, bodyColour, phoneColour, strength)
         }
     }
 }
 
 private fun DrawScope.drawShadowWedge(
-    centre: Offset,
+    center: Offset,
     radius: Float,
     bearing: Float,
-    colour: Color,
+    color: Color,
     strong: Boolean,
 ) {
     val start = bearing - 90f - SHADOW_HALF_ANGLE
@@ -102,24 +102,24 @@ private fun DrawScope.drawShadowWedge(
     drawArc(
         brush = Brush.radialGradient(
             colors = listOf(
-                colour.copy(alpha = if (strong) 0.42f else 0.16f),
+                color.copy(alpha = if (strong) 0.42f else 0.16f),
                 Color.Transparent,
             ),
-            center = centre,
+            center = center,
             radius = radius,
         ),
         startAngle = start,
         sweepAngle = sweep,
         useCenter = true,
-        topLeft = Offset(centre.x - radius, centre.y - radius),
+        topLeft = Offset(center.x - radius, center.y - radius),
         size = Size(radius * 2, radius * 2),
     )
     drawArc(
-        color = colour.copy(alpha = if (strong) 0.8f else 0.3f),
+        color = color.copy(alpha = if (strong) 0.8f else 0.3f),
         startAngle = start,
         sweepAngle = sweep,
         useCenter = true,
-        topLeft = Offset(centre.x - radius, centre.y - radius),
+        topLeft = Offset(center.x - radius, center.y - radius),
         size = Size(radius * 2, radius * 2),
         style = Stroke(width = 1.5f),
     )
@@ -127,23 +127,23 @@ private fun DrawScope.drawShadowWedge(
 
 private fun DrawScope.drawSource(
     measurer: TextMeasurer,
-    centre: Offset,
+    center: Offset,
     radius: Float,
     bearing: Float,
-    colour: Color,
+    color: Color,
     blocked: Boolean,
 ) {
     val radians = (bearing - 90f) * PI.toFloat() / 180f
     val point = Offset(
-        centre.x + radius * cos(radians),
-        centre.y + radius * sin(radians),
+        center.x + radius * cos(radians),
+        center.y + radius * sin(radians),
     )
-    drawCircle(color = colour.copy(alpha = 0.25f), radius = 20f, center = point)
-    drawCircle(color = colour, radius = 9f, center = point)
+    drawCircle(color = color.copy(alpha = 0.25f), radius = 20f, center = point)
+    drawCircle(color = color, radius = 9f, center = point)
 
     val layout = measurer.measure(
         text = if (blocked) "source (blocked)" else "source",
-        style = TextStyle(fontSize = 9.sp, color = colour),
+        style = TextStyle(fontSize = 9.sp, color = color),
     )
     drawText(
         textLayoutResult = layout,
@@ -156,18 +156,18 @@ private fun DrawScope.drawSource(
 
 /** The line from the source to the phone, dashed and red where the body interrupts it. */
 private fun DrawScope.drawPath(
-    centre: Offset,
+    center: Offset,
     radius: Float,
     bearing: Float,
-    colour: Color,
+    color: Color,
     blocked: Boolean,
 ) {
     val radians = (bearing - 90f) * PI.toFloat() / 180f
-    val outer = Offset(centre.x + radius * cos(radians), centre.y + radius * sin(radians))
+    val outer = Offset(center.x + radius * cos(radians), center.y + radius * sin(radians))
     drawLine(
-        color = colour.copy(alpha = if (blocked) 0.35f else 0.75f),
+        color = color.copy(alpha = if (blocked) 0.35f else 0.75f),
         start = outer,
-        end = centre,
+        end = center,
         strokeWidth = 2f,
         pathEffect = if (blocked) PathEffect.dashPathEffect(floatArrayOf(6f, 8f)) else null,
     )
@@ -178,42 +178,42 @@ private fun DrawScope.drawPath(
  * which is the whole reason the geometry works.
  */
 private fun DrawScope.drawPerson(
-    centre: Offset,
+    center: Offset,
     headingDegrees: Float,
     bodyColour: Color,
     phoneColour: Color,
     strength: Float,
 ) {
-    rotate(degrees = headingDegrees, pivot = centre) {
+    rotate(degrees = headingDegrees, pivot = center) {
         // Torso: an oval, broader across the shoulders than front to back.
         val halfWidth = 26f
         val halfDepth = 17f
         drawOval(
             color = bodyColour.copy(alpha = 0.55f),
-            topLeft = Offset(centre.x - halfWidth, centre.y - halfDepth),
+            topLeft = Offset(center.x - halfWidth, center.y - halfDepth),
             size = Size(halfWidth * 2, halfDepth * 2),
         )
         // Shoulders line, so the facing direction is unambiguous.
         drawLine(
             color = bodyColour.copy(alpha = 0.8f),
-            start = Offset(centre.x - halfWidth, centre.y),
-            end = Offset(centre.x + halfWidth, centre.y),
+            start = Offset(center.x - halfWidth, center.y),
+            end = Offset(center.x + halfWidth, center.y),
             strokeWidth = 2f,
         )
 
         // The phone, held flat on the chest, screen facing out.
-        val phoneTop = centre.y - halfDepth - 11f
+        val phoneTop = center.y - halfDepth - 11f
         drawRoundRect(
             color = phoneColour,
-            topLeft = Offset(centre.x - 9f, phoneTop),
+            topLeft = Offset(center.x - 9f, phoneTop),
             size = Size(18f, 11f),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
         )
         // A little cone of what the phone can hear, brighter when signal is strong.
         val cone = Path().apply {
-            moveTo(centre.x, phoneTop)
-            lineTo(centre.x - 34f, phoneTop - 46f)
-            lineTo(centre.x + 34f, phoneTop - 46f)
+            moveTo(center.x, phoneTop)
+            lineTo(center.x - 34f, phoneTop - 46f)
+            lineTo(center.x + 34f, phoneTop - 46f)
             close()
         }
         drawPath(cone, color = phoneColour.copy(alpha = 0.10f + strength * 0.35f))
@@ -222,22 +222,22 @@ private fun DrawScope.drawPerson(
 
 private fun DrawScope.drawCompassLabels(
     measurer: TextMeasurer,
-    centre: Offset,
+    center: Offset,
     radius: Float,
-    colour: Color,
+    color: Color,
 ) {
     listOf("N" to 0f, "E" to 90f, "S" to 180f, "W" to 270f).forEach { (text, angle) ->
         val radians = (angle - 90f) * PI.toFloat() / 180f
         val layout = measurer.measure(
             text = text,
-            style = TextStyle(fontSize = 10.sp, color = colour.copy(alpha = 0.7f)),
+            style = TextStyle(fontSize = 10.sp, color = color.copy(alpha = 0.7f)),
         )
         val at = radius + 13f
         drawText(
             textLayoutResult = layout,
             topLeft = Offset(
-                centre.x + at * cos(radians) - layout.size.width / 2f,
-                centre.y + at * sin(radians) - layout.size.height / 2f,
+                center.x + at * cos(radians) - layout.size.width / 2f,
+                center.y + at * sin(radians) - layout.size.height / 2f,
             ),
         )
     }

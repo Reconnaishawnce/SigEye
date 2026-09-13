@@ -14,7 +14,7 @@ data class Clue(val label: String, val detail: String, val firm: Boolean)
  * (WiGLE and friends) index Wi-Fi SSIDs and locations rather than BLE names. So instead of
  * guessing at the name, this assembles the clues that *are* backed by registries - the OUI,
  * the company ID, the appearance, the service UUIDs - and says plainly where each one came
- * from, including when the honest answer is that the address is randomised and tells you
+ * from, including when the honest answer is that the address is randomized and tells you
  * nothing at all.
  *
  * Pure and Android-free.
@@ -33,7 +33,7 @@ object Identity {
         if (Vendors.isRandomAddress(address)) {
             out += Clue(
                 "Address",
-                "Randomised. It is reassigned roughly every fifteen minutes and identifies " +
+                "Randomized. It is reassigned roughly every fifteen minutes and identifies " +
                     "no manufacturer, so nothing here can be learned from it.",
                 firm = true,
             )

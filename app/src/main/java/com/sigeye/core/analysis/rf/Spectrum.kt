@@ -10,22 +10,22 @@ import kotlin.math.roundToInt
  *
  * Wi-Fi channels are not slots, they are overlapping blocks of spectrum - which is the
  * whole reason 1, 6 and 11 exist as a convention - so a transmitter has to be described by
- * where its centre is and how wide it is, not by a channel number.
+ * where its center is and how wide it is, not by a channel number.
  */
 data class Occupant(
-    val centreMhz: Int,
+    val centerMhz: Int,
     val widthMhz: Int,
     val rssi: Int,
     val label: String? = null,
 ) {
-    val lowMhz: Int get() = centreMhz - widthMhz / 2
-    val highMhz: Int get() = centreMhz + widthMhz / 2
+    val lowMhz: Int get() = centerMhz - widthMhz / 2
+    val highMhz: Int get() = centerMhz + widthMhz / 2
 
     /**
      * How much of this transmitter lands inside a span, from none to all of it.
      *
      * A 40 MHz access point half over a 20 MHz channel is putting half its power there,
-     * and counting it as a whole neighbour would overstate the damage by the same factor
+     * and counting it as a whole neighbor would overstate the damage by the same factor
      * as ignoring it understates it.
      */
     fun overlapFraction(lowMhz: Int, highMhz: Int): Double {
@@ -40,7 +40,7 @@ data class Occupant(
 /** What is sitting on one 20 MHz channel. */
 data class ChannelLoad(
     val channel: Int,
-    val centreMhz: Int,
+    val centerMhz: Int,
     /** Transmitters putting any power at all into this channel. */
     val occupants: Int,
     /** Everything overlapping it, added up as power rather than as decibels. */
@@ -93,9 +93,9 @@ object Spectrum {
     const val ADVERT_WIDTH_MHZ = 2
 
     /**
-     * Above this, summed neighbour power is loud enough to matter.
+     * Above this, summed neighbor power is loud enough to matter.
      *
-     * Not a hard physical threshold - it is a judgement, set where a neighbour is strong
+     * Not a hard physical threshold - it is a judgement, set where a neighbor is strong
      * enough to force retries rather than merely be audible. Roughly the level at which a
      * phone would happily associate with the interferer itself.
      */
@@ -104,8 +104,8 @@ object Spectrum {
     /** The 2.4 GHz channels in use somewhere in the world, in channel numbers. */
     val CHANNELS_24: List<Int> = (1..13) + listOf(14)
 
-    /** Centre frequency of a 2.4 GHz channel. Fourteen is the odd one out, as ever. */
-    fun centreOf(channel: Int): Int = if (channel == 14) 2484 else 2407 + channel * 5
+    /** Center frequency of a 2.4 GHz channel. Fourteen is the odd one out, as ever. */
+    fun centerOf(channel: Int): Int = if (channel == 14) 2484 else 2407 + channel * 5
 
     /**
      * Everything overlapping a span, added as power and returned as dBm.
@@ -131,15 +131,15 @@ object Spectrum {
     fun occupantsOver(lowMhz: Int, highMhz: Int, occupants: List<Occupant>): List<Occupant> =
         occupants.filter { it.overlapFraction(lowMhz, highMhz) > 0.0 }
 
-    /** The 2.4 GHz band as twenty-megahertz channels, loudest neighbour and all. */
+    /** The 2.4 GHz band as twenty-megahertz channels, loudest neighbor and all. */
     fun channels24(occupants: List<Occupant>): List<ChannelLoad> = CHANNELS_24.map { channel ->
-        val centre = centreOf(channel)
-        val low = centre - 10
-        val high = centre + 10
+        val center = centerOf(channel)
+        val low = center - 10
+        val high = center + 10
         val over = occupantsOver(low, high, occupants)
         ChannelLoad(
             channel = channel,
-            centreMhz = centre,
+            centerMhz = center,
             occupants = over.size,
             loadDbm = loadOver(low, high, occupants),
             strongestDbm = over.maxOfOrNull { it.rssi },
@@ -179,15 +179,15 @@ object Spectrum {
      */
     fun offGrid(occupants: List<Occupant>, minRssi: Int = -85): List<Occupant> =
         occupants.filter {
-            it.centreMhz in 2400..2500 &&
+            it.centerMhz in 2400..2500 &&
                 it.rssi >= minRssi &&
-                it.centreMhz != 2412 && it.centreMhz != 2437 && it.centreMhz != 2462
+                it.centerMhz != 2412 && it.centerMhz != 2437 && it.centerMhz != 2462
         }
 
     /**
      * A rough share of the band that is genuinely in use, for a single headline number.
      *
-     * The fraction of twenty-megahertz channels carrying a neighbour above [BUSY_DBM],
+     * The fraction of twenty-megahertz channels carrying a neighbor above [BUSY_DBM],
      * counted over the thirteen channels anyone actually uses. Not an airtime measurement -
      * a phone cannot measure airtime - and the wording in the UI says so.
      */
@@ -209,7 +209,7 @@ object Spectrum {
         1 -> 40
         2 -> 80
         3 -> 160
-        4 -> 80 // 80+80, two disjoint blocks; treated as the one we were told the centre of
+        4 -> 80 // 80+80, two disjoint blocks; treated as the one we were told the center of
         5 -> 320
         else -> 20
     }
@@ -224,17 +224,17 @@ object Spectrum {
      * and a spreadsheet skips the hash-commented section headers happily.
      */
     fun csv(occupants: List<Occupant>): String = buildString {
-        val band = occupants.filter { it.centreMhz in 2400..2500 }
+        val band = occupants.filter { it.centerMhz in 2400..2500 }
         appendLine(
             "# occupants_24ghz=${band.size} busy_fraction=" +
                 String.format(Locale.US, "%.2f", busyFraction(band)) +
                 " busy_threshold_dbm=$BUSY_DBM",
         )
         appendLine("# section=wifi_channels")
-        appendLine("channel,centre_mhz,occupants,load_dbm,strongest_dbm,busy")
+        appendLine("channel,center_mhz,occupants,load_dbm,strongest_dbm,busy")
         channels24(band).forEach {
             appendLine(
-                "${it.channel},${it.centreMhz},${it.occupants}," +
+                "${it.channel},${it.centerMhz},${it.occupants}," +
                     (it.loadDbm?.let { load -> String.format(Locale.US, "%.2f", load) } ?: "") +
                     ",${it.strongestDbm ?: ""},${it.busy}",
             )
@@ -249,10 +249,10 @@ object Spectrum {
             )
         }
         appendLine("# section=occupants")
-        appendLine("label,centre_mhz,width_mhz,rssi_dbm")
+        appendLine("label,center_mhz,width_mhz,rssi_dbm")
         band.sortedByDescending { it.rssi }.forEach {
             appendLine(
-                "${it.label?.replace(',', ' ') ?: ""},${it.centreMhz},${it.widthMhz},${it.rssi}",
+                "${it.label?.replace(',', ' ') ?: ""},${it.centerMhz},${it.widthMhz},${it.rssi}",
             )
         }
     }

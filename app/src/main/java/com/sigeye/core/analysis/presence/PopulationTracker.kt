@@ -6,7 +6,7 @@ import com.sigeye.core.Vendors
 enum class DwellClass(val label: String, val blurb: String) {
     PASSING("Passing", "Seen briefly and gone. Traffic."),
     LINGERING("Lingering", "Stayed a while. A visitor, a queue, a parked car."),
-    RESIDENT("Resident", "Been here the whole time. Neighbours, your own kit, fixtures."),
+    RESIDENT("Resident", "Been here the whole time. Neighbors, your own kit, fixtures."),
 }
 
 data class TrackedDevice(
@@ -86,7 +86,7 @@ data class PopulationSnapshot(
  *
  * Pure and Android-free so the classification can be tested without a radio.
  *
- * The honest caveat, which both screens repeat: address randomisation means one phone can
+ * The honest caveat, which both screens repeat: address randomization means one phone can
  * appear as several devices over an evening. That inflates "passing" and inflates any
  * crowd estimate taken over a long window - which is why [PopulationSnapshot.presentNow]
  * uses a short presence window rather than everything ever seen.

@@ -38,7 +38,7 @@ data class FollowState(
  * already scanning, whether that is an experiment screen or a background recording - so
  * enabling it costs nothing until something else is looking anyway. When a followed device
  * rotates, its nickname and its lists move across in [DeviceBook], which is the one place
- * every other screen reads from, so Signal Watch, Discovery, Forensics and Travelling
+ * every other screen reads from, so Signal Watch, Discovery, Forensics and Traveling
  * Companions all keep the subject without knowing this class exists.
  *
  * The decision itself is [Following]'s, and it is written to refuse rather than guess. This

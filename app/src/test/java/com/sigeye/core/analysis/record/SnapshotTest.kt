@@ -48,7 +48,7 @@ class SnapshotTest {
     }
 
     @Test
-    fun `randomised addresses are left out rather than reported as intruders`() {
+    fun `randomized addresses are left out rather than reported as intruders`() {
         // The failure this prevents: two scans of the same untouched room, every phone in
         // it having rotated its address, reported as a houseful of arrivals.
         val diff = Snapshots.diff(
@@ -59,7 +59,7 @@ class SnapshotTest {
         assertTrue(diff.departed.isEmpty())
         assertEquals(1, diff.untrackableBefore)
         assertEquals(1, diff.untrackableAfter)
-        assertTrue(diff.summary().contains("randomised"))
+        assertTrue(diff.summary().contains("randomized"))
     }
 
     @Test
@@ -115,10 +115,10 @@ class SnapshotTest {
         assertEquals(3, diff.stayed.size)
     }
 
-    // ------------------------------------------------- travelling with you
+    // ------------------------------------------------- traveling with you
 
     @Test
-    fun `something fixed in all three places was travelling with you`() {
+    fun `something fixed in all three places was traveling with you`() {
         val home = snapshot("Home", device("FOLLOWER"), device("FRIDGE"))
         val work = snapshot("Work", device("FOLLOWER"), device("PRINTER"))
         val cafe = snapshot("Cafe", device("FOLLOWER"), device("TILL"))
@@ -137,7 +137,7 @@ class SnapshotTest {
     }
 
     @Test
-    fun `a randomised address cannot be a follower, however often it appears`() {
+    fun `a randomized address cannot be a follower, however often it appears`() {
         // It is a different address in every snapshot by construction, so matching on it
         // would be meaningless in both directions.
         val a = snapshot("A", device("R", isRandom = true))

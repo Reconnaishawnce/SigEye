@@ -235,7 +235,7 @@ private fun Live() {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "To actually test one, use Defeating Randomisation: pick a device you own, " +
+            "To actually test one, use Defeating Randomization: pick a device you own, " +
                 "walk it away, and watch whether the signal it claims is that device fades " +
                 "with it. That is ground truth, and it beats every confidence score here.",
             style = MaterialTheme.typography.bodySmall,
@@ -243,7 +243,7 @@ private fun Live() {
         Spacer(Modifier.height(8.dp))
         Text(
             "A vendor from an address prefix is only meaningful while the address is real. " +
-                "Once a device randomises it, the prefix belongs to nobody, and only the " +
+                "Once a device randomizes it, the prefix belongs to nobody, and only the " +
                 "company identifier inside the payload survives - which is why so much of " +
                 "any room lands in the unidentified pile.",
             style = MaterialTheme.typography.bodySmall,
@@ -371,14 +371,14 @@ private fun CohortView(cohorts: List<Cohort>) {
     Text(
         "Rotation is a firmware decision, so it is a vendor trait: a maker's whole fleet " +
             "behaves the same way. Grouping the room by manufacturer is grouping it by " +
-            "behaviour.",
+            "behavior.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(10.dp))
 
     cohorts.forEach { cohort ->
-        val trackable = cohort.vendor != Cohorts.UNKNOWN && cohort.randomised == 0 &&
+        val trackable = cohort.vendor != Cohorts.UNKNOWN && cohort.randomized == 0 &&
             cohort.size >= 2
         Card(
             Modifier.fillMaxWidth().padding(bottom = 8.dp),

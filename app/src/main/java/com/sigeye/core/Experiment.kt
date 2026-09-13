@@ -4,7 +4,7 @@ package com.sigeye.core
  * One entry on the SigEye home screen.
  *
  * Every experiment declares the permissions it needs rather than the app requesting a
- * union of everything up front. A user who only wants the Wi-Fi channel analyser should
+ * union of everything up front. A user who only wants the Wi-Fi channel analyzer should
  * never be asked for Bluetooth.
  */
 data class Experiment(
@@ -53,7 +53,7 @@ data class Experiment(
         SENSING("Counting and sensing", "Who and what is moving past."),
         PHYSICS("RF physics", "How radio actually behaves in your rooms."),
         MAPPING("Mapping", "Survey a building, a route, a band."),
-        PRIVACY("What is being broadcast", "What your neighbourhood gives away."),
+        PRIVACY("What is being broadcast", "What your neighborhood gives away."),
     }
 }
 
@@ -88,7 +88,11 @@ object Experiments {
     const val CONVOY = "convoy"
     const val ROTATION = "rotation"
     const val DOPPLER = "doppler"
-    const val POLARISATION = "polarisation"
+    // Spelled the old way on purpose, and it has to stay that way. The id is written into
+    // the favorites file and into exported CSV headers, so changing it would drop a starred
+    // Rotational Polarization on the next launch - sanitise() would see an experiment that
+    // no longer exists and quietly remove it. Ids are never shown to anybody.
+    const val POLARIZATION = "polarisation"
     const val CONGESTION = "congestion"
     const val BANDS = "bands"
     const val VULNERABILITY = "vulnerability"
@@ -123,14 +127,14 @@ object Experiments {
                     "goes with it - that is ground truth, and it beats any confidence " +
                     "score.",
             ),
-            reading = "The move is made on the same four signals Defeating Randomisation " +
+            reading = "The move is made on the same four signals Defeating Randomization " +
                 "shows: the advertisement's structure, the advertising interval, the " +
                 "signal not jumping across the swap, and the swap's timing. Only the " +
                 "strongest rating is acted on, and a device that matches two candidates " +
                 "equally well is left alone rather than assigned to the better of them.",
             limits = "Getting this wrong is worse than getting nothing: a name on the " +
                 "wrong phone becomes a fact that Signal Watch, Discovery, Forensics and " +
-                "Travelling Companions all repeat, and nothing later corrects it. So it " +
+                "Traveling Companions all repeat, and nothing later corrects it. So it " +
                 "refuses on plain advertisements, on ambiguity, on anything already " +
                 "broadcasting before the swap, and on a device gone more than ten " +
                 "minutes. It follows nothing while the app is idle, because it never " +
@@ -180,14 +184,14 @@ object Experiments {
                     "the baseline once you have identified it.",
                 "For the at-home use: save a snapshot of a room you trust, then take " +
                     "another next week and compare the two.",
-                "For the travelling-with-you use: snapshot three genuinely different " +
+                "For the traveling-with-you use: snapshot three genuinely different " +
                     "places and look at what fixed addresses appear in all of them.",
             ),
             reading = "Arrivals are devices unheard of during the baseline. The arrow is " +
                 "the signal trend, so a rising one is coming towards you. A comparison of " +
                 "two snapshots lists what arrived, what left, and what shifted by more " +
                 "than eight dB, which is about where a change stops being multipath.",
-            limits = "Randomised addresses defeat most of this and the app says so rather " +
+            limits = "Randomized addresses defeat most of this and the app says so rather " +
                 "than pretending otherwise: a phone changes address roughly every fifteen " +
                 "minutes, which is indistinguishable from a stranger arriving, so " +
                 "suspected rotations are listed but not alerted on, and snapshot " +
@@ -211,7 +215,7 @@ object Experiments {
                 "Tap a blip to select it and see its signal, range and trend.",
                 "Tap Locate to hunt it down on foot.",
             ),
-            reading = "Distance from the centre is signal strength, strongest in the " +
+            reading = "Distance from the center is signal strength, strongest in the " +
                 "middle. A blip drifting inward is getting closer.",
             limits = "The angle is not a direction. One antenna cannot measure a " +
                 "bearing, so the angle is only a hash of the address that keeps " +
@@ -219,9 +223,9 @@ object Experiments {
         ),
         Experiment(
             id = CONVOY,
-            title = "Travelling Companions",
+            title = "Traveling Companions",
             blurb = "Record here, then there, then somewhere else. What appears in all of it?",
-            teaches = "Anything present in three unrelated places was travelling with you " +
+            teaches = "Anything present in three unrelated places was traveling with you " +
                 "rather than living in any of them. The idea is simple; being honest " +
                 "about how weak it is takes most of the work.",
             category = Experiment.Category.PRIVACY,
@@ -240,7 +244,7 @@ object Experiments {
                 "Tap any candidate for the reasoning, and mark it as yours if it is.",
             ),
             reading = "Something in every leg with a fixed address, over a real span of " +
-                "time, is the only thing rated strongly. Anything randomised is capped at " +
+                "time, is the only thing rated strongly. Anything randomized is capped at " +
                 "the weakest rating however often it appears, because the same random " +
                 "address turning up repeatedly means either it is not rotating or the " +
                 "legs were too close together, and nothing here can tell those apart.",
@@ -254,7 +258,7 @@ object Experiments {
             id = WATCHLIST,
             title = "Signal Watch",
             blurb = "Alerts when something you care about comes into range.",
-            teaches = "Which identifiers survive address randomisation and which do not. " +
+            teaches = "Which identifiers survive address randomization and which do not. " +
                 "Manufacturer prefixes and service data outlive a rotating MAC.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
@@ -272,7 +276,7 @@ object Experiments {
                 "the time.",
             limits = "Rules matching an address only work on hardware with a fixed " +
                 "one. Manufacturer prefixes, company IDs and service data " +
-                "survive address randomisation; addresses do not.",
+                "survive address randomization; addresses do not.",
         ),
 
         // ----------------------------------------------------------- sensing
@@ -315,7 +319,7 @@ object Experiments {
                     "the track, and set it. Everything scales directly off this number.",
                 "Press Watch for passes and leave it.",
                 "Results appear a few seconds after each vehicle has gone - a pass is only " +
-                    "recognisable once it is over.",
+                    "recognizable once it is over.",
                 "Check one against something you know, a road with a speed limit will do, " +
                     "and adjust the path loss exponent until it agrees.",
             ),
@@ -342,7 +346,7 @@ object Experiments {
                     "number.",
                 "That figure is now roughly right for this kind of place.",
             ),
-            reading = "The radar shows what is present now, strongest at the centre. " +
+            reading = "The radar shows what is present now, strongest at the center. " +
                 "The headline uses only devices heard in the last minute.",
             limits = "It counts devices, not people. Laptops, televisions and " +
                 "printers belong to nobody, and one person can carry three " +
@@ -374,7 +378,7 @@ object Experiments {
                 "when that device was audible and the line inside it is its signal. " +
                 "Something that arrived halfway through and swelled in the middle is a " +
                 "pass. Something flat from edge to edge is furniture.",
-            limits = "Randomised addresses mean one phone driving past can appear as two " +
+            limits = "Randomized addresses mean one phone driving past can appear as two " +
                 "or three separate devices. The recording lives in memory and is lost " +
                 "when you leave the screen unless you export it first.",
         ),
@@ -397,7 +401,7 @@ object Experiments {
             reading = "Resident means a device held one address for over twenty " +
                 "minutes, which means fixed hardware. Those are the trustworthy " +
                 "rows.",
-            limits = "Passing counts are inflated by address randomisation: one " +
+            limits = "Passing counts are inflated by address randomization: one " +
                 "phone walking past can appear as several devices over an " +
                 "evening.",
         ),
@@ -425,7 +429,7 @@ object Experiments {
                     "beacon on the far side of a doorway makes a tripwire.",
             ),
             reading = "The score is how far the steadiest links have strayed from their " +
-                "own calm behaviour, in standard deviations. Level and jitter are shown " +
+                "own calm behavior, in standard deviations. Level and jitter are shown " +
                 "apart: level is someone blocking the path, jitter is someone moving " +
                 "anywhere in the room. Jitter is the sensitive one.",
             limits = "It cannot tell you who, where, or how many - only that the room " +
@@ -456,7 +460,7 @@ object Experiments {
                 "most interesting thing here - something that had been still was moved, " +
                 "or something large moved between it and the phone.",
             limits = "The screen has to stay open, so this is not a background task. " +
-                "Randomised addresses make phones look like a stream of strangers rather " +
+                "Randomized addresses make phones look like a stream of strangers rather " +
                 "than the same people staying, which inflates arrivals and departures - " +
                 "the fixtures are the trustworthy half. And a step in signal is not " +
                 "proof of movement, only of change.",
@@ -489,7 +493,7 @@ object Experiments {
                     "an error here goes straight into the answer.",
                 "Pick something fixed and leave it where it is. A beacon, a speaker, a " +
                     "television.",
-                "Walk steadily away in a straight line. Fifteen metres is plenty.",
+                "Walk steadily away in a straight line. Fifteen meters is plenty.",
                 "Do not turn back before finishing. The fit reads a return trip as the " +
                     "signal refusing to fall, and says so rather than reporting nonsense.",
                 "Try it again in a corridor, then through a wall. The number moves a long " +
@@ -503,12 +507,12 @@ object Experiments {
             limits = "The distance is only as good as the stride length, and the step " +
                 "counter needs physical activity permission or it returns nothing at all. " +
                 "A walk that curves, or one where the transmitter is not actually fixed, " +
-                "measures something other than path loss. Under a few metres of travel it " +
+                "measures something other than path loss. Under a few meters of travel it " +
                 "declines to fit.",
         ),
         Experiment(
-            id = POLARISATION,
-            title = "Rotational Polarisation",
+            id = POLARIZATION,
+            title = "Rotational Polarization",
             blurb = "Roll the phone over and watch the signal die.",
             teaches = "Radio has an orientation. Turn a receiving antenna across the " +
                 "field and it stops hearing - ten to twenty dB from nothing but a twist " +
@@ -516,10 +520,10 @@ object Experiments {
                 "reached you without bouncing off anything.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
-            needs = "One chatty transmitter a few metres away, and an accelerometer - " +
+            needs = "One chatty transmitter a few meters away, and an accelerometer - " +
                 "which every phone has. No compass, so nothing to calibrate.",
             howTo = listOf(
-                "Pick a source that talks at least twice a second, a few metres away " +
+                "Pick a source that talks at least twice a second, a few meters away " +
                     "with a clear path. Too close and reflections fill the null in.",
                 "Hold the phone with its long axis level, pointing left and right in " +
                     "front of you. Stood on end, gravity runs down that axis and there " +
@@ -532,7 +536,7 @@ object Experiments {
                     "fixed orientation to align with and gives almost nothing.",
             ),
             reading = "Depth is the gap between the best and worst roll angle. Six dB or " +
-                "more, with the two extremes about ninety degrees apart, is polarisation " +
+                "more, with the two extremes about ninety degrees apart, is polarization " +
                 "and nothing else in a room produces that shape. The deeper the null, the " +
                 "more of the signal arrived by one clean path - the same quantity " +
                 "Multipath Fading calls K, measured a completely different way.",
@@ -540,7 +544,7 @@ object Experiments {
                 "rather than plotted. Close in, or through walls, the null fills with " +
                 "reflections and the answer is honestly small rather than wrong. Moving " +
                 "the phone while rolling it measures distance instead. Some antennas are " +
-                "circularly polarised and simply have no null to find.",
+                "circularly polarized and simply have no null to find.",
         ),
         Experiment(
             id = CONGESTION,
@@ -566,7 +570,7 @@ object Experiments {
                     "together. A router on channel 3 in the next room is visible in the " +
                     "chart and audible in the percentages.",
             ),
-            reading = "Bars are summed neighbour power on each 20 MHz channel, added as " +
+            reading = "Bars are summed neighbor power on each 20 MHz channel, added as " +
                 "power rather than as decibels - two equal signals are 3 dB together, not " +
                 "twice the number. Shaded lanes are the non-overlapping 1, 6 and 11. A " +
                 "reception figure well under half means packets are being lost; compared " +
@@ -738,26 +742,26 @@ object Experiments {
         Experiment(
             id = MICROWAVE,
             title = "Microwave Interference",
-            blurb = "Watch an oven trample the 2.4 GHz band.",
+            blurb = "Watch a microwave flatten the 2.4 GHz band.",
             teaches = "A consumer microwave leaks around 2.45 GHz, right in the middle of " +
                 "the band Bluetooth uses. Measure how many advertisements survive with " +
                 "it off, then with it on.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
-            needs = "A microwave oven, and something to heat in it.",
+            needs = "A microwave and something to heat in it.",
             howTo = listOf(
                 "Stand near the microwave with a Bluetooth device in the room, " +
-                    "and put a cup of water in the oven so it has something to " +
+                    "and put a cup of water in the microwave so it has something to " +
                     "heat.",
-                "Record the baseline with the oven off, for thirty seconds.",
-                "Start the oven, then record the test phase for thirty seconds.",
+                "Record the baseline with the microwave off, for thirty seconds.",
+                "Start the microwave, then record the test phase for thirty seconds.",
                 "Stop, and compare.",
             ),
             reading = "The measure is how many advertisements a second reach the " +
                 "phone. A microwave leaking into the band drowns them out, so " +
                 "the rate falls and the surviving packets read weaker.",
-            limits = "It cannot see the oven directly, only the damage. A modern " +
-                "well-sealed oven may show almost nothing, which is itself the " +
+            limits = "It cannot see the microwave directly, only the damage it does. A " +
+                "modern, well-sealed one may show almost nothing, which is itself the " +
                 "answer: your kitchen Wi-Fi problem is somewhere else.",
         ),
         Experiment(
@@ -827,7 +831,7 @@ object Experiments {
         Experiment(
             id = FOLLOW,
             title = "Follow Me",
-            blurb = "Narrow a whole street down to the one device travelling with you.",
+            blurb = "Narrow a whole street down to the one device traveling with you.",
             teaches = "Following somebody by their phone needs no prior knowledge of it " +
                 "and no special hardware. It is done by elimination: walk together and " +
                 "everything that stayed behind drops out, which is nearly everything.",
@@ -900,7 +904,7 @@ object Experiments {
             limits = "Counting manufacturers is safe, because a company identifier is a " +
                 "fact in the payload about a product. Linking two addresses into a track " +
                 "is an inference about a stranger, so only the strongest rating is drawn " +
-                "at all and a track remains a hypothesis - Defeating Randomisation is " +
+                "at all and a track remains a hypothesis - Defeating Randomization is " +
                 "where you test one, by walking a device you own out of range. A vendor " +
                 "read from an address prefix means nothing once the address is random, " +
                 "which is why much of any room stays unidentified.",
@@ -921,8 +925,8 @@ object Experiments {
                     "first.",
                 "Tap a device for what each finding means and what to change.",
                 "Start with your own network and your own devices. Most of what a scan " +
-                    "picks up belongs to neighbours and is not yours to change.",
-                "Use the neighbours as calibration. Once you know how common WPS and " +
+                    "picks up belongs to neighbors and is not yours to change.",
+                "Use the neighbors as calibration. Once you know how common WPS and " +
                     "missing frame protection are, your own network stops being a guess.",
             ),
             reading = "Critical and high are worth acting on today; medium is a decision " +
@@ -962,7 +966,7 @@ object Experiments {
             ),
             reading = "Services are groups of related values. Device Information is the " +
                 "interesting one - maker, model, serial, firmware - and nothing verifies " +
-                "any of it. A serial number is worth noticing: unlike a randomised " +
+                "any of it. A serial number is worth noticing: unlike a randomized " +
                 "address it never changes, so a device that hands one out is identifiable " +
                 "for good.",
             limits = "It only reads, never writes. Many values need a bonded pairing " +
@@ -993,7 +997,7 @@ object Experiments {
         ),
         Experiment(
             id = ROTATION,
-            title = "Defeating Randomisation",
+            title = "Defeating Randomization",
             blurb = "Follow one phone through its address changes, and check whether it worked.",
             teaches = "An address changes every quarter of an hour, but the shape of the " +
                 "advertisement and the rate it is sent at do not - those are set by " +
@@ -1003,7 +1007,7 @@ object Experiments {
             status = Experiment.Status.ACTIVE,
             needs = "Your own phone, and somewhere you can carry it out of range and back.",
             howTo = listOf(
-                "Pick your own phone from the list. A randomised address is the point - a " +
+                "Pick your own phone from the list. A randomized address is the point - a " +
                     "fixed one has nothing to defeat.",
                 "Wait while its fingerprint is learned: how often it advertises, and what " +
                     "shape the advertisement is.",
@@ -1036,10 +1040,10 @@ object Experiments {
      * Twenty-seven experiments across five categories is a good library and a bad front
      * door - someone arriving for the first time has no way to tell which of them is the
      * one that will make them care. These five produce a result in under a minute and are
-     * the ones a person would show someone else, so they seed the favourites list.
+     * the ones a person would show someone else, so they seed the favorites list.
      *
      * Only a starting point. The list belongs to the user from the first tap of a star,
-     * and is never re-seeded afterwards - see [FavouriteStore]. Starred experiments still
+     * and is never re-seeded afterwards - see [FavoriteStore]. Starred experiments still
      * appear in their own categories below, because a shortcut that removes things from
      * where they belong is a maze.
      */
@@ -1047,7 +1051,7 @@ object Experiments {
 
     /** Why each featured experiment earned the spot, in a few words. */
     /**
-     * One line per experiment, for the favourites card.
+     * One line per experiment, for the favorites card.
      *
      * Written in the second person and aimed at somebody deciding whether to tap, which is
      * a different job from [Experiment.blurb] - the blurb describes the experiment, this
@@ -1075,7 +1079,7 @@ object Experiments {
         MOTION to "Turn a radio path into a tripwire and watch someone cross it.",
         PLACE to "Leave the phone somewhere for hours and read the shape of the day.",
         DOPPLER to "Walk away counting steps and measure the number everyone else guesses.",
-        POLARISATION to "Turn the phone over and watch the signal die.",
+        POLARIZATION to "Turn the phone over and watch the signal die.",
         CONGESTION to "See who is crowding the band and whether Bluetooth can get a word in.",
         BANDS to "Measure exactly what your walls take out of 5 GHz.",
         FADING to "Stand perfectly still and watch the signal move anyway.",

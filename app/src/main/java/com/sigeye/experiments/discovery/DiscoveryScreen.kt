@@ -564,7 +564,7 @@ private fun WatchTab(
                 when {
                     hideRandom -> "Only devices with fixed addresses. That means fitted " +
                         "equipment - cameras, beacons, cars, anything installed - and " +
-                        "excludes phones almost entirely, since they randomise. The right " +
+                        "excludes phones almost entirely, since they randomize. The right " +
                         "setting for sweeping a room, the wrong one for watching a street."
                     hideRotations -> "Arrivals that look like a device already here " +
                         "changing its random address are hidden. Conservative: it can hide " +
@@ -687,7 +687,7 @@ private fun ArrivalCard(arrival: Arrival, nickname: String?, onIgnore: () -> Uni
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        String.format(Locale.US, "~%.1f m", arrival.metres),
+                        String.format(Locale.US, "~%.1f m", arrival.meters),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -804,12 +804,12 @@ private fun SnapshotsTab(
     }
 
     if (saved.size >= 2) {
-        val travelling = Snapshots.commonTo(saved.take(5))
+        val traveling = Snapshots.commonTo(saved.take(5))
         Spacer(Modifier.height(12.dp))
         Card(
             Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = if (travelling.isEmpty()) {
+                containerColor = if (traveling.isEmpty()) {
                     MaterialTheme.colorScheme.surfaceVariant
                 } else {
                     MaterialTheme.colorScheme.errorContainer
@@ -823,7 +823,7 @@ private fun SnapshotsTab(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(6.dp))
-                if (travelling.isEmpty()) {
+                if (traveling.isEmpty()) {
                     Text(
                         "Nothing with a fixed address appears in all of your recent " +
                             "snapshots. Take them in genuinely different places for this " +
@@ -840,7 +840,7 @@ private fun SnapshotsTab(
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
                     Spacer(Modifier.height(6.dp))
-                    travelling.forEach {
+                    traveling.forEach {
                         Text(
                             "${it.label()}  ${it.address}",
                             style = MaterialTheme.typography.labelSmall,

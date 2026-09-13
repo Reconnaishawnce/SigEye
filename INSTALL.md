@@ -28,7 +28,7 @@ Tap **SigEye.apk** under Assets. It downloads directly — no login, no zip.
 
 ### 3. Install
 
-Open the phone's **Files** app → Downloads → tap `SigEye.apk` → **Install**. Play Protect will warn that it doesn't recognise the app; tap
+Open the phone's **Files** app → Downloads → tap `SigEye.apk` → **Install**. Play Protect will warn that it doesn't recognize the app; tap
 **Install anyway**.
 
 ### 4. First run

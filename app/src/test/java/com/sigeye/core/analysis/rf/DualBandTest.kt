@@ -60,7 +60,7 @@ class DualBandTest {
         val pairs = DualBand.pair(
             listOf(
                 radio("AA:BB:CC:DD:EE:01", "Home", 2437, -45.0),
-                radio("11:22:33:44:55:66", "Neighbour", 5180, -52.0),
+                radio("11:22:33:44:55:66", "Neighbor", 5180, -52.0),
             ),
         )
         assertTrue(pairs.isEmpty())

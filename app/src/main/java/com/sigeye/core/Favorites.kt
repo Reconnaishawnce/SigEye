@@ -11,16 +11,16 @@ package com.sigeye.core
  *
  * The list is only ever ids. It is written to preferences and read back on a later version
  * of the app, which may have renamed or dropped an experiment - so [sanitise] runs on every
- * read and nothing else in here has to worry about a favourite that no longer exists.
+ * read and nothing else in here has to worry about a favorite that no longer exists.
  *
  * Pure and Android-free.
  */
-object Favourites {
+object Favorites {
 
     /**
      * Prepares a stored list for use: no duplicates, nothing that no longer exists.
      *
-     * A favourite pointing at a deleted experiment would be an untappable row with no
+     * A favorite pointing at a deleted experiment would be an untappable row with no
      * title, which is exactly the kind of thing that survives for months because it only
      * happens to people who used an older version.
      */

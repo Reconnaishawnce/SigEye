@@ -13,7 +13,7 @@ a plain public APK download, no login and no zip. See [INSTALL.md](INSTALL.md).
 
 ## What is in it
 
-Starred favourites sit at the top of the home screen and can be rearranged; everything
+Starred favorites sit at the top of the home screen and can be rearranged; everything
 else is grouped by what it is for. `app/src/main/java/com/sigeye/core/Experiment.kt` is
 the authoritative list — the table below is a snapshot of it.
 
@@ -44,25 +44,25 @@ the authoritative list — the table below is a snapshot of it.
 | | |
 |---|---|
 | **Doppler Walk** | Walk away counting your steps, and measure the number everything guesses. |
-| **Rotational Polarisation** | Roll the phone over and watch the signal die. |
+| **Rotational Polarization** | Roll the phone over and watch the signal die. |
 | **Channel Congestion** | Who is using the 2.4 GHz band, and whether Bluetooth has room to shout. |
 | **Wall Penetration** | Measure how much more the building takes from 5 GHz than from 2.4. |
 | **Multipath Fading** | Stand still and watch the signal move anyway. |
 | **Body Absorption** | Turn slowly in a circle and find your own shadow. |
 | **Faraday Cage Test** | How many dB does a tin, a fridge or a crisp packet really block? |
-| **Microwave Interference** | Watch an oven trample the 2.4 GHz band. |
+| **Microwave Interference** | Watch a microwave flatten the 2.4 GHz band. |
 
 ### What is being broadcast
 
 | | |
 |---|---|
-| **Defeating Randomisation** | Follow one phone through its address changes, and check whether it worked. |
+| **Defeating Randomization** | Follow one phone through its address changes, and check whether it worked. |
 | **Rotation Lab** | A whole room's address privacy, grouped by maker and measured by clock. |
 | **Exposure Scan** | Insecure and over-sharing things in range, from what they broadcast. |
 | **Wi-Fi Survey** | Every network around you, and what its address gives away. |
 | **Bluetooth Explorer** | Ask a device what it has, and learn what the answers mean. |
 | **Beacon Decoder** | Reads the beacon formats hiding in the noise. |
-| **Travelling Companions** | Record here, then there, then somewhere else. What appears in all of it? |
+| **Traveling Companions** | Record here, then there, then somewhere else. What appears in all of it? |
 
 ### Mapping
 
@@ -131,7 +131,7 @@ the app will not derive location from scan results; dropping it is what lets the
 path work unchanged on API 26-30, where location permission is mandatory regardless.
 
 Each experiment asks only for what it needs, at the point it needs it. A user who only
-wants the Wi-Fi channel analyser is never asked for Bluetooth.
+wants the Wi-Fi channel analyzer is never asked for Bluetooth.
 
 ## Known limits
 

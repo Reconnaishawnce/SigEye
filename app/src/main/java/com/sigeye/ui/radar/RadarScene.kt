@@ -174,10 +174,10 @@ fun RadarScene(
             }
             .pointerInput(blips, outerDbm, innerDbm) {
                 detectTapGestures { tap ->
-                    val centre = Offset(size.width / 2f, size.height / 2f)
+                    val center = Offset(size.width / 2f, size.height / 2f)
                     val maxRadius = minOf(size.width, size.height) / 2f * 0.86f
                     val hit = blips.values
-                        .map { it to positionOf(it, centre, maxRadius) }
+                        .map { it to positionOf(it, center, maxRadius) }
                         .filter { hypot(it.second.x - tap.x, it.second.y - tap.y) < 44f }
                         .minByOrNull { hypot(it.second.x - tap.x, it.second.y - tap.y) }
                     onSelect(hit?.first?.address)
@@ -185,18 +185,18 @@ fun RadarScene(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val centre = Offset(size.width / 2f, size.height / 2f)
+            val center = Offset(size.width / 2f, size.height / 2f)
             val maxRadius = size.minDimension / 2f * 0.86f
             val sweepAngle = sweepAngle(frameMs)
 
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(normal.copy(alpha = 0.14f), Color.Transparent),
-                    center = centre,
+                    center = center,
                     radius = maxRadius,
                 ),
                 radius = maxRadius,
-                center = centre,
+                center = center,
             )
 
             repeat(4) { ring ->
@@ -204,14 +204,14 @@ fun RadarScene(
                 drawCircle(
                     color = grid,
                     radius = maxRadius * fraction,
-                    center = centre,
+                    center = center,
                     style = Stroke(width = if (ring == 3) 2f else 1f),
                 )
                 val dbm = innerDbm + (outerDbm - innerDbm) * fraction
-                drawRingLabel(measurer, "${dbm.toInt()}", centre, maxRadius * fraction, gridText)
+                drawRingLabel(measurer, "${dbm.toInt()}", center, maxRadius * fraction, gridText)
             }
 
-            drawSweep(centre, maxRadius, sweepAngle, normal)
+            drawSweep(center, maxRadius, sweepAngle, normal)
 
             blips.values.forEach { blip ->
                 // Ease toward the target so movement reads as gliding, not teleporting.
@@ -232,11 +232,11 @@ fun RadarScene(
                 drawBlip(
                     scale = blipScale.coerceIn(1f, 2.6f),
                     blip = blip,
-                    centre = centre,
+                    center = center,
                     maxRadius = maxRadius,
                     nowMs = frameMs,
                     selected = blip.address == selectedAddress,
-                    colour = when {
+                    color = when {
                         blip.address == selectedAddress -> selectedColour
                         blip.flagged -> flaggedColour
                         blip.watched -> watchedColour
@@ -258,56 +258,56 @@ private fun angleDelta(a: Float, b: Float): Float {
 }
 
 private fun DrawScope.drawSweep(
-    centre: Offset,
+    center: Offset,
     maxRadius: Float,
     angle: Float,
-    colour: Color,
+    color: Color,
 ) {
     // A short fading wedge behind the leading edge, which is what makes it read as a sweep
     // rather than a spinning stick.
     for (step in 0..14) {
         val trailing = angle - step * 2.2f
         val alpha = (1f - step / 14f) * 0.30f
-        rotate(degrees = trailing, pivot = centre) {
+        rotate(degrees = trailing, pivot = center) {
             drawLine(
-                color = colour.copy(alpha = alpha),
-                start = centre,
-                end = Offset(centre.x, centre.y - maxRadius),
+                color = color.copy(alpha = alpha),
+                start = center,
+                end = Offset(center.x, center.y - maxRadius),
                 strokeWidth = 3f,
             )
         }
     }
 }
 
-private fun positionOf(blip: Blip, centre: Offset, maxRadius: Float): Offset {
+private fun positionOf(blip: Blip, center: Offset, maxRadius: Float): Offset {
     val radians = (blip.angleDegrees - 90f) * PI.toFloat() / 180f
     val radius = maxRadius * blip.currentFraction.coerceIn(0.06f, 1.06f)
-    return Offset(centre.x + radius * cos(radians), centre.y + radius * sin(radians))
+    return Offset(center.x + radius * cos(radians), center.y + radius * sin(radians))
 }
 
 private fun DrawScope.drawBlip(
     blip: Blip,
-    centre: Offset,
+    center: Offset,
     maxRadius: Float,
     nowMs: Long,
     selected: Boolean,
-    colour: Color,
+    color: Color,
     measurer: TextMeasurer,
     scale: Float,
 ) {
-    val position = positionOf(blip, centre, maxRadius)
+    val position = positionOf(blip, center, maxRadius)
     val radians = (blip.angleDegrees - 90f) * PI.toFloat() / 180f
 
     val leaving = blip.leavingSinceMs
     if (leaving != null) {
         val progress = ((nowMs - leaving).toFloat() / LEAVE_MS).coerceIn(0f, 1f)
         drawCircle(
-            color = colour.copy(alpha = (1f - progress) * 0.8f),
+            color = color.copy(alpha = (1f - progress) * 0.8f),
             radius = 5f * scale,
             center = position,
         )
         drawCircle(
-            color = colour.copy(alpha = (1f - progress) * 0.4f),
+            color = color.copy(alpha = (1f - progress) * 0.4f),
             radius = (6f + progress * 22f) * scale,
             center = position,
             style = Stroke(width = 1.5f),
@@ -320,9 +320,9 @@ private fun DrawScope.drawBlip(
         val alpha = (index + 1).toFloat() / blip.trail.size * 0.20f
         val radius = maxRadius * fraction.coerceIn(0.06f, 1.06f)
         drawCircle(
-            color = colour.copy(alpha = alpha),
+            color = color.copy(alpha = alpha),
             radius = 2.5f,
-            center = Offset(centre.x + radius * cos(radians), centre.y + radius * sin(radians)),
+            center = Offset(center.x + radius * cos(radians), center.y + radius * sin(radians)),
         )
     }
 
@@ -331,7 +331,7 @@ private fun DrawScope.drawBlip(
         val progress = (age.toFloat() / APPEAR_MS).coerceIn(0f, 1f)
         val eased = 1f - (1f - progress) * (1f - progress)
         drawCircle(
-            color = colour.copy(alpha = (1f - eased) * 0.7f),
+            color = color.copy(alpha = (1f - eased) * 0.7f),
             radius = (5f + eased * 30f) * scale,
             center = position,
             style = Stroke(width = 2f),
@@ -347,26 +347,26 @@ private fun DrawScope.drawBlip(
     }
 
     drawCircle(
-        color = colour.copy(alpha = 0.16f + glow * 0.42f),
+        color = color.copy(alpha = 0.16f + glow * 0.42f),
         radius = (10f + glow * 8f) * scale,
         center = position,
     )
     drawCircle(
-        color = colour,
+        color = color,
         radius = (if (selected) 6.5f else 4.5f) * scale,
         center = position,
     )
 
     if (selected) {
         drawCircle(
-            color = colour,
+            color = color,
             radius = 15f * scale,
             center = position,
             style = Stroke(width = 2f),
         )
         val layout = measurer.measure(
             text = blip.label.take(22),
-            style = TextStyle(fontSize = 10.sp, color = colour),
+            style = TextStyle(fontSize = 10.sp, color = color),
         )
         drawText(
             textLayoutResult = layout,
@@ -379,7 +379,7 @@ private fun DrawScope.drawBlip(
     }
 }
 
-/** 0 at the centre, 1 at the rim. Strongest in the middle. */
+/** 0 at the center, 1 at the rim. Strongest in the middle. */
 private fun fractionFor(rssi: Double, innerDbm: Float, outerDbm: Float): Float {
     val span = (innerDbm - outerDbm).takeIf { abs(it) > 0.5f } ?: 1f
     val fraction = ((innerDbm - rssi) / span).toFloat()
@@ -396,19 +396,19 @@ private fun angleFor(address: String): Float {
 private fun DrawScope.drawRingLabel(
     measurer: TextMeasurer,
     text: String,
-    centre: Offset,
+    center: Offset,
     radius: Float,
-    colour: Color,
+    color: Color,
 ) {
     val layout = measurer.measure(
         text = text,
-        style = TextStyle(fontSize = 8.sp, color = colour.copy(alpha = 0.75f)),
+        style = TextStyle(fontSize = 8.sp, color = color.copy(alpha = 0.75f)),
     )
     drawText(
         textLayoutResult = layout,
         topLeft = Offset(
-            centre.x - layout.size.width / 2f,
-            centre.y - radius - layout.size.height - 1f,
+            center.x - layout.size.width / 2f,
+            center.y - radius - layout.size.height - 1f,
         ),
     )
 }

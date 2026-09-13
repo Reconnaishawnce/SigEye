@@ -38,7 +38,7 @@ private const val ZOOM_STEP_DB = 8f
  *
  * There were two radars in this app with different abilities, which meant tapping a blip
  * worked on one screen and did nothing on another. Every screen now uses this, so the
- * behaviour is the same everywhere: pinch or use the buttons to zoom, tap a blip to select
+ * behavior is the same everywhere: pinch or use the buttons to zoom, tap a blip to select
  * it, tap the background to clear, and whatever the screen knows about the selected device
  * appears underneath.
  *
@@ -58,7 +58,7 @@ fun RadarPanel(
      *
      * Proximity Radar renders a much fuller one of its own - distance, trend, a locate
      * button - so it turns this off rather than showing a thinner version of the same
-     * thing directly above it. The behaviour that has to match everywhere is tapping,
+     * thing directly above it. The behavior that has to match everywhere is tapping,
      * zooming and the selection existing at all, not the exact card.
      */
     showSelectionCard: Boolean = true,

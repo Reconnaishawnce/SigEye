@@ -29,14 +29,14 @@ data class AccessPoint(
      */
     val channelWidthMhz: Int = 20,
     /**
-     * Centre of the whole occupied block, which is not the primary channel once an access
+     * Center of the whole occupied block, which is not the primary channel once an access
      * point is wider than twenty megahertz. Zero when the driver did not say.
      */
-    val centreFreqMhz: Int = 0,
+    val centerFreqMhz: Int = 0,
 ) {
-    /** Where this access point's power is actually centred. */
+    /** Where this access point's power is actually centerd. */
     val occupiedCentreMhz: Int
-        get() = if (channelWidthMhz > 20 && centreFreqMhz > 0) centreFreqMhz else frequencyMhz
+        get() = if (channelWidthMhz > 20 && centerFreqMhz > 0) centerFreqMhz else frequencyMhz
 
     /** Hidden networks return an empty name, which is itself worth showing. */
     val hidden: Boolean get() = ssid.isNullOrBlank()
@@ -49,7 +49,7 @@ data class AccessPoint(
         }
 
     /**
-     * Channel number from centre frequency.
+     * Channel number from center frequency.
      *
      * The 2.4 GHz band is 5 MHz a channel from 2412, with channel 14 sitting out on its
      * own; 5 and 6 GHz are a flat arithmetic step.
@@ -211,7 +211,7 @@ object WifiScanHub {
                 capabilities = result.capabilities.orEmpty(),
                 seenAtMs = now,
                 channelWidthMhz = Spectrum.widthFromAndroid(result.channelWidth),
-                centreFreqMhz = result.centerFreq0,
+                centerFreqMhz = result.centerFreq0,
             )
         }
 

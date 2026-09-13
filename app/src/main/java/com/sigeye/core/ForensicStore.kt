@@ -59,7 +59,7 @@ class ForensicStore private constructor(context: Context) {
                     .put("random", device.isRandom)
                     .put("packets", device.packets)
                     .put("peak", device.peakRssi)
-                    .put("behaviour", device.behaviour),
+                    .put("behavior", device.behavior),
             )
         }
         return JSONObject()
@@ -86,7 +86,7 @@ class ForensicStore private constructor(context: Context) {
                     isRandom = device.optBoolean("random"),
                     packets = device.optInt("packets"),
                     peakRssi = device.optInt("peak", -127),
-                    behaviour = device.optString("behaviour"),
+                    behavior = device.optString("behavior"),
                 )
             },
         )

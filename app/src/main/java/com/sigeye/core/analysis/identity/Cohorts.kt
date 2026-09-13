@@ -23,12 +23,12 @@ data class Cohort(
 ) {
     val size: Int get() = members.size
 
-    val randomised: Int get() = members.count { it.isRandom }
+    val randomized: Int get() = members.count { it.isRandom }
 
-    val fixed: Int get() = size - randomised
+    val fixed: Int get() = size - randomized
 
     /** How much of this vendor's fleet bothers with a private address. */
-    val privacyFraction: Float get() = if (size == 0) 0f else randomised.toFloat() / size
+    val privacyFraction: Float get() = if (size == 0) 0f else randomized.toFloat() / size
 
     /** Distinct advertisement structures, which is roughly distinct products. */
     val shapes: Int get() = members.map { it.shapeKey }.distinct().size
@@ -48,15 +48,15 @@ data class Cohort(
     /**
      * What this cohort's address policy amounts to, in a sentence.
      *
-     * The interesting cases are the two extremes. A fleet that is entirely randomised is a
+     * The interesting cases are the two extremes. A fleet that is entirely randomized is a
      * vendor that took the specification seriously; a fleet that is entirely fixed is
      * every one of those devices trackable for the life of the hardware.
      */
     fun policy(): String = when {
         size == 0 -> "nothing here"
-        randomised == size -> "every one of them rotates"
+        randomized == size -> "every one of them rotates"
         fixed == size -> "not one of them rotates - all $size are trackable for good"
-        else -> "$randomised of $size rotate, $fixed do not"
+        else -> "$randomized of $size rotate, $fixed do not"
     }
 }
 
@@ -66,11 +66,11 @@ data class Cohort(
  * Rotation is a firmware decision, so it is a vendor trait: every Apple device in a room
  * rotates on the same schedule with the same payload structure, and a cheap beacon from a
  * factory that never read the privacy chapter does not rotate at all. Seeing the room
- * split that way makes the behaviour legible in a way a flat list of eighty addresses
+ * split that way makes the behavior legible in a way a flat list of eighty addresses
  * never will.
  *
  * The identification is the subtle part. An address prefix names a vendor only while the
- * address is real - the moment a device randomises it, the prefix is noise, and reading a
+ * address is real - the moment a device randomizes it, the prefix is noise, and reading a
  * vendor out of it is how a scanner ends up reporting a street full of devices from
  * companies that do not exist. What does survive a rotation is the company identifier
  * inside the advertisement, because the payload is what the device wants understood.
@@ -84,7 +84,7 @@ object Cohorts {
     /**
      * Who made this, using whichever handle is actually valid.
      *
-     * A randomised address has no vendor in it, so only the payload counts. A fixed
+     * A randomized address has no vendor in it, so only the payload counts. A fixed
      * address has a real prefix assigned by the IEEE, which is the stronger claim of the
      * two - but the payload still wins where both exist and disagree, because a company
      * identifier is a deliberate statement and a prefix can belong to whoever made the
@@ -126,7 +126,7 @@ object Cohorts {
      * the one anybody with a phone can follow around indefinitely.
      */
     fun trackable(cohorts: List<Cohort>, minimumSize: Int = 2): List<Cohort> = cohorts
-        .filter { it.vendor != UNKNOWN && it.size >= minimumSize && it.randomised == 0 }
+        .filter { it.vendor != UNKNOWN && it.size >= minimumSize && it.randomized == 0 }
         .sortedByDescending { it.size }
 
     fun describe(cohort: Cohort): String = String.format(

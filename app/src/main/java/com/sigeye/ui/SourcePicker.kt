@@ -92,8 +92,8 @@ enum class SourceOrder {
  * seven. None of those differences was a decision.
  *
  * What genuinely differs between screens is kept as parameters: what to sort by, whether a
- * randomised address is worth warning about, and how chatty a device has to be before it
- * is worth choosing. Everything else is now one behaviour.
+ * randomized address is worth warning about, and how chatty a device has to be before it
+ * is worth choosing. Everything else is now one behavior.
  *
  * Assumes the caller already holds the radio - every screen that shows a picker needs the
  * hub for the measurement afterwards anyway, and a component that acquired it separately
@@ -282,7 +282,7 @@ private fun SourceRow(
             if (warnOnRandom && source.isRandom) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Randomised address - this device will change it partway through and " +
+                    "Randomized address - this device will change it partway through and " +
                         "the measurement will stop where it does.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,

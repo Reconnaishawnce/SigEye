@@ -21,7 +21,7 @@ object DeviceRanking {
     const val ANONYMOUS = 4
 
     /**
-     * @param hasIdentity the advertisement carried a name or a recognisable vendor - that
+     * @param hasIdentity the advertisement carried a name or a recognizable vendor - that
      *   is, the row will read as something other than raw hex.
      */
     fun rank(

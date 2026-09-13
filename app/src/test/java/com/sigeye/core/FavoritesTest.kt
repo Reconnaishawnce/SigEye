@@ -4,17 +4,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class FavouritesTest {
+class FavoritesTest {
 
     private val available = setOf("radar", "train", "rotation", "forensics", "discovery")
 
     @Test
-    fun `a favourite pointing at an experiment that no longer exists is dropped`() {
+    fun `a favorite pointing at an experiment that no longer exists is dropped`() {
         // Survives an app update that renamed or removed something. Otherwise it is an
         // untappable row with no title, and only people on older versions ever see it.
         assertEquals(
             listOf("radar", "train"),
-            Favourites.sanitise(listOf("radar", "ghost", "train"), available),
+            Favorites.sanitise(listOf("radar", "ghost", "train"), available),
         )
     }
 
@@ -22,7 +22,7 @@ class FavouritesTest {
     fun `a list that got duplicated is repaired rather than shown twice`() {
         assertEquals(
             listOf("radar", "train"),
-            Favourites.sanitise(listOf("radar", "train", "radar"), available),
+            Favorites.sanitise(listOf("radar", "train", "radar"), available),
         )
     }
 
@@ -30,7 +30,7 @@ class FavouritesTest {
     fun `the seed keeps the recommended order, not the registry's`() {
         assertEquals(
             listOf("rotation", "train", "radar"),
-            Favourites.seed(listOf("rotation", "train", "radar"), available),
+            Favorites.seed(listOf("rotation", "train", "radar"), available),
         )
     }
 
@@ -38,7 +38,7 @@ class FavouritesTest {
     fun `a recommendation for something not shipped is quietly skipped`() {
         assertEquals(
             listOf("radar"),
-            Favourites.seed(listOf("radar", "not-built-yet"), available),
+            Favorites.seed(listOf("radar", "not-built-yet"), available),
         )
     }
 
@@ -46,25 +46,25 @@ class FavouritesTest {
 
     @Test
     fun `starring adds, and starring again removes`() {
-        val once = Favourites.toggle(listOf("radar"), "train")
+        val once = Favorites.toggle(listOf("radar"), "train")
         assertEquals(listOf("radar", "train"), once)
-        assertEquals(listOf("radar"), Favourites.toggle(once, "train"))
+        assertEquals(listOf("radar"), Favorites.toggle(once, "train"))
     }
 
     @Test
-    fun `a new favourite goes to the bottom, leaving an arranged list arranged`() {
+    fun `a new favorite goes to the bottom, leaving an arranged list arranged`() {
         // Inserting at the top would quietly rearrange the order somebody had chosen,
         // every time they starred something else.
         val arranged = listOf("forensics", "radar", "train")
         assertEquals(
             listOf("forensics", "radar", "train", "discovery"),
-            Favourites.toggle(arranged, "discovery"),
+            Favorites.toggle(arranged, "discovery"),
         )
     }
 
     @Test
-    fun `unstarring the only favourite leaves an empty list, not the seed again`() {
-        assertTrue(Favourites.toggle(listOf("radar"), "radar").isEmpty())
+    fun `unstarring the only favorite leaves an empty list, not the seed again`() {
+        assertTrue(Favorites.toggle(listOf("radar"), "radar").isEmpty())
     }
 
     // ---------------------------------------------------------------- reordering
@@ -73,7 +73,7 @@ class FavouritesTest {
     fun `moving up swaps with the one above`() {
         assertEquals(
             listOf("radar", "train", "rotation"),
-            Favourites.moveUp(listOf("train", "radar", "rotation"), "radar"),
+            Favorites.moveUp(listOf("train", "radar", "rotation"), "radar"),
         )
     }
 
@@ -81,43 +81,43 @@ class FavouritesTest {
     fun `moving down swaps with the one below`() {
         assertEquals(
             listOf("radar", "train", "rotation"),
-            Favourites.moveDown(listOf("train", "radar", "rotation"), "train"),
+            Favorites.moveDown(listOf("train", "radar", "rotation"), "train"),
         )
     }
 
     @Test
     fun `the top cannot go up and the bottom cannot go down`() {
         val list = listOf("train", "radar", "rotation")
-        assertEquals(list, Favourites.moveUp(list, "train"))
-        assertEquals(list, Favourites.moveDown(list, "rotation"))
-        assertTrue(!Favourites.canMoveUp(list, "train"))
-        assertTrue(!Favourites.canMoveDown(list, "rotation"))
-        assertTrue(Favourites.canMoveDown(list, "train"))
-        assertTrue(Favourites.canMoveUp(list, "rotation"))
+        assertEquals(list, Favorites.moveUp(list, "train"))
+        assertEquals(list, Favorites.moveDown(list, "rotation"))
+        assertTrue(!Favorites.canMoveUp(list, "train"))
+        assertTrue(!Favorites.canMoveDown(list, "rotation"))
+        assertTrue(Favorites.canMoveDown(list, "train"))
+        assertTrue(Favorites.canMoveUp(list, "rotation"))
     }
 
     @Test
     fun `moving something that is not in the list changes nothing`() {
         val list = listOf("train", "radar")
-        assertEquals(list, Favourites.moveUp(list, "forensics"))
-        assertEquals(list, Favourites.moveDown(list, "forensics"))
-        assertTrue(!Favourites.canMoveUp(list, "forensics"))
-        assertTrue(!Favourites.canMoveDown(list, "forensics"))
+        assertEquals(list, Favorites.moveUp(list, "forensics"))
+        assertEquals(list, Favorites.moveDown(list, "forensics"))
+        assertTrue(!Favorites.canMoveUp(list, "forensics"))
+        assertTrue(!Favorites.canMoveDown(list, "forensics"))
     }
 
     @Test
-    fun `a single favourite has nowhere to go`() {
+    fun `a single favorite has nowhere to go`() {
         val list = listOf("radar")
-        assertEquals(list, Favourites.moveUp(list, "radar"))
-        assertEquals(list, Favourites.moveDown(list, "radar"))
+        assertEquals(list, Favorites.moveUp(list, "radar"))
+        assertEquals(list, Favorites.moveDown(list, "radar"))
     }
 
     @Test
     fun `reordering never loses or invents an entry`() {
         var list = listOf("a", "b", "c", "d")
         repeat(10) {
-            list = Favourites.moveDown(list, "a")
-            list = Favourites.moveUp(list, "d")
+            list = Favorites.moveDown(list, "a")
+            list = Favorites.moveUp(list, "d")
         }
         assertEquals(4, list.size)
         assertEquals(setOf("a", "b", "c", "d"), list.toSet())

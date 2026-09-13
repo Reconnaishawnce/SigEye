@@ -67,7 +67,7 @@ fun FollowingScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             reasons = listOf(
                 PermissionReason(
                     "Nearby devices",
-                    "To recognise a named device after it changes its address.",
+                    "To recognize a named device after it changes its address.",
                 ),
                 PermissionReason("Location", "Android returns no scan results without it."),
             ),
@@ -181,7 +181,7 @@ private fun Live() {
             "A nickname is stored against an address. That works for a speaker and is " +
                 "useless for a phone, which puts on a new address every quarter of an " +
                 "hour - so the device you named comes back as a stranger. This follows it " +
-                "across, using the same fingerprinting Defeating Randomisation " +
+                "across, using the same fingerprinting Defeating Randomization " +
                 "demonstrates: the advertisement's structure, the advertising interval, " +
                 "the signal not jumping, and the timing of the swap.",
             style = MaterialTheme.typography.bodySmall,
@@ -190,7 +190,7 @@ private fun Live() {
         Text(
             "Getting it wrong is far worse than getting nothing. A name on the wrong " +
                 "phone becomes a fact that Signal Watch, Discovery, Forensics and " +
-                "Travelling Companions all then repeat, and nothing later corrects it. So " +
+                "Traveling Companions all then repeat, and nothing later corrects it. So " +
                 "it refuses in every case where it cannot be sure:",
             style = MaterialTheme.typography.bodySmall,
         )

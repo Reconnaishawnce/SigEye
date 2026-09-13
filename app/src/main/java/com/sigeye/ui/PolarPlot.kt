@@ -67,7 +67,7 @@ fun PolarPlot(
 
     Box(modifier.fillMaxWidth().aspectRatio(1f)) {
         Canvas(Modifier.fillMaxSize()) {
-            val centre = Offset(size.width / 2f, size.height / 2f)
+            val center = Offset(size.width / 2f, size.height / 2f)
             val maxRadius = size.minDimension / 2f * 0.78f
 
             val settled = result.sectors.filter { it.samples >= minSamplesPerSector }
@@ -87,7 +87,7 @@ fun PolarPlot(
                 drawCircle(
                     color = grid,
                     radius = maxRadius * (ring + 1) / 4f,
-                    center = centre,
+                    center = center,
                     style = Stroke(width = 1f),
                 )
             }
@@ -95,20 +95,20 @@ fun PolarPlot(
                 val radians = compassToRadians(angle)
                 drawLine(
                     color = grid,
-                    start = centre,
+                    start = center,
                     end = Offset(
-                        centre.x + maxRadius * cos(radians),
-                        centre.y + maxRadius * sin(radians),
+                        center.x + maxRadius * cos(radians),
+                        center.y + maxRadius * sin(radians),
                     ),
                     strokeWidth = 1f,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 6f)),
                 )
             }
-            drawAxisLabels(measurer, centre, maxRadius, label, axisLabels)
+            drawAxisLabels(measurer, center, maxRadius, label, axisLabels)
             drawCoverageRing(
                 sectors = result.sectors,
                 minSamples = minSamplesPerSector,
-                centre = centre,
+                center = center,
                 radius = maxRadius,
                 partial = line.copy(alpha = 0.25f),
                 complete = line.copy(alpha = 0.7f),
@@ -118,17 +118,17 @@ fun PolarPlot(
                 drawSweepOutline(
                     sectors = result.sectors,
                     minSamples = minSamplesPerSector,
-                    centre = centre,
+                    center = center,
                     radiusFor = ::radiusFor,
                     fill = fill,
                     line = line,
                 )
 
                 result.peak?.let {
-                    drawMarker(centre, it, ::radiusFor, peakColour)
+                    drawMarker(center, it, ::radiusFor, peakColour)
                 }
                 result.notch?.let {
-                    drawMarker(centre, it, ::radiusFor, notchColour)
+                    drawMarker(center, it, ::radiusFor, notchColour)
                 }
             }
 
@@ -136,10 +136,10 @@ fun PolarPlot(
                 val radians = compassToRadians(heading)
                 drawLine(
                     color = needle,
-                    start = centre,
+                    start = center,
                     end = Offset(
-                        centre.x + maxRadius * cos(radians),
-                        centre.y + maxRadius * sin(radians),
+                        center.x + maxRadius * cos(radians),
+                        center.y + maxRadius * sin(radians),
                     ),
                     strokeWidth = 3f,
                 )
@@ -157,7 +157,7 @@ fun PolarPlot(
 private fun DrawScope.drawCoverageRing(
     sectors: List<Sector>,
     minSamples: Int,
-    centre: Offset,
+    center: Offset,
     radius: Float,
     partial: Color,
     complete: Color,
@@ -168,13 +168,13 @@ private fun DrawScope.drawCoverageRing(
     sectors.forEach { sector ->
         if (sector.samples <= 0) return@forEach
         // Compass degrees run clockwise from north; Canvas angles run clockwise from east.
-        val start = sector.centreDegrees - width / 2f - 90f
+        val start = sector.centerDegrees - width / 2f - 90f
         drawArc(
             color = if (sector.samples >= minSamples) complete else partial,
             startAngle = start + 1f,
             sweepAngle = width - 2f,
             useCenter = false,
-            topLeft = Offset(centre.x - ringRadius, centre.y - ringRadius),
+            topLeft = Offset(center.x - ringRadius, center.y - ringRadius),
             size = Size(ringRadius * 2f, ringRadius * 2f),
             style = Stroke(width = 5f),
         )
@@ -187,7 +187,7 @@ private fun DrawScope.drawCoverageRing(
 private fun DrawScope.drawSweepOutline(
     sectors: List<Sector>,
     minSamples: Int,
-    centre: Offset,
+    center: Offset,
     radiusFor: (Double) -> Float,
     fill: Color,
     line: Color,
@@ -198,19 +198,19 @@ private fun DrawScope.drawSweepOutline(
         if (run.size >= 2) {
             val path = Path()
             run.forEachIndexed { index, sector ->
-                val radians = compassToRadians(sector.centreDegrees)
+                val radians = compassToRadians(sector.centerDegrees)
                 val radius = radiusFor(sector.meanRssi)
                 val point = Offset(
-                    centre.x + radius * cos(radians),
-                    centre.y + radius * sin(radians),
+                    center.x + radius * cos(radians),
+                    center.y + radius * sin(radians),
                 )
                 if (index == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
             }
-            // Closing back through the centre shows the wedge that was measured without
+            // Closing back through the center shows the wedge that was measured without
             // implying anything about the sectors that were not.
             val closed = Path().apply {
                 addPath(path)
-                lineTo(centre.x, centre.y)
+                lineTo(center.x, center.y)
                 close()
             }
             drawPath(closed, color = fill)
@@ -239,16 +239,16 @@ private fun DrawScope.drawSweepOutline(
 }
 
 private fun DrawScope.drawMarker(
-    centre: Offset,
+    center: Offset,
     sector: Sector,
     radiusFor: (Double) -> Float,
-    colour: Color,
+    color: Color,
 ) {
-    val radians = compassToRadians(sector.centreDegrees)
+    val radians = compassToRadians(sector.centerDegrees)
     val radius = radiusFor(sector.meanRssi)
-    val point = Offset(centre.x + radius * cos(radians), centre.y + radius * sin(radians))
-    drawCircle(color = colour, radius = 6f, center = point)
-    drawCircle(color = colour.copy(alpha = 0.35f), radius = 12f, center = point)
+    val point = Offset(center.x + radius * cos(radians), center.y + radius * sin(radians))
+    drawCircle(color = color, radius = 6f, center = point)
+    drawCircle(color = color.copy(alpha = 0.35f), radius = 12f, center = point)
 }
 
 /** Compass degrees to screen radians, with north up and east to the right. */
@@ -257,9 +257,9 @@ private fun compassToRadians(degrees: Float): Float =
 
 private fun DrawScope.drawAxisLabels(
     measurer: TextMeasurer,
-    centre: Offset,
+    center: Offset,
     maxRadius: Float,
-    colour: Color,
+    color: Color,
     labels: List<String>,
 ) {
     labels.take(4).forEachIndexed { index, text ->
@@ -267,14 +267,14 @@ private fun DrawScope.drawAxisLabels(
         val radians = compassToRadians(angle)
         val layout = measurer.measure(
             text = text,
-            style = TextStyle(fontSize = 11.sp, color = colour),
+            style = TextStyle(fontSize = 11.sp, color = color),
         )
         val radius = maxRadius + 14f
         drawText(
             textLayoutResult = layout,
             topLeft = Offset(
-                centre.x + radius * cos(radians) - layout.size.width / 2f,
-                centre.y + radius * sin(radians) - layout.size.height / 2f,
+                center.x + radius * cos(radians) - layout.size.width / 2f,
+                center.y + radius * sin(radians) - layout.size.height / 2f,
             ),
         )
     }

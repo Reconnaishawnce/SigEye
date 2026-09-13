@@ -30,7 +30,7 @@ data class Sighting(
 /**
  * Something that turned up after the baseline closed.
  *
- * [possibleRotationOf] is a suspicion, never a finding: a randomised address that changes
+ * [possibleRotationOf] is a suspicion, never a finding: a randomized address that changes
  * looks exactly like a stranger arriving, and on a busy street most "arrivals" are the
  * former. See [DiscoveryEngine.suspectRotation].
  */
@@ -38,7 +38,7 @@ data class Arrival(
     val sighting: Sighting,
     val trend: Trend = Trend.STEADY,
     val slopeDbPerSecond: Double = 0.0,
-    val metres: Double = 0.0,
+    val meters: Double = 0.0,
     val possibleRotationOf: String? = null,
 ) {
     val approaching: Boolean get() = trend == Trend.CLOSER
@@ -168,7 +168,7 @@ class DiscoveryEngine(
             sighting = sighting,
             trend = reading.trend,
             slopeDbPerSecond = reading.slopeDbPerSecond,
-            metres = reading.metres,
+            meters = reading.meters,
             possibleRotationOf = arrived[key]?.possibleRotationOf
                 ?: suspectRotation(sighting),
         )
@@ -191,7 +191,7 @@ class DiscoveryEngine(
      *
      * The two filters exist because on a street the list is mostly phones rotating their
      * addresses, and a list that is mostly noise is a list nobody reads. Hiding suspected
-     * rotations is the conservative one; hiding randomised addresses altogether is blunt,
+     * rotations is the conservative one; hiding randomized addresses altogether is blunt,
      * and leaves only devices with fixed addresses - which is to say fitted equipment
      * rather than people walking past.
      */
@@ -223,7 +223,7 @@ class DiscoveryEngine(
      * makes it dangerous - so this reports a suspicion for the screen to show, and the
      * arrival is listed either way.
      *
-     * The test is deliberately narrow: both addresses randomised, the old one falling
+     * The test is deliberately narrow: both addresses randomized, the old one falling
      * silent within a minute of the new one appearing, and their strongest readings within
      * a few dB. A public address never qualifies, because public addresses do not rotate.
      */

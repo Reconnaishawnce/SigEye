@@ -120,7 +120,7 @@ data class Identity(
      * The advertising interval in the units the specification actually uses.
      *
      * Intervals are set as a whole number of 0.625 ms slots, so the raw estimate snaps to
-     * one. The common values are recognisable on sight - 32 slots is 20 ms, 160 is 100 ms,
+     * one. The common values are recognizable on sight - 32 slots is 20 ms, 160 is 100 ms,
      * 244 is the 152.5 ms Apple uses, 1636 is the 1022.5 ms of a device trying to save
      * power - and a researcher comparing two devices wants the slot count, not a number
      * of milliseconds that happens to be close to it.
@@ -175,7 +175,7 @@ object Fingerprint {
                 holds = bothRandom,
                 weight = 0,
                 text = if (bothRandom) {
-                    "Both addresses are randomised, which is what rotation looks like."
+                    "Both addresses are randomized, which is what rotation looks like."
                 } else {
                     "One of these addresses is fixed, and a fixed address does not rotate."
                 },

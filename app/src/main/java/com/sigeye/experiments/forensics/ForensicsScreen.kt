@@ -51,7 +51,7 @@ import com.sigeye.core.ScanService
 import com.sigeye.core.SnapshotStore
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
-import com.sigeye.core.analysis.record.Behaviour
+import com.sigeye.core.analysis.record.Behavior
 import com.sigeye.core.analysis.record.ForensicFilter
 import com.sigeye.core.analysis.record.ForensicHistory
 import com.sigeye.core.analysis.record.ForensicSort
@@ -382,10 +382,10 @@ private fun Live() {
     Spacer(Modifier.height(12.dp))
     DiagnosticsPanel(
         title = "What the recording contains",
-        diagnostics = Behaviour.entries.map { behaviour ->
+        diagnostics = Behavior.entries.map { behavior ->
             Diagnostic(
-                behaviour.label.take(14),
-                "${census[behaviour] ?: 0}",
+                behavior.label.take(14),
+                "${census[behavior] ?: 0}",
                 "devices",
             )
         },
@@ -500,7 +500,7 @@ private fun Live() {
     ) { Text("Export the whole recording") }
     exported?.let {
         Text(
-            "Wrote $it - every reading with its device and behaviour.",
+            "Wrote $it - every reading with its device and behavior.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -628,7 +628,7 @@ private fun TrackCard(
     onToggle: () -> Unit,
     onRequestNewList: () -> Unit,
 ) {
-    val notable = track.behaviour == Behaviour.PASSED
+    val notable = track.behavior == Behavior.PASSED
     Card(
         Modifier.fillMaxWidth().clickable { onToggle() },
         colors = CardDefaults.cardColors(
@@ -676,7 +676,7 @@ private fun TrackCard(
             Timeline(track)
 
             Text(
-                track.behaviour.label + " · " + track.summary(),
+                track.behavior.label + " · " + track.summary(),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 4.dp),
@@ -697,7 +697,7 @@ private fun TrackCard(
             if (expanded) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    track.behaviour.meaning,
+                    track.behavior.meaning,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

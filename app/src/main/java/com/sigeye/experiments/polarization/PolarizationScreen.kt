@@ -1,4 +1,4 @@
-package com.sigeye.experiments.polarisation
+package com.sigeye.experiments.polarization
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -36,8 +36,8 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.CsvExport
 import com.sigeye.core.Permissions
 import com.sigeye.core.analysis.rf.PolarSweep
-import com.sigeye.core.analysis.rf.Polarisation
-import com.sigeye.core.analysis.rf.PolarisationResult
+import com.sigeye.core.analysis.rf.Polarization
+import com.sigeye.core.analysis.rf.PolarizationResult
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.sensors.RollSensor
 import com.sigeye.ui.Diagnostic
@@ -54,7 +54,7 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private const val HUB_TAG = "polarisation"
+private const val HUB_TAG = "polarization"
 private const val TICK_MS = 300L
 
 /** Twelve bins over half a turn: fifteen degrees each, which a wrist can hold. */
@@ -70,7 +70,7 @@ private enum class Stage { PICK, ROLL, RESULT }
 
 
 @Composable
-fun PolarisationScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun PolarizationScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -78,7 +78,7 @@ fun PolarisationScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(12.dp))
-        ExperimentHeader(Experiments.POLARISATION, onBack)
+        ExperimentHeader(Experiments.POLARIZATION, onBack)
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(
@@ -113,7 +113,7 @@ private fun Live() {
     var target by remember { mutableStateOf<String?>(null) }
     var targetLabel by remember { mutableStateOf("-") }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
-    var result by remember { mutableStateOf<PolarisationResult?>(null) }
+    var result by remember { mutableStateOf<PolarizationResult?>(null) }
     var recorded by remember { mutableStateOf(0) }
     var droppedFlat by remember { mutableStateOf(0) }
 
@@ -147,7 +147,7 @@ private fun Live() {
                 droppedFlat++
                 return@collect
             }
-            if (sweep.add(Polarisation.plotAngle(current.degrees), advert.rssi, advert.atMs)) {
+            if (sweep.add(Polarization.plotAngle(current.degrees), advert.rssi, advert.atMs)) {
                 recorded++
             }
         }
@@ -156,7 +156,7 @@ private fun Live() {
     LaunchedEffect(stage) {
         while (stage == Stage.ROLL) {
             delay(TICK_MS)
-            result = Polarisation.analyse(sweep, BINS)
+            result = Polarization.analyze(sweep, BINS)
         }
     }
 
@@ -184,7 +184,7 @@ private fun Live() {
             droppedFlat = droppedFlat,
             result = result,
             onFinish = {
-                result = Polarisation.analyse(sweep, BINS)
+                result = Polarization.analyze(sweep, BINS)
                 rollSensor.stop()
                 stage = Stage.RESULT
             },
@@ -279,7 +279,7 @@ private fun Pick(
     SourcePicker(
         onPick = onPick,
         heading = "Pick something to roll against",
-        hint = "A few metres away with a clear path works best. Too close and reflections " +
+        hint = "A few meters away with a clear path works best. Too close and reflections " +
             "fill the null in; the rate on the right matters more than the strength.",
         order = SourceOrder.RATE,
         wantsRate = 2.0,
@@ -296,7 +296,7 @@ private fun Rolling(
     rssi: Int?,
     recorded: Int,
     droppedFlat: Int,
-    result: PolarisationResult?,
+    result: PolarizationResult?,
     onFinish: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -335,7 +335,7 @@ private fun Rolling(
                     "you, and roll it slowly about that axis - like turning a rolling " +
                     "pin. Screen up, screen sideways, screen down, all the way over and " +
                     "back. Keep it in the same spot while you do: moving it measures " +
-                    "distance rather than polarisation."
+                    "distance rather than polarization."
             },
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(14.dp),
@@ -346,7 +346,7 @@ private fun Rolling(
         Spacer(Modifier.height(12.dp))
         PolarPlot(
             result = it.sweep,
-            liveHeading = Polarisation.plotAngle(rollDegrees),
+            liveHeading = Polarization.plotAngle(rollDegrees),
             minSamplesPerSector = 3,
             axisLabels = ROLL_AXES,
         )
@@ -389,15 +389,15 @@ private fun Rolling(
 @Composable
 private fun Results(
     label: String,
-    result: PolarisationResult?,
+    result: PolarizationResult?,
     recorded: Int,
     sweep: PolarSweep,
     onAgain: () -> Unit,
     onNewSource: () -> Unit,
 ) {
     val context = LocalContext.current
-    val polarisation = result
-    if (polarisation == null) {
+    val polarization = result
+    if (polarization == null) {
         Text("Nothing recorded.", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = onNewSource, modifier = Modifier.fillMaxWidth()) {
@@ -409,7 +409,7 @@ private fun Results(
     Text(label, style = MaterialTheme.typography.labelMedium)
     Spacer(Modifier.height(4.dp))
     Text(
-        polarisation.depthDb?.let { String.format(Locale.US, "%.1f dB", it) } ?: "-",
+        polarization.depthDb?.let { String.format(Locale.US, "%.1f dB", it) } ?: "-",
         style = MaterialTheme.typography.displaySmall,
         fontWeight = FontWeight.Bold,
     )
@@ -419,7 +419,7 @@ private fun Results(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    polarisation.verdict()?.let {
+    polarization.verdict()?.let {
         Spacer(Modifier.height(8.dp))
         Card(
             Modifier.fillMaxWidth(),
@@ -438,12 +438,12 @@ private fun Results(
 
     Spacer(Modifier.height(12.dp))
     PolarPlot(
-        result = polarisation.sweep,
+        result = polarization.sweep,
         minSamplesPerSector = 3,
         axisLabels = ROLL_AXES,
     )
 
-    if (polarisation.looksLikePolarisation) {
+    if (polarization.looksLikePolarisation) {
         Spacer(Modifier.height(12.dp))
         Card(
             Modifier.fillMaxWidth(),
@@ -453,7 +453,7 @@ private fun Results(
         ) {
             Column(Modifier.padding(14.dp)) {
                 Text(
-                    "That is polarisation",
+                    "That is polarization",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -467,7 +467,7 @@ private fun Results(
                             "About %.0f%% of what you are receiving arrived by a single " +
                             "clean path - the rest survived being crossed, which means it " +
                             "bounced on the way.",
-                        Polarisation.directPathFraction(polarisation.depthDb ?: 0.0) * 100,
+                        Polarization.directPathFraction(polarization.depthDb ?: 0.0) * 100,
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -482,25 +482,25 @@ private fun Results(
         diagnostics = listOf(
             Diagnostic(
                 "Depth",
-                polarisation.depthDb?.let { String.format(Locale.US, "%.1f", it) } ?: "-",
+                polarization.depthDb?.let { String.format(Locale.US, "%.1f", it) } ?: "-",
                 "dB",
             ),
             Diagnostic(
                 "Aligned",
-                polarisation.bestRollDegrees?.let { "${it.roundToInt()}°" } ?: "-",
+                polarization.bestRollDegrees?.let { "${it.roundToInt()}°" } ?: "-",
                 "strongest roll",
             ),
             Diagnostic(
                 "Crossed",
-                polarisation.worstRollDegrees?.let { "${it.roundToInt()}°" } ?: "-",
+                polarization.worstRollDegrees?.let { "${it.roundToInt()}°" } ?: "-",
                 "weakest roll",
             ),
             Diagnostic(
                 "Apart",
-                polarisation.separationDegrees?.let { "${it.roundToInt()}°" } ?: "-",
+                polarization.separationDegrees?.let { "${it.roundToInt()}°" } ?: "-",
                 "should be 90",
             ),
-            Diagnostic("Covered", "${(polarisation.coverage * 100).roundToInt()}%", "of the roll"),
+            Diagnostic("Covered", "${(polarization.coverage * 100).roundToInt()}%", "of the roll"),
             Diagnostic("Readings", "$recorded", "recorded"),
         ),
         footnote = "The null depth is a second, independent route to the same quantity " +
@@ -514,10 +514,10 @@ private fun Results(
         onClick = {
             CsvExport.shareText(
                 context = context,
-                folder = "polarisation",
+                folder = "polarization",
                 prefix = "roll",
-                content = CsvExport.header("polarisation roll sweep", "source=$label") +
-                    Polarisation.csv(sweep, polarisation),
+                content = CsvExport.header("polarization roll sweep", "source=$label") +
+                    Polarization.csv(sweep, polarization),
             )
         },
         modifier = Modifier.fillMaxWidth(),

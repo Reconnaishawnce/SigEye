@@ -50,7 +50,7 @@ data class WatcherStats(
  *
  * The previous design asked you to pick a device and then capture its pass, which requires
  * knowing which of forty anonymous addresses belongs to the car that has not arrived yet.
- * In practice traffic carries randomised addresses that appear for a few seconds and are
+ * In practice traffic carries randomized addresses that appear for a few seconds and are
  * never seen again, so by the time you could identify the right one it had gone.
  *
  * So this keeps a rolling window for every address, and when one falls quiet - the device
@@ -98,7 +98,7 @@ class PassWatcher(
     /**
      * Finalises every track that has gone quiet, and returns any that were passes.
      *
-     * Called on a timer rather than per packet: a device is recognised as gone by the
+     * Called on a timer rather than per packet: a device is recognized as gone by the
      * absence of packets, which no packet can tell you about.
      */
     fun tick(nowMs: Long): List<PassResult> {
@@ -110,7 +110,7 @@ class PassWatcher(
         gone.forEach { address ->
             val samples = tracks.remove(address) ?: return@forEach
             finished++
-            val result = SpeedEstimator.analyse(
+            val result = SpeedEstimator.analyze(
                 address = address,
                 samples = samples,
                 distanceMetres = distanceMetres,

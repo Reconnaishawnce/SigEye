@@ -166,7 +166,7 @@ private fun Live() {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Stat("Cells", snap.distinctCells.toString(), "distinct seen")
         Stat("On this one", formatDuration(snap.currentHeldMs), "so far")
-        Stat("Neighbours", current.neighbours.toString(), "visible now")
+        Stat("Neighbors", current.neighbors.toString(), "visible now")
     }
 
     Spacer(Modifier.height(16.dp))

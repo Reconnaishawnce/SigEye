@@ -15,14 +15,14 @@ machinery has been copy-pasted often enough that the copies have started to dive
 
 ### 1. Seven experiments have never run on a phone
 
-Polarisation, Channel Congestion, Wall Penetration, Exposure Scan, Persistent Tracking,
-Rotation Lab and the favourites screen all shipped without once being run on hardware. CI
+Polarization, Channel Congestion, Wall Penetration, Exposure Scan, Persistent Tracking,
+Rotation Lab and the favorites screen all shipped without once being run on hardware. CI
 proves they compile and that the arithmetic is right; it proves nothing about whether
 `RollSensor` reads the axis it claims, whether dual-band pairing finds a real router, or
 whether the Rotation Lab's chains survive a real cafe.
 
 This is the single biggest risk in the project, and the only one I cannot close. A
-half-hour with the phone in a busy room would close most of it. **Polarisation first** —
+half-hour with the phone in a busy room would close most of it. **Polarization first** —
 its geometry got shipped backwards once already and was caught by reading, not by testing.
 
 ### 2. `allowBackup="true"` sends the device book to Google
@@ -36,14 +36,14 @@ restored onto their next phone.
 The app says, on the home screen and in the README, *everything runs on this phone; no
 accounts, no network*. That is currently not true. Either set
 `android:allowBackup="false"`, or add rules that exclude the stores that contain
-observations about other people and keep only the harmless ones (favourites, first-run).
-The second is better behaviour and takes ten lines.
+observations about other people and keep only the harmless ones (favorites, first-run).
+The second is better behavior and takes ten lines.
 
 ### 3. Rotating the phone destroys an in-progress measurement
 
 No screen uses `rememberSaveable`, the activity declares no `configChanges`, and the
 manifest does not lock orientation. So turning the phone sideways during a Body Absorption
-sweep, a Doppler walk, a polarisation roll or a Faraday comparison destroys the activity
+sweep, a Doppler walk, a polarization roll or a Faraday comparison destroys the activity
 and every `remember`ed value with it — the sweep, the stage, the picked source, all of it.
 
 Three of those experiments explicitly ask the user to move the phone about while
@@ -56,7 +56,7 @@ Android stops recreating it. Do the cheap one now and the proper one per screen 
 
 ### 4. The device picker is copy-pasted into seven screens
 
-Absorption, Doppler, Explorer, Fading, Faraday, Motion and Polarisation each declare their
+Absorption, Doppler, Explorer, Fading, Faraday, Motion and Polarization each declare their
 own `data class Candidate`, their own advert-collection loop, their own freshness filter
 and their own rate sort. They have already diverged: some show a vendor fallback for the
 name and some do not, some require three sightings and some two, some sort by rate and some
@@ -84,7 +84,7 @@ silent. `BleScanHub` already tracks `subscribers` — it just does not say who.
 The house rule is that an empty screen with no explanation is a bug. Beacons, Cells,
 Fading, Faraday, Inspector, Locate, Microwave, Motion, Population, Radar, Train Spotter and
 Watchlist do not have a `DiagnosticsPanel`. Several of them are the ones most likely to
-show nothing at all — Microwave needs an oven, Cells needs an OEM that reports cell
+show nothing at all — Microwave needs a microwave, Cells needs an OEM that reports cell
 identity, Locate needs a device that is still advertising.
 
 These are the screens where a user concludes the app is broken. The panel already exists
@@ -104,7 +104,7 @@ make it obvious where a new file goes.
 
 ### 8. Seven `SharedPreferences` files and no settings screen
 
-`devicebook`, `favourites`, `firstrun`, `following`, `ignorelist`, `trainspotter`,
+`devicebook`, `favorites`, `firstrun`, `following`, `ignorelist`, `trainspotter`,
 `watchlist`. Each store invented its own file and its own key names. There is nowhere to
 see what the app is holding, nowhere to change a default, and no way to back any of it up
 deliberately (see item 2).
@@ -128,7 +128,7 @@ after each class. The finding below is what was actually true.*
 
 `LiveAddress` and `RotationLab`. `LiveAddress` is now shared by two trackers and is where
 every identity in the app is built — it is the worse of the two to have left untested,
-because if the interval it reports were wrong, Defeating Randomisation, Rotation Lab and
+because if the interval it reports were wrong, Defeating Randomization, Rotation Lab and
 Persistent Tracking would all be wrong together and in the same direction. `RotationLab`
 does the cohort and rhythm aggregation the whole Rotation Lab screen rests on.
 
@@ -150,7 +150,7 @@ synthetic ones.
 
 ### 13. `Experiments.featuredReasons` only covers five
 
-Star anything else and the favourites card falls back to `blurb`. The blurbs are good, but
+Star anything else and the favorites card falls back to `blurb`. The blurbs are good, but
 the five hand-written reasons are noticeably better, and the inconsistency is visible the
 moment a user stars a sixth thing. Either write one for every ready experiment or drop the
 mechanism and use blurbs throughout.
@@ -161,7 +161,7 @@ mechanism and use blurbs throughout.
 
 ### 14. The app is not accessible
 
-One `onClickLabel` in the entire codebase, on the favourites glyphs I added an hour ago.
+One `onClickLabel` in the entire codebase, on the favorites glyphs I added an hour ago.
 Sixteen `Canvas` charts with no semantics at all: to a screen reader the polar plot, the
 spectrum chart and the radar are blank rectangles. Every chart should carry a
 `contentDescription` that states the finding in words — "peak at 40 degrees, notch at 210,
@@ -197,7 +197,7 @@ store plus one screen.
 
 ### 19. No home-screen search
 
-Twenty-eight experiments in five categories plus a favourites list is now enough that
+Twenty-eight experiments in five categories plus a favorites list is now enough that
 finding "the one about the microwave" means scrolling. A filter field at the top matching
 title, blurb and `teaches` would cost twenty lines.
 
@@ -229,7 +229,7 @@ block depth against it — the Fading machinery already computes exactly this.
 
 ### 23. Microwave Interference needs a control band
 
-An oven trampling 2.4 GHz is dramatic and unfalsifiable as currently presented. Watching a
+A microwave flattening 2.4 GHz is dramatic and unfalsifiable as presented. Watching a
 5 GHz access point at the same time gives a control: 2.4 collapses, 5 does not, and the
 difference is the finding rather than the drop. `WifiScanHub` already provides both bands
 and Wall Penetration already pairs them.

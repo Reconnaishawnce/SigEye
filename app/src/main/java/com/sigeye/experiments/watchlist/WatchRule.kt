@@ -17,12 +17,12 @@ enum class MatchKind(val label: String, val hint: String) {
     OUI(
         "Manufacturer (MAC prefix)",
         "First three bytes of the address, e.g. 00:25:DF. Only works on devices that " +
-            "do not randomise their address.",
+            "do not randomize their address.",
     ),
     COMPANY_ID(
         "Company ID",
         "Bluetooth SIG number in the manufacturer data, e.g. 0x004C for Apple. Survives " +
-            "address randomisation.",
+            "address randomization.",
     ),
     SERVICE_UUID(
         "Service UUID",
@@ -69,7 +69,7 @@ data class WatchRule(
         return when (kind) {
             MatchKind.OUI ->
                 !advert.isRandomAddress &&
-                    advert.oui.equals(normaliseOui(needle), ignoreCase = true)
+                    advert.oui.equals(normalizeOui(needle), ignoreCase = true)
 
             MatchKind.COMPANY_ID ->
                 advert.companyId != null && advert.companyId == parseCompanyId(needle)
@@ -105,7 +105,7 @@ data class WatchRule(
     }
 
     companion object {
-        fun normaliseOui(raw: String): String =
+        fun normalizeOui(raw: String): String =
             raw.uppercase().replace('-', ':').filter { it.isLetterOrDigit() || it == ':' }
                 .split(':').filter { it.isNotEmpty() }.take(3).joinToString(":")
 

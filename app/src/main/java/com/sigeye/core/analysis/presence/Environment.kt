@@ -21,7 +21,7 @@ enum class Density(val label: String, val blurb: String) {
     ),
     SUBURBAN(
         "Suburban",
-        "A street of houses, a small office. Neighbours audible through the walls.",
+        "A street of houses, a small office. Neighbors audible through the walls.",
     ),
     URBAN(
         "Urban",
@@ -30,7 +30,7 @@ enum class Density(val label: String, val blurb: String) {
     ),
     CROWDED(
         "Crowded",
-        "A train, a concourse, a shopping centre. Hundreds of devices, most of them " +
+        "A train, a concourse, a shopping center. Hundreds of devices, most of them " +
             "passing through.",
     ),
 }

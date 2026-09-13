@@ -13,7 +13,7 @@ class ForensicHistoryTest {
         isRandom = random,
         packets = 20,
         peakRssi = -55,
-        behaviour = "THROUGHOUT_STEADY",
+        behavior = "THROUGHOUT_STEADY",
     )
 
     private fun session(label: String, atMs: Long, vararg devices: SavedDevice) =
@@ -32,7 +32,7 @@ class ForensicHistoryTest {
     // -------------------------------------------------------------- provenance
 
     @Test
-    fun `a device from an earlier recording is recognised`() {
+    fun `a device from an earlier recording is recognized`() {
         val provenance = ForensicHistory.provenance(
             address = "AA",
             sessions = listOf(session("High Street", 1_000L, device("AA"))),
@@ -125,7 +125,7 @@ class ForensicHistoryTest {
     }
 
     @Test
-    fun `randomised addresses are excluded rather than reported as churn`() {
+    fun `randomized addresses are excluded rather than reported as churn`() {
         // Two recordings of the same street an hour apart would otherwise report every
         // phone in it as both departed and newly arrived.
         val before = session("Monday", 0L, device("FIXED"), device("R1", random = true))
@@ -136,7 +136,7 @@ class ForensicHistoryTest {
         assertTrue(diff.onlyBefore.isEmpty())
         assertEquals(1, diff.randomBefore)
         assertEquals(1, diff.randomAfter)
-        assertTrue(diff.summary().contains("randomised"))
+        assertTrue(diff.summary().contains("randomized"))
     }
 
     @Test
@@ -156,7 +156,7 @@ class ForensicHistoryTest {
         assertEquals(1, saved.size)
         assertEquals(20, saved.devices.first().packets)
         assertEquals(-55, saved.devices.first().peakRssi)
-        assertEquals("THROUGHOUT_STEADY", saved.devices.first().behaviour)
+        assertEquals("THROUGHOUT_STEADY", saved.devices.first().behavior)
     }
 
     @Test

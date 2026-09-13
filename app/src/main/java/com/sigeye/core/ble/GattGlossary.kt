@@ -170,9 +170,9 @@ object GattGlossary {
         0x2A01 to "Appearance: the registry category the device claims to belong to.",
         0x2A19 to "Battery level, as a percentage.",
         0x2A23 to "System ID. Usually contains the device's own MAC address - which means " +
-            "a device using a randomised address can leak its real one here.",
+            "a device using a randomized address can leak its real one here.",
         0x2A24 to "Model number, as free text set by the maker.",
-        0x2A25 to "Serial number. Unique to the unit, and unlike a randomised MAC it does " +
+        0x2A25 to "Serial number. Unique to the unit, and unlike a randomized MAC it does " +
             "not change - which makes it the strongest identifier most devices hand out.",
         0x2A26 to "Firmware revision. Useful for telling two otherwise identical devices " +
             "apart, and for knowing how old the software on it is.",

@@ -186,7 +186,7 @@ private fun Live() {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     "Record a leg in one place, another somewhere else, a third somewhere " +
-                        "else again. Anything appearing in all of them was travelling " +
+                        "else again. Anything appearing in all of them was traveling " +
                         "rather than living in any of them.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -292,7 +292,7 @@ private fun Live() {
             ),
             footnote = "Two legs recorded close together share most of their contents " +
                 "simply because they overlap, so this refuses to draw conclusions until " +
-                "there is real time and distance between them. Randomised addresses " +
+                "there is real time and distance between them. Randomized addresses " +
                 "defeat it outright: a phone following you appears as a stranger in every " +
                 "leg. What it can catch is fitted equipment, tyre sensors and cheap " +
                 "trackers - things whose address never changes.",

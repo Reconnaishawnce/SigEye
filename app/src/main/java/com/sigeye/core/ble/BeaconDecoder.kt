@@ -6,7 +6,7 @@ import com.sigeye.core.Vendors
 data class BeaconField(val label: String, val value: String)
 
 /**
- * A recognised advertisement format.
+ * A recognized advertisement format.
  *
  * [protocol] is what it speaks, [summary] is the one-line identity a person would read,
  * and [fields] is the full decode.
@@ -156,7 +156,7 @@ object BeaconDecoder {
             val vendor = Vendors.byCompanyId(companyId) ?: return null
             return Beacon(
                 protocol = vendor,
-                summary = "$vendor (format not recognised)",
+                summary = "$vendor (format not recognized)",
                 fields = listOf(
                     BeaconField("Company ID", Vendors.companyIdHex(companyId)),
                     BeaconField("Payload", manufacturerData?.hex() ?: "-"),

@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * A labelled block that shows its conclusion and hides its working.
+ * A labeled block that shows its conclusion and hides its working.
  *
  * The screens in this app accumulated a great deal of genuinely useful detail and then
  * showed all of it at once, which is the same as showing none of it - by the fourth

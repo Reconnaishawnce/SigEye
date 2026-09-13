@@ -9,7 +9,7 @@ import org.junit.Test
  *
  * Two trackers share it now, and everything that claims two addresses are one device does
  * so from an [Identity] this produced. If the interval it reports is wrong, Defeating
- * Randomisation, Rotation Lab and Persistent Tracking are all wrong together and in the
+ * Randomization, Rotation Lab and Persistent Tracking are all wrong together and in the
  * same direction, which is the worst way to be wrong.
  */
 class LiveAddressTest {

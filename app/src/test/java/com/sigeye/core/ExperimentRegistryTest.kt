@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * The registry is the one place a mistake is invisible until somebody taps the thing.
  *
- * An experiment with no screen, a favourite pointing nowhere, a duplicate id - all of
+ * An experiment with no screen, a favorite pointing nowhere, a duplicate id - all of
  * them compile, ship, and then do nothing on a phone. These are cheap to check and there
  * was no reason not to.
  */
@@ -24,7 +24,7 @@ class ExperimentRegistryTest {
     }
 
     @Test
-    fun `every ready experiment has a reason for the favourites card`() {
+    fun `every ready experiment has a reason for the favorites card`() {
         // Five hand-written reasons and twenty-three fallbacks was visible the moment
         // anybody starred a sixth thing.
         val missing = ready.filter { Experiments.featuredReasons[it.id] == null }
@@ -39,11 +39,11 @@ class ExperimentRegistryTest {
     }
 
     @Test
-    fun `every seeded favourite is a ready experiment`() {
+    fun `every seeded favorite is a ready experiment`() {
         Experiments.featuredIds.forEach { id ->
             val experiment = Experiments.byId(id)
-            assertNotNull("seeded favourite $id does not exist", experiment)
-            assertTrue("seeded favourite $id is not openable", experiment!!.status.openable)
+            assertNotNull("seeded favorite $id does not exist", experiment)
+            assertTrue("seeded favorite $id is not openable", experiment!!.status.openable)
         }
     }
 
@@ -106,7 +106,7 @@ class ExperimentRegistryTest {
     }
 
     @Test
-    fun `nothing in development is seeded as a favourite`() {
+    fun `nothing in development is seeded as a favorite`() {
         Experiments.featuredIds.forEach { id ->
             val experiment = Experiments.byId(id)!!
             assertTrue("$id is not built", experiment.status.openable)

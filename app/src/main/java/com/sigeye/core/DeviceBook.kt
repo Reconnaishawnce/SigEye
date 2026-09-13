@@ -18,7 +18,7 @@ data class DeviceNote(
 /**
  * The user's own names and groupings for devices they care about.
  *
- * Addresses are a poor handle for a human - "the car", "downstairs neighbour's TV" is what
+ * Addresses are a poor handle for a human - "the car", "downstairs neighbor's TV" is what
  * you actually think in. Lists then turn those names into something a watch rule can
  * target, so "alert me about anything on my Vehicles list" needs no rule per device.
  *

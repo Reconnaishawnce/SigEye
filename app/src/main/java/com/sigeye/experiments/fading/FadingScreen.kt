@@ -115,7 +115,7 @@ private fun Live() {
 
     var liveRssi by remember { mutableStateOf<Int?>(null) }
     var trace by remember { mutableStateOf<List<Int>>(emptyList()) }
-    var stats by remember { mutableStateOf(FadingAnalysis.analyse(emptyList())) }
+    var stats by remember { mutableStateOf(FadingAnalysis.analyze(emptyList())) }
     var spots by remember { mutableStateOf<List<Spot>>(emptyList()) }
 
     DisposableEffect(Unit) {
@@ -141,7 +141,7 @@ private fun Live() {
         while (stage == Stage.RECORD) {
             delay(400)
             val snapshot = synchronized(record) { record.toList() }
-            stats = FadingAnalysis.analyse(snapshot)
+            stats = FadingAnalysis.analyze(snapshot)
             trace = snapshot.takeLast(TRACE_POINTS).map { it.rssi }
         }
     }
@@ -158,7 +158,7 @@ private fun Live() {
                 synchronized(record) { record.clear() }
                 spots = emptyList()
                 trace = emptyList()
-                stats = FadingAnalysis.analyse(emptyList())
+                stats = FadingAnalysis.analyze(emptyList())
                 stage = Stage.RECORD
             },
         )
@@ -174,7 +174,7 @@ private fun Live() {
                 spots = spots + Spot("Spot ${spots.size + 1}", stats)
                 synchronized(record) { record.clear() }
                 trace = emptyList()
-                stats = FadingAnalysis.analyse(emptyList())
+                stats = FadingAnalysis.analyze(emptyList())
             },
             onFinish = {
                 val current = stats
@@ -194,7 +194,7 @@ private fun Live() {
             onAgain = {
                 synchronized(record) { record.clear() }
                 trace = emptyList()
-                stats = FadingAnalysis.analyse(emptyList())
+                stats = FadingAnalysis.analyze(emptyList())
                 stage = Stage.RECORD
             },
             onNewSource = {
@@ -491,8 +491,8 @@ private fun FadeTrace(values: List<Int>, modifier: Modifier = Modifier) {
             // A floor on the span stops a dead-steady signal from being drawn as a
             // dramatic zigzag of its own quantisation.
             val span = (highest - lowest).coerceAtLeast(6)
-            val centre = (highest + lowest) / 2.0
-            val top = centre + span / 2.0
+            val center = (highest + lowest) / 2.0
+            val top = center + span / 2.0
             val step = size.width / (values.size - 1).toFloat()
 
             fun yFor(rssi: Double): Float =

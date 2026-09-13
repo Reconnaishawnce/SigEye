@@ -23,7 +23,7 @@ enum class Trend(val label: String, val arrow: String) {
 data class ProximityReading(
     val rawRssi: Int,
     val smoothedRssi: Double,
-    val metres: Double,
+    val meters: Double,
     val zone: ProximityZone,
     val trend: Trend,
     /** dB per second. Positive means the signal is strengthening. */
@@ -83,7 +83,7 @@ class RssiFilter(
  * it is getting stronger as you move is reliable, and that is enough to find something.
  */
 class ProximityEstimator(
-    /** Signal at one metre. Beacons often declare their own; otherwise assume. */
+    /** Signal at one meter. Beacons often declare their own; otherwise assume. */
     var txPowerAtOneMetre: Int = -59,
     /**
      * Path loss exponent. 2.0 is free space; indoors with walls is nearer 3. Raising it
@@ -118,8 +118,8 @@ class ProximityEstimator(
         return ProximityReading(
             rawRssi = rssi,
             smoothedRssi = smoothed,
-            metres = metresFor(smoothed),
-            zone = zoneFor(metresFor(smoothed), samples),
+            meters = metersFor(smoothed),
+            zone = zoneFor(metersFor(smoothed), samples),
             trend = trendFor(slope),
             slopeDbPerSecond = slope,
             confidence = confidence(),
@@ -128,7 +128,7 @@ class ProximityEstimator(
         )
     }
 
-    fun metresFor(rssi: Double): Double =
+    fun metersFor(rssi: Double): Double =
         10.0.pow((txPowerAtOneMetre - rssi) / (10.0 * pathLossExponent))
 
     /**
@@ -178,11 +178,11 @@ class ProximityEstimator(
         /** dB per second that counts as movement rather than drift. */
         const val TREND_THRESHOLD = 0.9
 
-        fun zoneFor(metres: Double, samples: Int): ProximityZone = when {
+        fun zoneFor(meters: Double, samples: Int): ProximityZone = when {
             samples < 3 -> ProximityZone.UNKNOWN
-            metres < 0.5 -> ProximityZone.IMMEDIATE
-            metres < 2.0 -> ProximityZone.NEAR
-            metres < 8.0 -> ProximityZone.FAR
+            meters < 0.5 -> ProximityZone.IMMEDIATE
+            meters < 2.0 -> ProximityZone.NEAR
+            meters < 8.0 -> ProximityZone.FAR
             else -> ProximityZone.DISTANT
         }
     }

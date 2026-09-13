@@ -9,17 +9,17 @@ import org.junit.Test
 class SpectrumTest {
 
     private fun ap(channel: Int, rssi: Int, widthMhz: Int = 20) =
-        Occupant(Spectrum.centreOf(channel), widthMhz, rssi, "ch$channel")
+        Occupant(Spectrum.centerOf(channel), widthMhz, rssi, "ch$channel")
 
     // ------------------------------------------------------------- the band plan
 
     @Test
-    fun `channel centres follow the five megahertz step, and fourteen does not`() {
-        assertEquals(2412, Spectrum.centreOf(1))
-        assertEquals(2437, Spectrum.centreOf(6))
-        assertEquals(2462, Spectrum.centreOf(11))
-        assertEquals(2472, Spectrum.centreOf(13))
-        assertEquals(2484, Spectrum.centreOf(14))
+    fun `channel centers follow the five megahertz step, and fourteen does not`() {
+        assertEquals(2412, Spectrum.centerOf(1))
+        assertEquals(2437, Spectrum.centerOf(6))
+        assertEquals(2462, Spectrum.centerOf(11))
+        assertEquals(2472, Spectrum.centerOf(13))
+        assertEquals(2484, Spectrum.centerOf(14))
     }
 
     @Test
@@ -30,7 +30,7 @@ class SpectrumTest {
         // Twenty megahertz apart at twenty-five megahertz of separation.
         assertEquals(0.0, one.overlapFraction(six.lowMhz, six.highMhz), 0.001)
         assertEquals(0.0, six.overlapFraction(eleven.lowMhz, eleven.highMhz), 0.001)
-        // Channel 3 lands halfway into both of its neighbours, which is the whole problem.
+        // Channel 3 lands halfway into both of its neighbors, which is the whole problem.
         val three = ap(3, -50)
         assertTrue(three.overlapFraction(one.lowMhz, one.highMhz) > 0.4)
         assertTrue(three.overlapFraction(six.lowMhz, six.highMhz) > 0.1)
@@ -38,21 +38,21 @@ class SpectrumTest {
 
     @Test
     fun `a forty megahertz access point only puts half its power on one channel`() {
-        val wide = Occupant(Spectrum.centreOf(3), 40, -50)
+        val wide = Occupant(Spectrum.centerOf(3), 40, -50)
         assertEquals(0.5, wide.overlapFraction(2402, 2422), 0.001)
     }
 
     // ------------------------------------------------------------------- adding up
 
     @Test
-    fun `two equal neighbours are three decibels, not twice the number`() {
+    fun `two equal neighbors are three decibels, not twice the number`() {
         val load = Spectrum.loadOver(2402, 2422, listOf(ap(1, -60), ap(1, -60)))
         assertNotNull(load)
         assertEquals(-57.0, load!!, 0.1)
     }
 
     @Test
-    fun `a far weaker neighbour barely moves the total`() {
+    fun `a far weaker neighbor barely moves the total`() {
         val load = Spectrum.loadOver(2402, 2422, listOf(ap(1, -50), ap(1, -80)))
         assertEquals(-50.0, load!!, 0.1)
     }
@@ -90,7 +90,7 @@ class SpectrumTest {
     }
 
     @Test
-    fun `a weak neighbour on the same frequency is reported but not called busy`() {
+    fun `a weak neighbor on the same frequency is reported but not called busy`() {
         val channels = Spectrum.advertChannels(listOf(ap(4, -88)))
         val thirtyEight = channels.first { it.channel == 38 }
         assertEquals(1, thirtyEight.occupants)
@@ -118,7 +118,7 @@ class SpectrumTest {
     fun `access points off the three lanes are called out`() {
         val mixed = listOf(ap(1, -50), ap(3, -50), ap(6, -50), ap(9, -50), ap(11, -50))
         val off = Spectrum.offGrid(mixed)
-        assertEquals(setOf(Spectrum.centreOf(3), Spectrum.centreOf(9)), off.map { it.centreMhz }.toSet())
+        assertEquals(setOf(Spectrum.centerOf(3), Spectrum.centerOf(9)), off.map { it.centerMhz }.toSet())
     }
 
     @Test

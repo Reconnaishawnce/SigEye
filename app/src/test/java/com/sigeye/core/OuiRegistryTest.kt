@@ -34,7 +34,7 @@ class OuiRegistryTest {
     }
 
     @Test
-    fun `an unassigned prefix is null rather than the nearest neighbour`() {
+    fun `an unassigned prefix is null rather than the nearest neighbor`() {
         OuiRegistry.installForTest(table("000000" to "First", "48CA43" to "Espressif"))
         assertNull(OuiRegistry.lookup("48:CA:44"))
         assertNull(OuiRegistry.lookup("99:99:99"))
@@ -105,7 +105,7 @@ class OuiRegistryTest {
     }
 
     @Test
-    fun `a registered prefix is never called randomised`() {
+    fun `a registered prefix is never called randomized`() {
         OuiRegistry.installForTest(File("src/main/assets/oui.bin").readBytes())
         // 0x48 sets neither the locally-administered bit nor a public-only bit pattern -
         // its top two bits read as a resolvable private address. The registry overrules.

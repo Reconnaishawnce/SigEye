@@ -67,7 +67,7 @@ class SweepSession(private val sectorCount: Int = 24) {
 
     fun result(): SessionResult {
         val combined = combine()
-        val headings = runs.mapNotNull { it.notch?.centreDegrees }
+        val headings = runs.mapNotNull { it.notch?.centerDegrees }
         val spread = circularSpread(headings)
         return SessionResult(
             runs = runs.toList(),
@@ -111,7 +111,7 @@ class SweepSession(private val sectorCount: Int = 24) {
         runs.forEach { run ->
             run.sectors.forEach { sector ->
                 if (sector.samples <= 0) return@forEach
-                val bearing = ((sector.centreDegrees % 360f) + 360f) % 360f
+                val bearing = ((sector.centerDegrees % 360f) + 360f) % 360f
                 val index = (bearing / width).toInt().coerceIn(0, resolution - 1)
                 weighted[index] += sector.meanRssi * sector.samples
                 weights[index] += sector.samples
@@ -123,7 +123,7 @@ class SweepSession(private val sectorCount: Int = 24) {
         val sectors = (0 until resolution).map { index ->
             Sector(
                 index = index,
-                centreDegrees = index * width + width / 2f,
+                centerDegrees = index * width + width / 2f,
                 samples = weights[index],
                 meanRssi = if (weights[index] == 0) 0.0 else weighted[index] / weights[index],
                 minRssi = if (weights[index] == 0) 0 else mins[index],

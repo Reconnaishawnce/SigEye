@@ -152,13 +152,13 @@ class DiscoveryEngineTest {
         assertEquals(0, engine.arrivalCount)
     }
 
-    // --------------------------------------------------- randomised addresses
+    // --------------------------------------------------- randomized addresses
 
     @Test
     fun `a rotation is flagged as a suspicion rather than swallowed`() {
         val engine = engine(baselineMs = 5_000L)
         engine.start(0L)
-        // A phone in the room during the baseline, randomised address.
+        // A phone in the room during the baseline, randomized address.
         engine.chatter("OLD", 0L, 4_000L, rssi = -58, isRandom = true)
         engine.tick(5_000L)
 

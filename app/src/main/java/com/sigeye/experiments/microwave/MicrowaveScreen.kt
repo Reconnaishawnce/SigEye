@@ -405,13 +405,13 @@ private fun RateTrace(
         val high = all.max().coerceAtLeast(1.0)
         val stepX = size.width / (all.size - 1)
 
-        fun draw(series: List<Double>, offset: Int, colour: Color) {
+        fun draw(series: List<Double>, offset: Int, color: Color) {
             var previous: Offset? = null
             series.forEachIndexed { index, value ->
                 val x = (index + offset) * stepX
                 val y = size.height - 6f - ((value / high).toFloat() * (size.height - 12f))
                 val point = Offset(x, y)
-                previous?.let { drawLine(colour, it, point, strokeWidth = 2.5f) }
+                previous?.let { drawLine(color, it, point, strokeWidth = 2.5f) }
                 previous = point
             }
         }

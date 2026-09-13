@@ -7,7 +7,7 @@ import kotlin.math.abs
 data class Ping(val atMs: Long, val rssi: Int)
 
 /** What a device did over the course of a recording. */
-enum class Behaviour(val label: String, val meaning: String) {
+enum class Behavior(val label: String, val meaning: String) {
     PASSED(
         "Passed by",
         "Appeared, rose to a peak, fell away and left. The shape of something going " +
@@ -122,14 +122,14 @@ data class Track(
      * tested first, and "unchanging furniture" is the most common, so it is what anything
      * unremarkable falls through to.
      */
-    val behaviour: Behaviour
+    val behavior: Behavior
         get() = when {
-            packets < MIN_PACKETS -> Behaviour.GLIMPSED
-            looksLikePass -> Behaviour.PASSED
-            !presentFromStart && presentToEnd -> Behaviour.ARRIVED
-            presentFromStart && !presentToEnd -> Behaviour.LEFT
-            rangeDb >= MOVING_RANGE_DB -> Behaviour.THROUGHOUT_VARYING
-            else -> Behaviour.THROUGHOUT_STEADY
+            packets < MIN_PACKETS -> Behavior.GLIMPSED
+            looksLikePass -> Behavior.PASSED
+            !presentFromStart && presentToEnd -> Behavior.ARRIVED
+            presentFromStart && !presentToEnd -> Behavior.LEFT
+            rangeDb >= MOVING_RANGE_DB -> Behavior.THROUGHOUT_VARYING
+            else -> Behavior.THROUGHOUT_STEADY
         }
 
     /**
@@ -241,7 +241,7 @@ data class ForensicFilter(
     val hideKnown: Boolean = false,
     /** Keep only things that rose and fell, which is what going past looks like. */
     val passesOnly: Boolean = false,
-    /** Drop randomised addresses. */
+    /** Drop randomized addresses. */
     val fixedOnly: Boolean = false,
     val minPackets: Int = 0,
 )
@@ -367,7 +367,7 @@ class ForensicRecorder(
         val knownUpper = known.map { it.uppercase(Locale.US) }.toSet()
         return tracks()
             .filter { it.packets >= filter.minPackets }
-            .filter { !(filter.hideFurniture && it.behaviour == Behaviour.THROUGHOUT_STEADY) }
+            .filter { !(filter.hideFurniture && it.behavior == Behavior.THROUGHOUT_STEADY) }
             .filter { !(filter.hideKnown && knownUpper.contains(it.address)) }
             .filter { !(filter.passesOnly && !it.looksLikePass) }
             .filter { !(filter.fixedOnly && it.isRandom) }
@@ -381,24 +381,24 @@ class ForensicRecorder(
             }
     }
 
-    /** How many of each behaviour, for the summary. */
-    fun census(): Map<Behaviour, Int> =
-        tracks().groupingBy { it.behaviour }.eachCount()
+    /** How many of each behavior, for the summary. */
+    fun census(): Map<Behavior, Int> =
+        tracks().groupingBy { it.behavior }.eachCount()
 
     /** Every reading, flattened, for export. */
     fun csv(): String = buildString {
         append("# SigEye forensic recording\n")
         append("# devices=").append(builders.size)
             .append(" span_ms=").append(spanMs).append('\n')
-        append("elapsed_ms,address,label,rssi_dbm,behaviour\n")
+        append("elapsed_ms,address,label,rssi_dbm,behavior\n")
         tracks().forEach { track ->
-            val behaviour = track.behaviour.name
+            val behavior = track.behavior.name
             track.pings.forEach { ping ->
                 append(ping.atMs - startedAtMs).append(',')
                     .append(track.address).append(',')
                     .append(track.label.replace(',', ' ')).append(',')
                     .append(ping.rssi).append(',')
-                    .append(behaviour).append('\n')
+                    .append(behavior).append('\n')
             }
         }
     }

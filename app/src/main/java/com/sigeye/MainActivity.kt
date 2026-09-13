@@ -29,7 +29,7 @@ import com.sigeye.experiments.bands.BandsScreen
 import com.sigeye.experiments.vulnerability.VulnerabilityScreen
 import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.doppler.DopplerScreen
-import com.sigeye.experiments.polarisation.PolarisationScreen
+import com.sigeye.experiments.polarization.PolarizationScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
 import com.sigeye.experiments.follow.FollowScreen
@@ -175,8 +175,8 @@ private fun SigEyeApp() {
             Experiments.DOPPLER ->
                 DopplerScreen(onBack = goBack, modifier = inset)
 
-            Experiments.POLARISATION ->
-                PolarisationScreen(onBack = goBack, modifier = inset)
+            Experiments.POLARIZATION ->
+                PolarizationScreen(onBack = goBack, modifier = inset)
 
             Experiments.CONGESTION ->
                 CongestionScreen(onBack = goBack, modifier = inset)

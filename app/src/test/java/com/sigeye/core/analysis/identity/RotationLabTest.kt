@@ -90,7 +90,7 @@ class RotationLabTest {
         }
         lab.tick(start + 10_000)
         val cohort = lab.cohorts(start + 10_000).first { it.vendor == "Beacons Ltd" }
-        assertEquals(0, cohort.randomised)
+        assertEquals(0, cohort.randomized)
         assertEquals(3, cohort.fixed)
         assertTrue(cohort.policy().contains("not one of them rotates"))
     }

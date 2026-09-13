@@ -20,7 +20,7 @@ import android.util.Log
  * Reads whichever cell the phone is camped on.
  *
  * Polls rather than registering a callback: the callback API changed shape at API 31 and
- * the poll is simple, cheap at a few seconds apart, and gives the neighbour list in the
+ * the poll is simple, cheap at a few seconds apart, and gives the neighbor list in the
  * same call. Requires location permission - Android treats cell identity as location,
  * which it plainly is.
  */
@@ -47,19 +47,19 @@ class CellReader(context: Context) {
 
         if (cells.isEmpty()) return null
 
-        // The registered cell is the one we are camped on; the rest are neighbours.
+        // The registered cell is the one we are camped on; the rest are neighbors.
         val registered = cells.firstOrNull { it.isRegistered } ?: cells.first()
-        val neighbours = cells.count { it !== registered }
+        val neighbors = cells.count { it !== registered }
 
         return when (registered) {
-            is CellInfoLte -> lte(registered, neighbours, nowMs)
-            is CellInfoWcdma -> wcdma(registered, neighbours, nowMs)
-            is CellInfoGsm -> gsm(registered, neighbours, nowMs)
-            else -> nr(registered, neighbours, nowMs)
+            is CellInfoLte -> lte(registered, neighbors, nowMs)
+            is CellInfoWcdma -> wcdma(registered, neighbors, nowMs)
+            is CellInfoGsm -> gsm(registered, neighbors, nowMs)
+            else -> nr(registered, neighbors, nowMs)
         }
     }
 
-    private fun lte(info: CellInfoLte, neighbours: Int, nowMs: Long): CellSample {
+    private fun lte(info: CellInfoLte, neighbors: Int, nowMs: Long): CellSample {
         val id = info.cellIdentity
         val strength = info.cellSignalStrength
         return CellSample(
@@ -72,11 +72,11 @@ class CellReader(context: Context) {
             dbm = strength.rsrp.takeIf { it != Int.MAX_VALUE } ?: strength.dbm,
             level = strength.level,
             atMs = nowMs,
-            neighbours = neighbours,
+            neighbors = neighbors,
         )
     }
 
-    private fun wcdma(info: CellInfoWcdma, neighbours: Int, nowMs: Long): CellSample {
+    private fun wcdma(info: CellInfoWcdma, neighbors: Int, nowMs: Long): CellSample {
         val id = info.cellIdentity
         return CellSample(
             technology = "WCDMA",
@@ -88,11 +88,11 @@ class CellReader(context: Context) {
             dbm = info.cellSignalStrength.dbm,
             level = info.cellSignalStrength.level,
             atMs = nowMs,
-            neighbours = neighbours,
+            neighbors = neighbors,
         )
     }
 
-    private fun gsm(info: CellInfoGsm, neighbours: Int, nowMs: Long): CellSample {
+    private fun gsm(info: CellInfoGsm, neighbors: Int, nowMs: Long): CellSample {
         val id = info.cellIdentity
         return CellSample(
             technology = "GSM",
@@ -104,12 +104,12 @@ class CellReader(context: Context) {
             dbm = info.cellSignalStrength.dbm,
             level = info.cellSignalStrength.level,
             atMs = nowMs,
-            neighbours = neighbours,
+            neighbors = neighbors,
         )
     }
 
     /** 5G, which only exists from API 29. */
-    private fun nr(info: CellInfo, neighbours: Int, nowMs: Long): CellSample? {
+    private fun nr(info: CellInfo, neighbors: Int, nowMs: Long): CellSample? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         if (info !is CellInfoNr) return null
         val id = info.cellIdentity as? CellIdentityNr ?: return null
@@ -124,7 +124,7 @@ class CellReader(context: Context) {
             dbm = strength?.ssRsrp?.takeIf { it != Int.MAX_VALUE } ?: info.cellSignalStrength.dbm,
             level = info.cellSignalStrength.level,
             atMs = nowMs,
-            neighbours = neighbours,
+            neighbors = neighbors,
         )
     }
 

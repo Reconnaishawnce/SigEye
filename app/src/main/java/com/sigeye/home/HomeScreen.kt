@@ -39,7 +39,7 @@ import com.sigeye.core.CheckLevel
 import com.sigeye.core.Contact
 import com.sigeye.core.Experiment
 import com.sigeye.core.Experiments
-import com.sigeye.core.FavouriteStore
+import com.sigeye.core.FavoriteStore
 import com.sigeye.core.FirstRun
 import com.sigeye.core.Preflight
 import com.sigeye.core.ScanService
@@ -50,9 +50,9 @@ import java.util.Locale
 @Composable
 fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val store = remember { FavouriteStore.get(context) }
+    val store = remember { FavoriteStore.get(context) }
     val firstRun = remember { FirstRun.get(context) }
-    val favouriteIds by store.ids.collectAsStateWithLifecycle()
+    val favoriteIds by store.ids.collectAsStateWithLifecycle()
     val welcomed by firstRun.dismissed.collectAsStateWithLifecycle()
     val backupWarned by firstRun.backupWarned.collectAsStateWithLifecycle()
     var arranging by remember { mutableStateOf(false) }
@@ -64,8 +64,8 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         BackupWarning(onDismiss = { firstRun.markBackupWarned() })
     }
 
-    val favourites = remember(favouriteIds) {
-        favouriteIds.mapNotNull { Experiments.byId(it) }
+    val favorites = remember(favoriteIds) {
+        favoriteIds.mapNotNull { Experiments.byId(it) }
     }
 
     Column(
@@ -128,7 +128,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
             matches.forEach { experiment ->
                 ExperimentCard(
                     experiment = experiment,
-                    favourite = favouriteIds.contains(experiment.id),
+                    favorite = favoriteIds.contains(experiment.id),
                     onToggleFavourite = { store.toggle(experiment.id) },
                     onClick = { if (experiment.status.openable) onOpen(experiment.id) },
                 )
@@ -138,8 +138,8 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
                 SuggestIt(Contact.Kind.EXPERIMENT, "Ask for it")
             }
         } else {
-            FavouritesSection(
-                favourites = favourites,
+            FavoritesSection(
+                favorites = favorites,
                 editing = arranging,
                 store = store,
                 onEditToggle = { arranging = !arranging },
@@ -165,7 +165,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
                 experiments.forEach { experiment ->
                     ExperimentCard(
                         experiment = experiment,
-                        favourite = favouriteIds.contains(experiment.id),
+                        favorite = favoriteIds.contains(experiment.id),
                         onToggleFavourite = { store.toggle(experiment.id) },
                         onClick = {
                             if (experiment.status.openable) onOpen(experiment.id)
@@ -178,7 +178,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
 
             WishList(
                 experiments = Experiments.unbuilt(),
-                favourite = { favouriteIds.contains(it) },
+                favorite = { favoriteIds.contains(it) },
                 onToggleFavourite = { store.toggle(it) },
             )
         }
@@ -230,7 +230,7 @@ private fun Welcome(onDismiss: () -> Unit, onTryIt: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Start with a favourite below. Each one opens with what it needs, " +
+                text = "Start with a favorite below. Each one opens with what it needs, " +
                     "how to run it, what the reading means, and where it lies to you - " +
                     "tap the title for that. Nothing leaves the phone and nothing is " +
                     "connected to unless you ask.",
@@ -259,7 +259,7 @@ private fun Welcome(onDismiss: () -> Unit, onTryIt: () -> Unit) {
 /**
  * The front door: the user's own shortlist, in the user's own order.
  *
- * A categorised list of twenty-seven experiments is a good library and a bad first
+ * A categorized list of twenty-seven experiments is a good library and a bad first
  * impression, because everything is equally weighted and so nothing is. This starts
  * pre-filled with the recommended set - an empty shelf on first launch would be worse than
  * a guess - and from then on it is the user's. Starring is on every card everywhere, and
@@ -267,10 +267,10 @@ private fun Welcome(onDismiss: () -> Unit, onTryIt: () -> Unit) {
  * list of cards rather than a list of controls.
  */
 @Composable
-private fun FavouritesSection(
-    favourites: List<Experiment>,
+private fun FavoritesSection(
+    favorites: List<Experiment>,
     editing: Boolean,
-    store: FavouriteStore,
+    store: FavoriteStore,
     onEditToggle: () -> Unit,
     onOpen: (String) -> Unit,
 ) {
@@ -281,12 +281,12 @@ private fun FavouritesSection(
     ) {
         Column {
             Text(
-                text = "Favourites",
+                text = "Favorites",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = if (favourites.isEmpty()) {
+                text = if (favorites.isEmpty()) {
                     "Star anything below to put it up here."
                 } else if (editing) {
                     "Move them about, or tap a star to remove one."
@@ -297,7 +297,7 @@ private fun FavouritesSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (favourites.isNotEmpty() || editing) {
+        if (favorites.isNotEmpty() || editing) {
             TextButton(onClick = onEditToggle) {
                 Text(if (editing) "Done" else "Arrange")
             }
@@ -305,7 +305,7 @@ private fun FavouritesSection(
     }
     Spacer(Modifier.height(10.dp))
 
-    favourites.forEach { experiment ->
+    favorites.forEach { experiment ->
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -337,21 +337,21 @@ private fun FavouritesSection(
                     // so the arrow a thumb is over always matches what it can see.
                     Glyph(
                         text = "▲",
-                        enabled = favourites.first().id != experiment.id,
-                        colour = MaterialTheme.colorScheme.onPrimaryContainer,
+                        enabled = favorites.first().id != experiment.id,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         description = "Move ${experiment.title} up",
                     ) { store.moveUp(experiment.id) }
                     Glyph(
                         text = "▼",
-                        enabled = favourites.last().id != experiment.id,
-                        colour = MaterialTheme.colorScheme.onPrimaryContainer,
+                        enabled = favorites.last().id != experiment.id,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         description = "Move ${experiment.title} down",
                     ) { store.moveDown(experiment.id) }
                 }
                 Glyph(
                     text = "★",
-                    colour = MaterialTheme.colorScheme.onPrimaryContainer,
-                    description = "Remove ${experiment.title} from favourites",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    description = "Remove ${experiment.title} from favorites",
                 ) { store.toggle(experiment.id) }
                 if (!editing) {
                     Text(
@@ -366,7 +366,7 @@ private fun FavouritesSection(
         Spacer(Modifier.height(8.dp))
     }
 
-    if (editing && favourites.isNotEmpty()) {
+    if (editing && favorites.isNotEmpty()) {
         TextButton(onClick = { store.reset() }) { Text("Back to the recommended set") }
     }
     Spacer(Modifier.height(16.dp))
@@ -382,7 +382,7 @@ private fun FavouritesSection(
 @Composable
 private fun Glyph(
     text: String,
-    colour: Color,
+    color: Color,
     description: String,
     enabled: Boolean = true,
     onClick: () -> Unit,
@@ -390,7 +390,7 @@ private fun Glyph(
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium,
-        color = if (enabled) colour else colour.copy(alpha = 0.25f),
+        color = if (enabled) color else color.copy(alpha = 0.25f),
         modifier = Modifier
             .clickable(enabled = enabled, onClickLabel = description, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 10.dp),
@@ -593,7 +593,7 @@ private fun PreflightCard() {
 @Composable
 private fun ExperimentCard(
     experiment: Experiment,
-    favourite: Boolean,
+    favorite: Boolean,
     onToggleFavourite: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -648,19 +648,19 @@ private fun ExperimentCard(
                     }
                 }
                 if (ready) {
-                    // Hollow when it is not a favourite, so the row of cards reads as
+                    // Hollow when it is not a favorite, so the row of cards reads as
                     // cards rather than as a column of controls.
                     Glyph(
-                        text = if (favourite) "★" else "☆",
-                        colour = if (favourite) {
+                        text = if (favorite) "★" else "☆",
+                        color = if (favorite) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        description = if (favourite) {
-                            "Remove ${experiment.title} from favourites"
+                        description = if (favorite) {
+                            "Remove ${experiment.title} from favorites"
                         } else {
-                            "Add ${experiment.title} to favourites"
+                            "Add ${experiment.title} to favorites"
                         },
                         onClick = onToggleFavourite,
                     )
@@ -699,7 +699,7 @@ private fun ExperimentCard(
 /**
  * A filter across every experiment.
  *
- * Twenty-eight experiments in five categories plus a favourites list is past the point
+ * Twenty-eight experiments in five categories plus a favorites list is past the point
  * where scrolling finds the one about the microwave. Matching runs over the title, the
  * blurb and what the experiment teaches, because somebody looking for "walls" will not
  * think of the word "penetration" and somebody looking for "tracking" will not know it is
@@ -735,7 +735,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
 @Composable
 private fun WishList(
     experiments: List<Experiment>,
-    favourite: (String) -> Boolean,
+    favorite: (String) -> Boolean,
     onToggleFavourite: (String) -> Unit,
 ) {
     Text(
@@ -754,7 +754,7 @@ private fun WishList(
     experiments.forEach { experiment ->
         ExperimentCard(
             experiment = experiment,
-            favourite = favourite(experiment.id),
+            favorite = favorite(experiment.id),
             onToggleFavourite = { onToggleFavourite(experiment.id) },
             onClick = {},
         )

@@ -4,7 +4,7 @@ package com.sigeye.core.analysis.rf
 data class Sector(
     val index: Int,
     /** Middle of the sector, in compass degrees. */
-    val centreDegrees: Float,
+    val centerDegrees: Float,
     val samples: Int,
     val meanRssi: Double,
     val minRssi: Int,
@@ -101,7 +101,7 @@ data class SweepResult(
         var sumSin = 0.0
         var sumCos = 0.0
         region.forEach {
-            val radians = Math.toRadians(it.centreDegrees.toDouble())
+            val radians = Math.toRadians(it.centerDegrees.toDouble())
             sumSin += Math.sin(radians)
             sumCos += Math.cos(radians)
         }
@@ -224,10 +224,10 @@ class PolarSweep(
     /** Every reading, in arrival order. For export and diagnosis. */
     fun readings(): List<HeadingSample> = samples.toList()
 
-    /** Normalises any heading, including negative and over-360, into a sector. */
+    /** Normalizes any heading, including negative and over-360, into a sector. */
     fun sectorOf(headingDegrees: Float, count: Int = sectorCount): Int {
-        val normalised = ((headingDegrees % 360f) + 360f) % 360f
-        return (normalised / (360f / count)).toInt().coerceIn(0, count - 1)
+        val normalized = ((headingDegrees % 360f) + 360f) % 360f
+        return (normalized / (360f / count)).toInt().coerceIn(0, count - 1)
     }
 
     fun result(): SweepResult = result(sectorCount)
@@ -251,7 +251,7 @@ class PolarSweep(
         val sectors = (0 until resolution).map { index ->
             Sector(
                 index = index,
-                centreDegrees = index * width + width / 2f,
+                centerDegrees = index * width + width / 2f,
                 samples = counts[index],
                 meanRssi = if (counts[index] == 0) {
                     0.0
@@ -302,7 +302,7 @@ class PolarSweep(
         result(bestResolution(minCoverage))
 
     private companion object {
-        /** Finest first. Each divides 360 evenly so sector centres stay tidy. */
+        /** Finest first. Each divides 360 evenly so sector centers stay tidy. */
         val RESOLUTIONS = listOf(24, 18, 12, 8)
 
         /**

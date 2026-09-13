@@ -253,7 +253,7 @@ private fun Live(onLocate: (String) -> Unit) {
             Locale.US,
             "%.0f packets a second. Pinch or use the buttons to zoom, tap a blip to " +
                 "select it. Angle is not direction - one antenna cannot measure a " +
-                "bearing, so only distance from the centre means anything.",
+                "bearing, so only distance from the center means anything.",
             health.advertsPerSecond,
         ),
     )
@@ -371,7 +371,7 @@ private fun Live(onLocate: (String) -> Unit) {
                         )
                         Stat(
                             "Range",
-                            String.format(Locale.US, "~%.1f m", reading.metres),
+                            String.format(Locale.US, "~%.1f m", reading.meters),
                             reading.zone.label,
                         )
                         Stat(

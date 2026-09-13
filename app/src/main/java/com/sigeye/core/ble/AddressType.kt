@@ -29,11 +29,11 @@ enum class AddressType(val label: String, val rotates: String) {
     RESOLVABLE_PRIVATE(
         "Resolvable private",
         "The real privacy address. It changes every fifteen minutes or so, and a device " +
-            "that has been paired with can still recognise it.",
+            "that has been paired with can still recognize it.",
     ),
     NON_RESOLVABLE_PRIVATE(
         "Non-resolvable private",
-        "Changes regularly and cannot be recognised by anyone, paired or not. Rare.",
+        "Changes regularly and cannot be recognized by anyone, paired or not. Rare.",
     ),
     UNKNOWN("Unknown", "Not enough information to tell."),
     ;

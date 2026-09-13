@@ -95,7 +95,7 @@ class ConvoyTest {
     }
 
     @Test
-    fun `a single stray packet does not make something a travelling companion`() {
+    fun `a single stray packet does not make something a traveling companion`() {
         val tracker = ConvoyTracker()
         tracker.startLeg("A", 0L)
         tracker.present("SOLID", 0L)
@@ -111,10 +111,10 @@ class ConvoyTest {
         assertTrue(report.followers.any { it.address == "SOLID" })
     }
 
-    // --------------------------------------------------- randomised addresses
+    // --------------------------------------------------- randomized addresses
 
     @Test
-    fun `a randomised address can never rate above weak`() {
+    fun `a randomized address can never rate above weak`() {
         // It is a different address every quarter of an hour. Seeing the same one in
         // three legs means it is not rotating, or the legs were close together, and
         // nothing here can tell those apart - so it must not be reported as certainty.
@@ -129,7 +129,7 @@ class ConvoyTest {
         val rotator = tracker.report().followers.first { it.address == "ROTATOR" }
         assertEquals(3, rotator.legsShared)
         assertEquals(FollowConfidence.WEAK, rotator.confidence)
-        assertTrue(rotator.reasons().any { it.contains("randomised") })
+        assertTrue(rotator.reasons().any { it.contains("randomized") })
     }
 
     @Test

@@ -150,7 +150,7 @@ private fun Live() {
     var calibrationSeconds by remember { mutableStateOf(20f) }
     var agreement by remember { mutableStateOf(2f) }
     var holdTicks by remember { mutableStateOf(2f) }
-    // Long enough to walk out and shut a door. Zero restores the old behaviour for
+    // Long enough to walk out and shut a door. Zero restores the old behavior for
     // anyone calibrating a room they are not in.
     var headStart by remember { mutableStateOf(10f) }
     var alertStyle by remember { mutableStateOf(AlertStyle.BOTH) }
@@ -210,7 +210,7 @@ private fun Live() {
 
     // The head start. Calibration used to begin on the same line as the button press, so
     // whatever you did next - which is walk out of the room - was learned as the room's
-    // normal behaviour, inflating every link's baseline until nothing could cross it.
+    // normal behavior, inflating every link's baseline until nothing could cross it.
     LaunchedEffect(countdown != null) {
         var left = countdown ?: return@LaunchedEffect
         while (left > 0) {
@@ -480,7 +480,7 @@ private fun Live() {
             color = stateColour,
         )
         Spacer(Modifier.height(4.dp))
-        ScoreGauge(score = snap.score, threshold = snap.threshold, colour = stateColour)
+        ScoreGauge(score = snap.score, threshold = snap.threshold, color = stateColour)
     }
 
     Spacer(Modifier.height(12.dp))
@@ -511,7 +511,7 @@ private fun Live() {
     ScoreTrace(
         history = history,
         threshold = snap.threshold,
-        colour = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.primary,
         alert = MaterialTheme.colorScheme.error,
         background = MaterialTheme.colorScheme.surfaceVariant,
     )
@@ -712,7 +712,7 @@ private fun Calibrating(reading: MotionReading) {
 
 /** Disturbance against the trigger, as an arc that fills past the line. */
 @Composable
-private fun ScoreGauge(score: Double, threshold: Double, colour: Color) {
+private fun ScoreGauge(score: Double, threshold: Double, color: Color) {
     val fraction = (score / (threshold * 2)).coerceIn(0.0, 1.0).toFloat()
     val animated by animateFloatAsState(fraction, tween(350), label = "score")
     val track = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
@@ -721,22 +721,22 @@ private fun ScoreGauge(score: Double, threshold: Double, colour: Color) {
     Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val radius = size.minDimension / 2f * 0.80f
-            val centre = Offset(size.width / 2f, size.height / 2f)
+            val center = Offset(size.width / 2f, size.height / 2f)
             drawArc(
                 color = track,
                 startAngle = 135f,
                 sweepAngle = 270f,
                 useCenter = false,
-                topLeft = Offset(centre.x - radius, centre.y - radius),
+                topLeft = Offset(center.x - radius, center.y - radius),
                 size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 16f),
             )
             drawArc(
-                color = colour,
+                color = color,
                 startAngle = 135f,
                 sweepAngle = 270f * animated,
                 useCenter = false,
-                topLeft = Offset(centre.x - radius, centre.y - radius),
+                topLeft = Offset(center.x - radius, center.y - radius),
                 size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 16f),
             )
@@ -745,12 +745,12 @@ private fun ScoreGauge(score: Double, threshold: Double, colour: Color) {
             drawLine(
                 color = markColour,
                 start = Offset(
-                    centre.x + (radius - 14f) * kotlin.math.cos(markAngle).toFloat(),
-                    centre.y + (radius - 14f) * kotlin.math.sin(markAngle).toFloat(),
+                    center.x + (radius - 14f) * kotlin.math.cos(markAngle).toFloat(),
+                    center.y + (radius - 14f) * kotlin.math.sin(markAngle).toFloat(),
                 ),
                 end = Offset(
-                    centre.x + (radius + 14f) * kotlin.math.cos(markAngle).toFloat(),
-                    centre.y + (radius + 14f) * kotlin.math.sin(markAngle).toFloat(),
+                    center.x + (radius + 14f) * kotlin.math.cos(markAngle).toFloat(),
+                    center.y + (radius + 14f) * kotlin.math.sin(markAngle).toFloat(),
                 ),
                 strokeWidth = 3f,
             )
@@ -774,7 +774,7 @@ private fun ScoreGauge(score: Double, threshold: Double, colour: Color) {
 private fun ScoreTrace(
     history: List<Double>,
     threshold: Double,
-    colour: Color,
+    color: Color,
     alert: Color,
     background: Color,
 ) {
@@ -800,7 +800,7 @@ private fun ScoreTrace(
             val point = Offset(index * stepX, pointY)
             previous?.let {
                 drawLine(
-                    color = if (value >= threshold) alert else colour,
+                    color = if (value >= threshold) alert else color,
                     start = it,
                     end = point,
                     strokeWidth = 2.5f,
@@ -853,7 +853,7 @@ private fun Settings(
         Setting(
             label = "Trigger level",
             value = String.format(Locale.US, "%.1f sigma", sensitivity),
-            advice = "How far a link must stray from its own calm behaviour. Start at 3. " +
+            advice = "How far a link must stray from its own calm behavior. Start at 3. " +
                 "Drop toward 2 if someone can cross the room without tripping it; raise " +
                 "toward 5 if a fan or a curtain keeps firing it.",
         ) {

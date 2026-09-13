@@ -99,7 +99,7 @@ class PopulationTrackerTest {
     }
 
     @Test
-    fun `randomised address share is reported so the count can be read sceptically`() {
+    fun `randomized address share is reported so the count can be read skeptically`() {
         val t = tracker()
         t.observe("fixed1", -60, 0L, false)
         t.observe("fixed2", -60, 0L, false)

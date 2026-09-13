@@ -28,7 +28,7 @@ class PolarSweepTest {
     }
 
     @Test
-    fun `headings outside zero to 360 are normalised, not clamped`() {
+    fun `headings outside zero to 360 are normalized, not clamped`() {
         val s = sweep()
         // Negative and over-wound headings are what sensors actually hand you.
         assertEquals(s.sectorOf(10f), s.sectorOf(370f))
@@ -185,11 +185,11 @@ class PolarSweepTest {
     }
 
     @Test
-    fun `sector centres sit in the middle of their span`() {
+    fun `sector centers sit in the middle of their span`() {
         val s = sweep()
         val sectors = s.result().sectors
-        assertEquals(7.5f, sectors[0].centreDegrees, 0.001f)
-        assertEquals(187.5f, sectors[12].centreDegrees, 0.001f)
+        assertEquals(7.5f, sectors[0].centerDegrees, 0.001f)
+        assertEquals(187.5f, sectors[12].centerDegrees, 0.001f)
     }
 
     // ------------------------------------------------- progress versus measurement
@@ -280,7 +280,7 @@ class PolarSweepTest {
 
     @Test
     fun `a notch survives being re-binned coarser`() {
-        // A 20 dB hole centred on due south should still be the weakest direction at any
+        // A 20 dB hole centerd on due south should still be the weakest direction at any
         // resolution - the measurement must not depend on the binning that draws it.
         val sweep = lap(240) { heading ->
             if (kotlin.math.abs(heading - 180f) < 25f) -85 else -60

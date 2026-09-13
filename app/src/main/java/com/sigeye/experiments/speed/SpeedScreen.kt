@@ -61,7 +61,7 @@ import kotlin.math.roundToInt
 private const val HUB_TAG = "speed"
 private const val TICK_MS = 1_000L
 
-/** A device is considered gone, and its track analysed, after this long unheard. */
+/** A device is considered gone, and its track analyzed, after this long unheard. */
 private const val PASS_TIMEOUT_MS = 6_000L
 private const val TRACK_MAX_MS = 90_000L
 
@@ -142,7 +142,7 @@ private fun Live() {
         }
     }
 
-    // A pass is only recognisable once it has finished, so the work happens when a device
+    // A pass is only recognizable once it has finished, so the work happens when a device
     // stops being heard rather than while it is still going by.
     LaunchedEffect(watching, distance, pathLoss) {
         watcher.distanceMetres = distance.toDouble()
@@ -283,7 +283,7 @@ private fun Live() {
                     "distance from the track is a right-angled triangle - so the length of " +
                     "track between the two crossings falls out, and dividing by the time " +
                     "between them gives speed.\n\n" +
-                    "A pass is only recognisable once it is over, so results appear a few " +
+                    "A pass is only recognizable once it is over, so results appear a few " +
                     "seconds after the train has gone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

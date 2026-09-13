@@ -7,7 +7,7 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 /** One reading, paired with how far the walker had gone when it arrived. */
-data class WalkSample(val metres: Double, val rssi: Int)
+data class WalkSample(val meters: Double, val rssi: Int)
 
 enum class FitQuality(val label: String) {
     GOOD("Clean fit"),
@@ -46,7 +46,7 @@ data class PathLossResult(
     }
 
     /** Distance a given reading implies, under this fit rather than a guess. */
-    fun metresFor(rssi: Int): Double =
+    fun metersFor(rssi: Int): Double =
         10.0.pow((referenceRssi - rssi) / (10.0 * exponent))
 }
 
@@ -55,7 +55,7 @@ data class PathLossResult(
  *
  * The model is `rssi = reference - 10 n log10(d)`. Plot RSSI against `log10(distance)` and
  * it is a straight line whose slope is `-10n`, so a least-squares fit over a walk recovers
- * both the exponent and the one-metre reference at once.
+ * both the exponent and the one-meter reference at once.
  *
  * The distance has to be real, which is the entire difficulty and the reason this
  * experiment needs a step counter. Everything else in the app that talks about distance is
@@ -91,48 +91,48 @@ object PathLossFit {
                     " span_m=" + String.format(Locale.US, "%.1f", result.spanMetres) +
                     " quality=" + result.quality.name,
             )
-            appendLine("metres,rssi_dbm,log10_metres,modelled_dbm")
+            appendLine("meters,rssi_dbm,log10_metres,modeled_dbm")
             samples.forEach { sample ->
-                val modelled = result.referenceRssi -
-                    10.0 * result.exponent * log10(sample.metres.coerceAtLeast(0.01))
+                val modeled = result.referenceRssi -
+                    10.0 * result.exponent * log10(sample.meters.coerceAtLeast(0.01))
                 appendLine(
                     String.format(
                         Locale.US,
                         "%.3f,%d,%.4f,%.2f",
-                        sample.metres,
+                        sample.meters,
                         sample.rssi,
-                        log10(sample.metres.coerceAtLeast(0.01)),
-                        modelled,
+                        log10(sample.meters.coerceAtLeast(0.01)),
+                        modeled,
                     ),
                 )
             }
         }
 
     fun fit(samples: List<WalkSample>): PathLossResult {
-        val usable = samples.filter { it.metres >= NEAR_FIELD_METRES }
+        val usable = samples.filter { it.meters >= NEAR_FIELD_METRES }
         if (usable.size < MIN_SAMPLES) {
             return rejected(
                 usable.size,
-                "Only ${usable.size} readings past half a metre. Walk further, or pick " +
+                "Only ${usable.size} readings past half a meter. Walk further, or pick " +
                     "something that advertises more often.",
             )
         }
 
-        val span = (usable.maxOf { it.metres } - usable.minOf { it.metres })
+        val span = (usable.maxOf { it.meters } - usable.minOf { it.meters })
         if (span < MIN_SPAN_METRES) {
             return rejected(
                 usable.size,
                 String.format(
                     java.util.Locale.US,
                     "You covered %.1f m. The slope of a line needs the line to go " +
-                        "somewhere - walk at least a few metres further.",
+                        "somewhere - walk at least a few meters further.",
                     span,
                 ),
             )
         }
 
         // Least squares of rssi against log10(distance). The slope is -10n.
-        val xs = usable.map { log10(it.metres) }
+        val xs = usable.map { log10(it.meters) }
         val ys = usable.map { it.rssi.toDouble() }
         val meanX = xs.average()
         val meanY = ys.average()
@@ -212,7 +212,7 @@ object PathLossFit {
     )
 
     /**
-     * Stride length from height, for phones whose step counter gives steps and not metres.
+     * Stride length from height, for phones whose step counter gives steps and not meters.
      *
      * The 0.415 ratio is the standard anthropometric estimate for walking. It is wrong for
      * any individual by a few percent, which propagates straight into the distance and

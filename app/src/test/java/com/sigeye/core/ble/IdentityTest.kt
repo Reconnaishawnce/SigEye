@@ -113,9 +113,9 @@ class IdentityTest {
     private fun clueText(clues: List<Clue>) = clues.joinToString(" | ") { it.label + ": " + it.detail }
 
     @Test
-    fun `a randomised address is called out as telling you nothing`() {
+    fun `a randomized address is called out as telling you nothing`() {
         val clues = Identity.clues("4D:2A:6F:11:22:33", null, null, null)
-        assertTrue(clueText(clues).contains("Randomised"))
+        assertTrue(clueText(clues).contains("Randomized"))
         // And nothing pretends to name a manufacturer from it.
         assertTrue(clues.none { it.label == "Registered to" })
     }
@@ -136,7 +136,7 @@ class IdentityTest {
     }
 
     @Test
-    fun `a name one address off is recognised as the chip's other radio`() {
+    fun `a name one address off is recognized as the chip's other radio`() {
         // The real case: an ESP32 advertising ...BA:B2:C6 and calling itself smax-bab2c4,
         // because its Bluetooth address is the Wi-Fi one plus an offset.
         val clues = Identity.clues("48:CA:43:BA:B2:C6", "smax-bab2c4", null, null)
@@ -186,7 +186,7 @@ class IdentityTest {
 
     @Test
     fun `when nothing is backed by a registry it says so`() {
-        // A fixed address whose prefix nobody holds: not randomised, so there is no firm
+        // A fixed address whose prefix nobody holds: not randomized, so there is no firm
         // statement to make about it either way. 00:27:6F is unassigned, and its top bits
         // are the pattern no random address uses.
         val clues = Identity.clues("00:27:6F:11:22:33", null, null, null)
@@ -195,7 +195,7 @@ class IdentityTest {
     }
 
     @Test
-    fun `a randomised address is itself a firm statement`() {
+    fun `a randomized address is itself a firm statement`() {
         // It says the device is deliberately unidentifiable, which is worth knowing - so
         // the "nothing to go on" fallback should not also fire.
         val clues = Identity.clues("4D:2A:6F:11:22:33", null, null, null)

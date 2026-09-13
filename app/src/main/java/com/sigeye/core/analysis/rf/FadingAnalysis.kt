@@ -57,7 +57,7 @@ object FadingAnalysis {
     /** Below this the readings are mostly the radio's 1 dB quantisation. */
     const val STEADY_SD_DB = 1.0
 
-    fun analyse(samples: List<FadeSample>): FadingStats {
+    fun analyze(samples: List<FadeSample>): FadingStats {
         if (samples.size < MIN_SAMPLES) {
             return FadingStats(
                 samples = samples.size,
@@ -185,8 +185,8 @@ data class FadingStats(
         10.0.pow(sdDb / (10.0 * pathLossExponent))
 
     /** The same, as a range around a nominal distance. */
-    fun distanceRange(metres: Double, pathLossExponent: Double = 2.0): ClosedFloatingPointRange<Double> {
+    fun distanceRange(meters: Double, pathLossExponent: Double = 2.0): ClosedFloatingPointRange<Double> {
         val factor = distanceErrorFactor(pathLossExponent)
-        return (metres / factor)..(metres * factor)
+        return (meters / factor)..(meters * factor)
     }
 }

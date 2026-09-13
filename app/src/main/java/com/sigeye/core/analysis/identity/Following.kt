@@ -50,8 +50,8 @@ data class Handover(
  * Nicknames and lists are stored against an address, which is fine for a speaker and
  * useless for a phone: the name goes stale every quarter of an hour and the device the
  * user actually cared about reappears as a stranger. This follows it across, using the
- * same fingerprinting the Defeating Randomisation experiment demonstrates, so Signal
- * Watch, Discovery and Travelling Companions all keep their subject.
+ * same fingerprinting the Defeating Randomization experiment demonstrates, so Signal
+ * Watch, Discovery and Traveling Companions all keep their subject.
  *
  * The failure mode is the entire design problem. Losing a device is an inconvenience;
  * moving somebody's name onto a stranger's phone is a false statement that then gets

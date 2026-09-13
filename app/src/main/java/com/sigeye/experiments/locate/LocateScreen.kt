@@ -196,7 +196,7 @@ private fun Hunt(address: String) {
         ) {
             Text(
                 "Lost it. Nothing heard for a few seconds - walk back the way you came. " +
-                    "If it had a randomised address it may simply have changed identity.",
+                    "If it had a randomized address it may simply have changed identity.",
                 Modifier.padding(14.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
@@ -205,7 +205,7 @@ private fun Hunt(address: String) {
     }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        StrengthDial(reading = current, colour = trendColour)
+        StrengthDial(reading = current, color = trendColour)
         Spacer(Modifier.height(6.dp))
         Text(
             current.trend.label,
@@ -225,12 +225,12 @@ private fun Hunt(address: String) {
     Spacer(Modifier.height(16.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Stat("Now", "${current.smoothedRssi.roundToInt()}", "dBm")
-        Stat("Range", String.format(Locale.US, "~%.1f m", current.metres), current.zone.label)
+        Stat("Range", String.format(Locale.US, "~%.1f m", current.meters), current.zone.label)
         Stat("Closest", "${current.bestRssi}", "dBm best")
     }
 
     Spacer(Modifier.height(14.dp))
-    Trace(history = history, colour = MaterialTheme.colorScheme.primary)
+    Trace(history = history, color = MaterialTheme.colorScheme.primary)
     Text(
         "Last two minutes. Rising is warmer.",
         style = MaterialTheme.typography.labelSmall,
@@ -296,7 +296,7 @@ private fun Hunt(address: String) {
     )
     Slider(value = pathLoss, onValueChange = { pathLoss = it }, valueRange = 1.8f..3.5f, steps = 16)
     Text(
-        "Only changes the metres figure, never the trend. If the distance reads wrong " +
+        "Only changes the meters figure, never the trend. If the distance reads wrong " +
             "for something you can see, adjust this until it matches - that number is " +
             "then roughly right for this building.",
         style = MaterialTheme.typography.labelSmall,
@@ -315,7 +315,7 @@ private fun Hunt(address: String) {
 
 /** Big circular strength gauge. The one thing readable at arm's length. */
 @Composable
-private fun StrengthDial(reading: ProximityReading, colour: Color) {
+private fun StrengthDial(reading: ProximityReading, color: Color) {
     val fraction = ((reading.smoothedRssi + 100) / 55.0).coerceIn(0.0, 1.0).toFloat()
     val animated by animateFloatAsState(fraction, tween(900), label = "strength")
     val track = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
@@ -323,14 +323,14 @@ private fun StrengthDial(reading: ProximityReading, colour: Color) {
     Box(Modifier.fillMaxWidth().height(230.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val radius = size.minDimension / 2f * 0.82f
-            val centre = Offset(size.width / 2f, size.height / 2f)
-            drawCircle(color = track, radius = radius, center = centre, style = Stroke(width = 18f))
+            val center = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(color = track, radius = radius, center = center, style = Stroke(width = 18f))
             drawArc(
-                color = colour,
+                color = color,
                 startAngle = 135f,
                 sweepAngle = 270f * animated,
                 useCenter = false,
-                topLeft = Offset(centre.x - radius, centre.y - radius),
+                topLeft = Offset(center.x - radius, center.y - radius),
                 size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
                 style = Stroke(width = 18f),
             )
@@ -339,7 +339,7 @@ private fun StrengthDial(reading: ProximityReading, colour: Color) {
             Text(
                 reading.trend.arrow,
                 fontSize = 34.sp,
-                color = colour,
+                color = color,
             )
             Text(
                 "${reading.smoothedRssi.roundToInt()}",
@@ -357,7 +357,7 @@ private fun StrengthDial(reading: ProximityReading, colour: Color) {
 
 /** Signal history. Scaled to what was actually seen, so small changes stay visible. */
 @Composable
-private fun Trace(history: List<Double>, colour: Color) {
+private fun Trace(history: List<Double>, color: Color) {
     val track = MaterialTheme.colorScheme.surfaceVariant
     Canvas(Modifier.fillMaxWidth().height(90.dp)) {
         drawRect(track)
@@ -371,7 +371,7 @@ private fun Trace(history: List<Double>, colour: Color) {
             val y = (size.height - 6f) -
                 (((value - low) / span).toFloat() * (size.height - 12f))
             val point = Offset(index * stepX, y)
-            previous?.let { drawLine(colour, it, point, strokeWidth = 2.5f) }
+            previous?.let { drawLine(color, it, point, strokeWidth = 2.5f) }
             previous = point
         }
     }

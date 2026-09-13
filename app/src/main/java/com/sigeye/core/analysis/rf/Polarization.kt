@@ -4,7 +4,7 @@ import java.util.Locale
 import kotlin.math.abs
 
 /** What a roll sweep found. */
-data class PolarisationResult(
+data class PolarizationResult(
     val sweep: SweepResult,
     val bestRollDegrees: Float?,
     val worstRollDegrees: Float?,
@@ -13,7 +13,7 @@ data class PolarisationResult(
     val coverage: Float,
 ) {
     /**
-     * Two nulls a right angle apart is the signature of polarisation rather than of a room.
+     * Two nulls a right angle apart is the signature of polarization rather than of a room.
      *
      * A dipole's response has two maxima and two minima, ninety degrees apart, repeating
      * every half turn. So the strongest and weakest roll angles should sit about ninety
@@ -37,13 +37,13 @@ data class PolarisationResult(
                 Locale.US,
                 "Only %.1f dB between the best and worst angle. Either the source is " +
                     "close enough that reflections fill in the null, or its antenna is " +
-                    "not linearly polarised. Try further away, or with a clearer path.",
+                    "not linearly polarized. Try further away, or with a clearer path.",
                 depthDb,
             )
         !looksLikePolarisation ->
             String.format(
                 Locale.US,
-                "The strongest and weakest angles are %.0f degrees apart. Polarisation " +
+                "The strongest and weakest angles are %.0f degrees apart. Polarization " +
                     "puts them ninety apart, so something else is doing this - a hand " +
                     "over the antenna, or something moving while you turned.",
                 separationDegrees ?: 0f,
@@ -63,7 +63,7 @@ data class PolarisationResult(
 
     companion object {
         /**
-         * Below this the difference is multipath rather than polarisation.
+         * Below this the difference is multipath rather than polarization.
          *
          * A stationary link wanders several dB on its own - which the Multipath Fading
          * experiment exists to demonstrate - so anything smaller proves nothing.
@@ -79,9 +79,9 @@ data class PolarisationResult(
 }
 
 /**
- * Signal against the roll angle of the phone, which is antenna polarisation.
+ * Signal against the roll angle of the phone, which is antenna polarization.
  *
- * A linearly polarised antenna radiates a field oriented one way, and a receiving antenna
+ * A linearly polarized antenna radiates a field oriented one way, and a receiving antenna
  * turned across that field picks up far less of it - in theory nothing at all, in a real
  * room ten to twenty dB. So rolling a phone about its long axis while watching one
  * transmitter traces out that response, and the depth of the null is a direct measurement
@@ -94,7 +94,7 @@ data class PolarisationResult(
  *
  * Pure and Android-free.
  */
-object Polarisation {
+object Polarization {
 
     /**
      * Roll is symmetric over half a turn, so the response repeats every 180 degrees.
@@ -113,11 +113,11 @@ object Polarisation {
      * Doubling the folded angle spreads half a turn of roll across the full circle
      * instead, so every bin is reachable and the two lobes of a dipole response land
      * opposite each other, where peak-against-notch is exactly what the spine measures
-     * best. Angles coming back out are halved again by [analyse].
+     * best. Angles coming back out are halved again by [analyze].
      */
     fun plotAngle(rollDegrees: Float): Float = fold(rollDegrees) * 2f
 
-    fun analyse(sweep: PolarSweep, resolution: Int = 12): PolarisationResult {
+    fun analyze(sweep: PolarSweep, resolution: Int = 12): PolarizationResult {
         val result = sweep.result(resolution)
         val best = result.peakBearingDegrees?.let { fold(it / 2f) }
         val worst = result.notchBearingDegrees?.let { fold(it / 2f) }
@@ -133,7 +133,7 @@ object Polarisation {
             null
         }
 
-        return PolarisationResult(
+        return PolarizationResult(
             sweep = result,
             bestRollDegrees = best,
             worstRollDegrees = worst,
@@ -159,7 +159,7 @@ object Polarisation {
      * [plotAngle] is the one step a reader would not guess from the numbers - and without
      * it the bearings in the summary look like they disagree with the readings.
      */
-    fun csv(sweep: PolarSweep, result: PolarisationResult): String = buildString {
+    fun csv(sweep: PolarSweep, result: PolarizationResult): String = buildString {
         appendLine(
             "# depth_db=" + (result.depthDb?.let { String.format(Locale.US, "%.2f", it) } ?: "") +
                 " best_roll_deg=" + (result.bestRollDegrees?.let {
@@ -172,7 +172,7 @@ object Polarisation {
                     String.format(Locale.US, "%.1f", it)
                 } ?: "") +
                 " coverage=" + String.format(Locale.US, "%.2f", result.coverage) +
-                " polarisation=" + result.looksLikePolarisation,
+                " polarization=" + result.looksLikePolarisation,
         )
         appendLine("# roll_deg is the measured roll; plot_deg is roll folded to a half turn and doubled")
         appendLine("elapsed_ms,plot_deg,roll_deg,rssi_dbm")

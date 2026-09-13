@@ -74,7 +74,7 @@ fun DeviceActions(
         )
         if (isRandomAddress) {
             Text(
-                "This address is randomised and will change within about fifteen minutes. " +
+                "This address is randomized and will change within about fifteen minutes. " +
                     "A nickname will not follow it, and neither will a watch rule based " +
                     "on the address.",
                 style = MaterialTheme.typography.labelSmall,
@@ -117,7 +117,7 @@ fun DeviceActions(
         }
 
         // The rule this device would have added, if it is there. Matching on value rather
-        // than on a remembered id so a rule added from any other screen is recognised too.
+        // than on a remembered id so a rule added from any other screen is recognized too.
         val existingRule = rules.firstOrNull {
             it.kind == MatchKind.ADDRESS && it.value.equals(address, ignoreCase = true)
         }
@@ -166,7 +166,7 @@ fun DeviceActions(
     }
 }
 
-/** A labelled read-only field, monospaced so hex and addresses line up. */
+/** A labeled read-only field, monospaced so hex and addresses line up. */
 @Composable
 fun DetailField(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier.padding(bottom = 8.dp)) {
@@ -196,7 +196,7 @@ fun NewListDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Group devices you care about - Vehicles, Neighbours, Mine. A watch " +
+                    "Group devices you care about - Vehicles, Neighbors, Mine. A watch " +
                         "rule can then alert on the whole list at once.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

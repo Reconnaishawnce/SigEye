@@ -69,7 +69,7 @@ private data class DecodedDevice(
      * Distance from the log-distance model, using the beacon's own declared power at 1 m
      * when it has one. Still only as good as the assumption of a clear path.
      */
-    fun metres(): Double? {
+    fun meters(): Double? {
         val reference = beacon.measuredPower ?: return null
         return 10.0.pow((reference - rssi) / 20.0)
     }
@@ -224,7 +224,7 @@ private fun Live() {
     if (devices.isEmpty()) {
         Spacer(Modifier.height(20.dp))
         Text(
-            "Nothing recognised yet. Most devices advertise nothing structured - it is " +
+            "Nothing recognized yet. Most devices advertise nothing structured - it is " +
                 "the beacons, tags, headphones and phones running Continuity that show up " +
                 "here. Give it a moment, or walk somewhere busier.",
             style = MaterialTheme.typography.bodySmall,
@@ -300,7 +300,7 @@ private fun BeaconRow(device: DecodedDevice, nickname: String?, onClick: () -> U
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                device.metres()?.let {
+                device.meters()?.let {
                     Text(
                         String.format(Locale.US, "~%.1f m", it),
                         style = MaterialTheme.typography.labelSmall,
@@ -389,10 +389,10 @@ private fun BeaconDetail(
                     )
                 }
 
-                if (device.metres() != null) {
+                if (device.meters() != null) {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Range comes from the power the beacon claims at one metre. It " +
+                        "Range comes from the power the beacon claims at one meter. It " +
                             "assumes a clear path and is routinely wrong by a factor of " +
                             "two indoors.",
                         style = MaterialTheme.typography.labelSmall,

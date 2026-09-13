@@ -31,7 +31,7 @@ data class PassResult(
 /**
  * Works out how fast something went past, from the shape of its signal.
  *
- * The geometry: a transmitter travelling in a straight line at perpendicular distance *d*
+ * The geometry: a transmitter traveling in a straight line at perpendicular distance *d*
  * is closest - and loudest - at the moment it draws level. Some number of dB below that
  * peak corresponds to a known greater range, and a known range at a known perpendicular
  * distance is a right-angled triangle, so the along-track offset falls out as
@@ -58,7 +58,7 @@ object SpeedEstimator {
     /** Beyond this ratio between approach and departure, the pass is not a clean one. */
     const val MAX_ASYMMETRY = 1.6
 
-    fun analyse(
+    fun analyze(
         address: String,
         samples: List<PassSample>,
         distanceMetres: Double,

@@ -28,16 +28,16 @@ class ForensicsTest {
     }
 
     /** The shape of something driving past: rises to a peak in the middle, falls away. */
-    private fun pass(centreMs: Long, widthMs: Long, peak: Int = -45, floor: Int = -85) =
+    private fun pass(centerMs: Long, widthMs: Long, peak: Int = -45, floor: Int = -85) =
         { at: Long ->
-            val offset = abs(at - centreMs).toDouble() / widthMs
+            val offset = abs(at - centerMs).toDouble() / widthMs
             (peak - (peak - floor) * offset.coerceAtMost(1.0)).toInt()
         }
 
-    // ------------------------------------------------------------ behaviours
+    // ------------------------------------------------------------ behaviors
 
     @Test
-    fun `something that rose, peaked and left is recognised as a pass`() {
+    fun `something that rose, peaked and left is recognized as a pass`() {
         val recorder = recorder()
         recorder.start(0L)
         recorder.heard("CAR", 60_000L, 120_000L, rssi = pass(90_000L, 30_000L))
@@ -46,7 +46,7 @@ class ForensicsTest {
 
         val car = recorder.tracks().first { it.address == "CAR" }
         assertTrue("range was ${car.rangeDb}", car.looksLikePass)
-        assertEquals(Behaviour.PASSED, car.behaviour)
+        assertEquals(Behavior.PASSED, car.behavior)
     }
 
     @Test
@@ -62,7 +62,7 @@ class ForensicsTest {
 
         val track = recorder.tracks().first()
         assertTrue(!track.looksLikePass)
-        assertEquals(Behaviour.ARRIVED, track.behaviour)
+        assertEquals(Behavior.ARRIVED, track.behavior)
     }
 
     @Test
@@ -71,7 +71,7 @@ class ForensicsTest {
         recorder.start(0L)
         recorder.heard("FRIDGE", 0L, span)
         recorder.stop(span)
-        assertEquals(Behaviour.THROUGHOUT_STEADY, recorder.tracks().first().behaviour)
+        assertEquals(Behavior.THROUGHOUT_STEADY, recorder.tracks().first().behavior)
     }
 
     @Test
@@ -80,16 +80,16 @@ class ForensicsTest {
         recorder.start(0L)
         recorder.heard("POCKET", 0L, span) { at -> if ((at / 20_000L) % 2 == 0L) -40 else -80 }
         recorder.stop(span)
-        assertEquals(Behaviour.THROUGHOUT_VARYING, recorder.tracks().first().behaviour)
+        assertEquals(Behavior.THROUGHOUT_VARYING, recorder.tracks().first().behavior)
     }
 
     @Test
-    fun `something that was here and left is labelled as such`() {
+    fun `something that was here and left is labeled as such`() {
         val recorder = recorder()
         recorder.start(0L)
         recorder.heard("LEAVER", 0L, 60_000L)
         recorder.stop(span)
-        assertEquals(Behaviour.LEFT, recorder.tracks().first().behaviour)
+        assertEquals(Behavior.LEFT, recorder.tracks().first().behavior)
     }
 
     @Test
@@ -99,7 +99,7 @@ class ForensicsTest {
         recorder.observe("BLIP", -70, 10_000L)
         recorder.observe("BLIP", -68, 11_000L)
         recorder.stop(span)
-        assertEquals(Behaviour.GLIMPSED, recorder.tracks().first().behaviour)
+        assertEquals(Behavior.GLIMPSED, recorder.tracks().first().behavior)
     }
 
     // --------------------------------------------------------------- filters
@@ -145,7 +145,7 @@ class ForensicsTest {
     }
 
     @Test
-    fun `fixed only drops the randomised addresses`() {
+    fun `fixed only drops the randomized addresses`() {
         val recorder = recorder()
         recorder.start(0L)
         recorder.heard("PHONE", 0L, span, isRandom = true)
@@ -260,18 +260,18 @@ class ForensicsTest {
         recorder.stop(span)
 
         assertEquals(recorder.deviceCount, recorder.census().values.sum())
-        assertEquals(1, recorder.census()[Behaviour.PASSED])
+        assertEquals(1, recorder.census()[Behavior.PASSED])
     }
 
     @Test
-    fun `the export carries every reading with its behaviour`() {
+    fun `the export carries every reading with its behavior`() {
         val recorder = recorder()
         recorder.start(0L)
         recorder.heard("A", 0L, 10_000L)
         recorder.stop(10_000L)
 
         val csv = recorder.csv()
-        assertTrue(csv.contains("elapsed_ms,address,label,rssi_dbm,behaviour"))
+        assertTrue(csv.contains("elapsed_ms,address,label,rssi_dbm,behavior"))
         assertTrue(csv.contains("THROUGHOUT_STEADY"))
         // Eleven readings plus three header lines.
         assertEquals(14, csv.trim().lines().size)

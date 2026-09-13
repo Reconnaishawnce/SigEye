@@ -57,7 +57,7 @@ class FadingAnalysisTest {
     @Test
     fun `recovers a strong dominant path`() {
         // K = 20 linear, about 13 dB: a clear line of sight with echoes around it.
-        val stats = FadingAnalysis.analyse(ricianRecord(kLinear = 20.0))
+        val stats = FadingAnalysis.analyze(ricianRecord(kLinear = 20.0))
         val kDb = stats.ricianKDb!!
         assertEquals(13.0, kDb, 3.0)
         assertTrue(
@@ -68,14 +68,14 @@ class FadingAnalysisTest {
 
     @Test
     fun `recovers a middling one`() {
-        val stats = FadingAnalysis.analyse(ricianRecord(kLinear = 3.0))
+        val stats = FadingAnalysis.analyze(ricianRecord(kLinear = 3.0))
         assertEquals(10.0 * log10(3.0), stats.ricianKDb!!, 3.0)
     }
 
     @Test
     fun `pure Rayleigh has no dominant path and says so`() {
         // K = 0: everything arriving has bounced.
-        val stats = FadingAnalysis.analyse(ricianRecord(kLinear = 0.0))
+        val stats = FadingAnalysis.analyze(ricianRecord(kLinear = 0.0))
         assertEquals(0.0, stats.ricianK!!, 0.6)
         assertEquals(FadingCharacter.SCATTERED, stats.character)
         // And it swings hard - this is the number that makes the point.
@@ -97,7 +97,7 @@ class FadingAnalysisTest {
     @Test
     fun `a dead flat signal is infinitely dominated by one path`() {
         val flat = (0 until 100).map { FadeSample(it * 100L, -55) }
-        val stats = FadingAnalysis.analyse(flat)
+        val stats = FadingAnalysis.analyze(flat)
         assertEquals(0.0, stats.sdDb, 1e-9)
         assertEquals(0, stats.rangeDb)
         assertEquals(FadingCharacter.STEADY, stats.character)
@@ -108,7 +108,7 @@ class FadingAnalysisTest {
     @Test
     fun `too few readings is refused rather than estimated`() {
         val few = (0 until 5).map { FadeSample(it * 100L, -60) }
-        val stats = FadingAnalysis.analyse(few)
+        val stats = FadingAnalysis.analyze(few)
         assertEquals(FadingCharacter.TOO_FEW, stats.character)
         assertNull(stats.ricianK)
         assertNull(FadingAnalysis.ricianK(listOf(-60, -61, -59)))
@@ -121,7 +121,7 @@ class FadingAnalysisTest {
         val samples = listOf(-70, -66, -64, -63, -62, -61, -60, -59, -58, -50)
             .flatMap { rssi -> List(3) { rssi } }
             .mapIndexed { index, rssi -> FadeSample(index * 100L, rssi) }
-        val stats = FadingAnalysis.analyse(samples)
+        val stats = FadingAnalysis.analyze(samples)
 
         assertEquals(30, stats.samples)
         assertEquals(-50, stats.maxDbm)
@@ -136,12 +136,12 @@ class FadingAnalysisTest {
     fun `packet rate comes from the span, not from the count`() {
         val samples = (0 until 50).map { FadeSample(it * 200L, -60) }
         // Fifty samples across 9.8 s of span.
-        assertEquals(50 / 9.8, FadingAnalysis.analyse(samples).packetsPerSecond, 0.05)
+        assertEquals(50 / 9.8, FadingAnalysis.analyze(samples).packetsPerSecond, 0.05)
     }
 
     @Test
     fun `a single sample does not divide by zero`() {
-        val stats = FadingAnalysis.analyse(listOf(FadeSample(0L, -60)))
+        val stats = FadingAnalysis.analyze(listOf(FadeSample(0L, -60)))
         assertEquals(0.0, stats.spanSeconds, 1e-9)
         assertEquals(0.0, stats.packetsPerSecond, 1e-9)
         assertEquals(FadingCharacter.TOO_FEW, stats.character)
@@ -155,11 +155,11 @@ class FadingAnalysisTest {
             // Half at +6 dB and half at -6 dB about the mean gives exactly 6 dB of SD.
             FadeSample(it * 100L, if (it % 2 == 0) -54 else -66)
         }
-        val stats = FadingAnalysis.analyse(samples)
+        val stats = FadingAnalysis.analyze(samples)
         assertEquals(6.0, stats.sdDb, 1e-9)
         assertEquals(2.0, stats.distanceErrorFactor(2.0), 0.01)
 
-        val range = stats.distanceRange(metres = 10.0, pathLossExponent = 2.0)
+        val range = stats.distanceRange(meters = 10.0, pathLossExponent = 2.0)
         assertEquals(5.0, range.start, 0.05)
         assertEquals(20.0, range.endInclusive, 0.2)
     }
@@ -169,7 +169,7 @@ class FadingAnalysisTest {
         val samples = (0 until 100).map {
             FadeSample(it * 100L, if (it % 2 == 0) -54 else -66)
         }
-        val stats = FadingAnalysis.analyse(samples)
+        val stats = FadingAnalysis.analyze(samples)
         assertTrue(stats.distanceErrorFactor(4.0) < stats.distanceErrorFactor(2.0))
         assertEquals(sqrt(2.0), stats.distanceErrorFactor(4.0), 0.01)
     }

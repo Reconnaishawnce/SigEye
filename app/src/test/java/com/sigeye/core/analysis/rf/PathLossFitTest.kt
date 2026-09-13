@@ -22,9 +22,9 @@ class PathLossFitTest {
         steps: Int = 40,
         noise: (Int) -> Int = { 0 },
     ): List<WalkSample> = (0 until steps).map { index ->
-        val metres = from + (to - from) * index / (steps - 1).toDouble()
-        val rssi = reference - 10.0 * exponent * log10(metres)
-        WalkSample(metres, rssi.toInt() + noise(index))
+        val meters = from + (to - from) * index / (steps - 1).toDouble()
+        val rssi = reference - 10.0 * exponent * log10(meters)
+        WalkSample(meters, rssi.toInt() + noise(index))
     }
 
     // ------------------------------------------------------------ recovering n
@@ -86,20 +86,20 @@ class PathLossFitTest {
     fun `too short a walk is refused rather than extrapolated`() {
         val fit = PathLossFit.fit(walk(exponent = 2.0, from = 1.0, to = 3.0))
         assertEquals(FitQuality.REJECTED, fit.quality)
-        assertTrue(fit.reason!!.contains("walk at least a few metres further"))
+        assertTrue(fit.reason!!.contains("walk at least a few meters further"))
     }
 
     @Test
     fun `too few readings is refused`() {
         val fit = PathLossFit.fit(walk(exponent = 2.0, steps = 6))
         assertEquals(FitQuality.REJECTED, fit.quality)
-        assertTrue(fit.reason!!.contains("readings past half a metre"))
+        assertTrue(fit.reason!!.contains("readings past half a meter"))
     }
 
     @Test
     fun `walking the wrong way is named rather than reported as a negative exponent`() {
         // Signal rising with distance is not a measurement of anything.
-        val samples = walk(exponent = 2.0).map { it.copy(rssi = -100 + it.metres.toInt() * 2) }
+        val samples = walk(exponent = 2.0).map { it.copy(rssi = -100 + it.meters.toInt() * 2) }
         val fit = PathLossFit.fit(samples)
         assertEquals(FitQuality.REJECTED, fit.quality)
         assertTrue(fit.reason!!.contains("did not fall as you walked away"))
@@ -134,7 +134,7 @@ class PathLossFitTest {
     fun `the fit can be inverted back to a distance`() {
         val fit = PathLossFit.fit(walk(exponent = 2.0, reference = -40.0))
         // -60 dBm is 20 dB down, which at n=2 is a factor of ten in distance.
-        assertEquals(10.0, fit.metresFor(-60), 1.5)
+        assertEquals(10.0, fit.metersFor(-60), 1.5)
     }
 
     @Test

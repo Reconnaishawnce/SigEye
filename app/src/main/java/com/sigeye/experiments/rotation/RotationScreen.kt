@@ -498,7 +498,7 @@ private fun Pick(
 
     Text("Pick something to follow", style = MaterialTheme.typography.labelLarge)
     Text(
-        "Randomised addresses are the interesting ones - a fixed address has nothing to " +
+        "Randomized addresses are the interesting ones - a fixed address has nothing to " +
             "defeat. The more distinctive the advertisement, the better the chances.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -519,7 +519,7 @@ private fun Pick(
             ) {
                 Column(Modifier.padding(end = 8.dp)) {
                     Text(
-                        // A randomised address has no vendor of its own, but the company
+                        // A randomized address has no vendor of its own, but the company
                         // id in the payload does - and showing "Apple" beats showing hex
                         // when every other screen already says Apple.
                         nicknameOf(candidate.address)
@@ -835,7 +835,7 @@ private fun Fingerprint(state: HuntState) {
                 Field("Signal spread", String.format(Locale.US, "%.1f dB", traits.rssiSpread))
                 Text(
                     "The interval is a firmware constant, given in the 0.625 ms slots the " +
-                        "specification uses - 244 slots is recognisably Apple in a way " +
+                        "specification uses - 244 slots is recognizably Apple in a way " +
                         "that 152 ms is not.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -19,7 +19,7 @@ data class CellSample(
     val level: Int,
     val atMs: Long,
     /** How many other cells the modem could see at the same moment. */
-    val neighbours: Int = 0,
+    val neighbors: Int = 0,
 ) {
     /** What makes this a different cell from the last one. */
     val key: String

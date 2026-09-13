@@ -17,7 +17,7 @@ data class Roll(
 )
 
 /**
- * Rotation about the phone's own long axis, for polarisation sweeps.
+ * Rotation about the phone's own long axis, for polarization sweeps.
  *
  * Deliberately not the compass. Body Absorption plots against heading and has spent three
  * separate attempts fighting magnetometer calibration - a sensor that returns a confident

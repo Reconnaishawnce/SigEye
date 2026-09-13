@@ -84,7 +84,7 @@ object BleScanHub {
 
     private lateinit var appContext: Context
     private lateinit var ignoreList: IgnoreList
-    private var initialised = false
+    private var initialized = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loop: Job? = null
@@ -123,7 +123,7 @@ object BleScanHub {
 
     @Synchronized
     fun init(context: Context) {
-        if (initialised) return
+        if (initialized) return
         appContext = context.applicationContext
         ignoreList = IgnoreList.get(appContext)
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
@@ -133,13 +133,13 @@ object BleScanHub {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             appContext.registerReceiver(bluetoothReceiver, filter)
         }
-        initialised = true
+        initialized = true
     }
 
     /** Claim the radio under [tag]. Idempotent per tag. */
     @Synchronized
     fun acquire(tag: String) {
-        check(initialised) { "BleScanHub.init() must be called before acquire()" }
+        check(initialized) { "BleScanHub.init() must be called before acquire()" }
         val wasEmpty = claims.isEmpty()
         // A tag acquired twice without a release is a leaked claim, and the symptom is a
         // flat battery rather than a crash - the radio simply never goes off again. The

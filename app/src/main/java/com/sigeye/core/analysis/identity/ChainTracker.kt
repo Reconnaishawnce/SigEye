@@ -221,7 +221,7 @@ class ChainTracker(
         .sortedByDescending { it.rotations }
 
     /**
-     * Randomised addresses currently audible that have never been linked to anything.
+     * Randomized addresses currently audible that have never been linked to anything.
      *
      * Useful as a denominator: forty unlinked addresses against three chains says the
      * matching is catching very little, which is the honest reading of most rooms.

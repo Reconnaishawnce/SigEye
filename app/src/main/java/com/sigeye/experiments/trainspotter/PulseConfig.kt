@@ -17,7 +17,7 @@ data class PulseConfig(
      * Opening stretch where devices are recorded but not counted.
      *
      * Without it the first bin does not measure arrivals, it enumerates the entire
-     * standing population of the neighbourhood - hundreds of devices - which buries every
+     * standing population of the neighborhood - hundreds of devices - which buries every
      * later reading under a single spike on the chart and writes a misleading row to CSV.
      */
     val enrollmentSeconds: Int = 20,

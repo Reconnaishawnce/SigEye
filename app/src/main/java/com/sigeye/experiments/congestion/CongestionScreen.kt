@@ -184,7 +184,7 @@ private fun Live() {
     }
 
     val occupants = remember(wifi.results) { wifi.results.map { it.asOccupant() } }
-    val band24 = remember(occupants) { occupants.filter { it.centreMhz in 2400..2500 } }
+    val band24 = remember(occupants) { occupants.filter { it.centerMhz in 2400..2500 } }
     val channels = remember(band24) { Spectrum.channels24(band24) }
     val advertChannels = remember(band24) { Spectrum.advertChannels(band24) }
     val best = remember(receptions) { Reception.best(receptions) }
@@ -301,7 +301,7 @@ private fun Live() {
             else -> null
         },
         footnote = "A phone cannot measure airtime, only who is present and how loud. " +
-            "Occupancy here is summed neighbour power, which correlates with congestion " +
+            "Occupancy here is summed neighbor power, which correlates with congestion " +
             "but is not the same thing as a busy channel - a single loud access point " +
             "with no traffic on it will read as loud.",
     )
@@ -348,7 +348,7 @@ private fun Headline(
             Spacer(Modifier.height(4.dp))
             Text(
                 "${band24.size} access points on 2.4 GHz · " +
-                    "${(busy * 100).roundToInt()}% of channels carrying a loud neighbour" +
+                    "${(busy * 100).roundToInt()}% of channels carrying a loud neighbor" +
                     (quietest?.let { " · emptiest lane is channel ${it.channel}" } ?: ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = onContainer,
@@ -385,11 +385,11 @@ private fun SpectrumChart(
 
             // The three conventional lanes, drawn behind everything as context.
             listOf(1, 6, 11).forEach { channel ->
-                val centre = Spectrum.centreOf(channel).toFloat()
+                val center = Spectrum.centerOf(channel).toFloat()
                 drawRect(
                     color = lane,
-                    topLeft = Offset(x(centre - 10f), 0f),
-                    size = Size(x(centre + 10f) - x(centre - 10f), plotHeight),
+                    topLeft = Offset(x(center - 10f), 0f),
+                    size = Size(x(center + 10f) - x(center - 10f), plotHeight),
                 )
             }
 
@@ -413,9 +413,9 @@ private fun SpectrumChart(
             channels.filter { it.channel in 1..13 }.forEach { channel ->
                 val height = Spectrum.barHeight(channel.loadDbm) * plotHeight
                 if (height <= 0f) return@forEach
-                val centre = channel.centreMhz.toFloat()
-                val left = x(centre - 2f)
-                val right = x(centre + 2f)
+                val center = channel.centerMhz.toFloat()
+                val left = x(center - 2f)
+                val right = x(center + 2f)
                 drawRect(
                     color = if (channel.busy) barBusy else barQuiet,
                     topLeft = Offset(left, plotHeight - height),
@@ -460,7 +460,7 @@ private fun SpectrumChart(
                 drawText(
                     textLayoutResult = layout,
                     topLeft = Offset(
-                        x(Spectrum.centreOf(channel).toFloat()) - layout.size.width / 2f,
+                        x(Spectrum.centerOf(channel).toFloat()) - layout.size.width / 2f,
                         plotHeight + 5f,
                     ),
                 )
@@ -630,15 +630,15 @@ private fun OffGrid(band24: List<Occupant>) {
         Spacer(Modifier.height(8.dp))
         off.take(8).forEach { occupant ->
             Field(
-                occupant.label ?: "${occupant.centreMhz} MHz",
-                "${occupant.centreMhz} MHz, ${occupant.widthMhz} MHz wide, ${occupant.rssi} dBm",
+                occupant.label ?: "${occupant.centerMhz} MHz",
+                "${occupant.centerMhz} MHz, ${occupant.widthMhz} MHz wide, ${occupant.rssi} dBm",
             )
         }
     }
 }
 
 private fun AccessPoint.asOccupant(): Occupant = Occupant(
-    centreMhz = occupiedCentreMhz,
+    centerMhz = occupiedCentreMhz,
     widthMhz = channelWidthMhz,
     rssi = rssi,
     label = ssid?.takeIf { it.isNotBlank() } ?: "hidden ($bssid)",

@@ -157,8 +157,8 @@ class HeadingSensor(context: Context) {
     }
 
     private fun publish(rawDegrees: Float) {
-        val normalised = ((rawDegrees % 360f) + 360f) % 360f
-        val radians = Math.toRadians(normalised.toDouble())
+        val normalized = ((rawDegrees % 360f) + 360f) % 360f
+        val radians = Math.toRadians(normalized.toDouble())
 
         // Average the unit vector rather than the angle: averaging 359 and 1 numerically
         // gives 180, which points the needle at exactly the wrong place.

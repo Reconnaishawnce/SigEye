@@ -40,7 +40,7 @@ data class SeenDevice(
 
     /**
      * A rough distance, from the log-distance path loss model with an assumed reference of
-     * -59 dBm at one metre and an exponent of 2. Wrong by a factor of two or more in any
+     * -59 dBm at one meter and an exponent of 2. Wrong by a factor of two or more in any
      * real room, so it is only ever shown as a coarse hint, never as a measurement.
      */
     fun roughMetres(): Double {

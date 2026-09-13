@@ -119,7 +119,7 @@ object RotationRhythm {
     /**
      * @param changeTimesMs when each address change was observed, in any order.
      */
-    fun analyse(changeTimesMs: List<Long>): Rhythm {
+    fun analyze(changeTimesMs: List<Long>): Rhythm {
         val times = changeTimesMs.sorted()
         val periods = times.zipWithNext { a, b -> b - a }.filter { it > 0 }
 
@@ -147,8 +147,8 @@ object RotationRhythm {
         // one at 1_000 are two seconds apart, not the whole cycle.
         val phases = times.map { ((it % median) + median) % median }
         val phase = circularMedian(phases, median)
-        val spread = phase?.let { centre ->
-            phases.maxOfOrNull { circularDistance(it, centre, median) }
+        val spread = phase?.let { center ->
+            phases.maxOfOrNull { circularDistance(it, center, median) }
         }
 
         return Rhythm(
@@ -161,7 +161,7 @@ object RotationRhythm {
         )
     }
 
-    /** Names a measured period when it lands on one people recognise. */
+    /** Names a measured period when it lands on one people recognize. */
     fun familiarName(periodMs: Long?): String? {
         val period = periodMs ?: return null
         return FAMILIAR.firstOrNull {

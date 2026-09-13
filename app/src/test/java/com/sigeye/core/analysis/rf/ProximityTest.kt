@@ -47,17 +47,17 @@ class ProximityTest {
     // -------------------------------------------------------------- distance
 
     @Test
-    fun `distance at the reference power is one metre`() {
+    fun `distance at the reference power is one meter`() {
         val e = ProximityEstimator(txPowerAtOneMetre = -59, pathLossExponent = 2.0)
-        assertEquals(1.0, e.metresFor(-59.0), 0.001)
+        assertEquals(1.0, e.metersFor(-59.0), 0.001)
     }
 
     @Test
     fun `weaker signal always means further away`() {
         val e = ProximityEstimator()
-        val near = e.metresFor(-50.0)
-        val mid = e.metresFor(-70.0)
-        val far = e.metresFor(-90.0)
+        val near = e.metersFor(-50.0)
+        val mid = e.metersFor(-70.0)
+        val far = e.metersFor(-90.0)
         assertTrue(near < mid)
         assertTrue(mid < far)
     }
@@ -66,7 +66,7 @@ class ProximityTest {
     fun `a higher path loss exponent reads the same signal as closer`() {
         val freeSpace = ProximityEstimator(pathLossExponent = 2.0)
         val indoors = ProximityEstimator(pathLossExponent = 3.0)
-        assertTrue(indoors.metresFor(-80.0) < freeSpace.metresFor(-80.0))
+        assertTrue(indoors.metersFor(-80.0) < freeSpace.metersFor(-80.0))
     }
 
     @Test
@@ -74,7 +74,7 @@ class ProximityTest {
         val assumed = ProximityEstimator(txPowerAtOneMetre = -59)
         val declared = ProximityEstimator(txPowerAtOneMetre = -75)
         // A quieter transmitter at the same received strength must be nearer.
-        assertTrue(declared.metresFor(-80.0) < assumed.metresFor(-80.0))
+        assertTrue(declared.metersFor(-80.0) < assumed.metersFor(-80.0))
     }
 
     // ----------------------------------------------------------------- zones

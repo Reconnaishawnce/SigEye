@@ -98,7 +98,7 @@ class TpmsTest {
     // --------------------------------------------------------- by address alone
 
     @Test
-    fun `the address pattern is recognised without a payload`() {
+    fun `the address pattern is recognized without a payload`() {
         assertTrue(Tpms.looksLikeSensor("80:EA:CA:10:8A:78"))
         assertTrue(Tpms.looksLikeSensor("83:ea:ca:11:22:33"))
         assertTrue(Tpms.looksLikeSensor("81-EA-CA-11-22-33"))

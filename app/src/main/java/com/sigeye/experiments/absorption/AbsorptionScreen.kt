@@ -556,10 +556,10 @@ private fun Results(
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         combined.peak?.let {
-            Stat("Clearest", "${it.centreDegrees.roundToInt()}°", "${it.meanRssi.roundToInt()} dBm")
+            Stat("Clearest", "${it.centerDegrees.roundToInt()}°", "${it.meanRssi.roundToInt()} dBm")
         }
         combined.notch?.let {
-            Stat("Shadow", "${it.centreDegrees.roundToInt()}°", "${it.meanRssi.roundToInt()} dBm")
+            Stat("Shadow", "${it.centerDegrees.roundToInt()}°", "${it.meanRssi.roundToInt()} dBm")
         }
         Stat("Sweeps", session.runCount.toString(), "${combined.totalSamples} reads")
     }
@@ -689,7 +689,7 @@ private fun interpret(result: SweepResult, session: SessionResult): String {
     }
     val difference = result.frontToBackDb ?: return "Not enough readings."
     val notch = result.notchBearingDegrees?.roundToInt()
-        ?: result.notch?.centreDegrees?.roundToInt() ?: 0
+        ?: result.notch?.centerDegrees?.roundToInt() ?: 0
 
     val depth = when {
         difference < 3.0 ->

@@ -19,7 +19,7 @@ class CohortsTest {
     // ----------------------------------------------------------- who made this
 
     @Test
-    fun `a randomised address is named by its payload, never by its prefix`() {
+    fun `a randomized address is named by its payload, never by its prefix`() {
         // The prefix of a random address belongs to nobody. Reading a vendor out of it is
         // how a scanner reports a street full of companies that do not exist.
         val hidden = member("5A:11:22:33:44:55", payloadVendor = null, ouiVendor = "Cisco")
@@ -127,7 +127,7 @@ class CohortsTest {
                 member("M3", payloadVendor = "Mixed", isRandom = false),
             ),
         ).first()
-        assertEquals(1, cohort.randomised)
+        assertEquals(1, cohort.randomized)
         assertEquals(2, cohort.fixed)
         assertEquals(1f / 3f, cohort.privacyFraction, 0.001f)
         assertTrue(cohort.policy().contains("1 of 3 rotate"))

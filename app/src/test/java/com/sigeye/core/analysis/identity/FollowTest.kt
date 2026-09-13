@@ -46,7 +46,7 @@ class FollowTest {
     }
 
     @Test
-    fun `travelling together cuts what stayed behind`() {
+    fun `traveling together cuts what stayed behind`() {
         val session = FollowSession()
 
         session.beginLeg("the office", moving = false, atMs = start)

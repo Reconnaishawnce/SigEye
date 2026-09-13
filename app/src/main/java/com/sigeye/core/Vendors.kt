@@ -6,10 +6,10 @@ package com.sigeye.core
  * Two separate namespaces, often confused:
  *
  *  - **OUI** - the first three bytes of a MAC address, assigned by the IEEE. Only
- *    meaningful when the device advertises a public (non-randomised) address, which is
+ *    meaningful when the device advertises a public (non-randomized) address, which is
  *    typical of fixed-function hardware: beacons, tags, body cameras, car kits, readers.
  *  - **Company ID** - a 16-bit number assigned by the Bluetooth SIG, carried in the first
- *    two bytes of manufacturer-specific data. Present regardless of address randomisation,
+ *    two bytes of manufacturer-specific data. Present regardless of address randomization,
  *    which makes it the more reliable of the two for phones.
  *
  * The tables themselves live in [VendorData], generated from the registries.
@@ -62,7 +62,7 @@ object Vendors {
         return VendorData.OUI[oui] ?: OuiRegistry.lookup(oui)
     }
 
-    /** Vendor for a MAC, or null when the address is randomised or simply unknown. */
+    /** Vendor for a MAC, or null when the address is randomized or simply unknown. */
     fun byAddress(address: String): String? {
         if (isRandomAddress(address)) return null
         return registered(address)

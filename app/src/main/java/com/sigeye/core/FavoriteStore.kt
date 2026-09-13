@@ -11,9 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
  * person who deliberately unstars everything has said they want an unadorned list, and
  * refilling it on the next launch would read as the app arguing with them.
  */
-class FavouriteStore private constructor(context: Context) {
+class FavoriteStore private constructor(context: Context) {
 
     private val prefs = context.applicationContext
+        // Spelled the old way on purpose. This names a file on disk, and renaming it would
+        // orphan the one every existing install has already written their starred list to.
         .getSharedPreferences("favourites", Context.MODE_PRIVATE)
 
     private val _ids = MutableStateFlow(load())
@@ -23,14 +25,14 @@ class FavouriteStore private constructor(context: Context) {
 
     fun isFavourite(id: String): Boolean = _ids.value.contains(id)
 
-    fun toggle(id: String) = update(Favourites.toggle(_ids.value, id))
+    fun toggle(id: String) = update(Favorites.toggle(_ids.value, id))
 
-    fun moveUp(id: String) = update(Favourites.moveUp(_ids.value, id))
+    fun moveUp(id: String) = update(Favorites.moveUp(_ids.value, id))
 
-    fun moveDown(id: String) = update(Favourites.moveDown(_ids.value, id))
+    fun moveDown(id: String) = update(Favorites.moveDown(_ids.value, id))
 
     /** Puts the recommended set back, for someone who has arranged themselves into a corner. */
-    fun reset() = update(Favourites.seed(Experiments.featuredIds, knownIds()))
+    fun reset() = update(Favorites.seed(Experiments.featuredIds, knownIds()))
 
     private fun update(next: List<String>) {
         _ids.value = next
@@ -43,7 +45,7 @@ class FavouriteStore private constructor(context: Context) {
     private fun load(): List<String> {
         val known = knownIds()
         if (!prefs.getBoolean(KEY_SEEDED, false)) {
-            val seeded = Favourites.seed(Experiments.featuredIds, known)
+            val seeded = Favorites.seed(Experiments.featuredIds, known)
             prefs.edit()
                 .putString(KEY_IDS, seeded.joinToString(SEPARATOR))
                 .putBoolean(KEY_SEEDED, true)
@@ -54,7 +56,7 @@ class FavouriteStore private constructor(context: Context) {
             ?.split(SEPARATOR)
             ?.filter { it.isNotBlank() }
             .orEmpty()
-        return Favourites.sanitise(stored, known)
+        return Favorites.sanitise(stored, known)
     }
 
     private fun knownIds(): Set<String> = Experiments.all
@@ -69,11 +71,11 @@ class FavouriteStore private constructor(context: Context) {
         private const val SEPARATOR = ","
 
         @Volatile
-        private var instance: FavouriteStore? = null
+        private var instance: FavoriteStore? = null
 
-        fun get(context: Context): FavouriteStore =
+        fun get(context: Context): FavoriteStore =
             instance ?: synchronized(this) {
-                instance ?: FavouriteStore(context).also { instance = it }
+                instance ?: FavoriteStore(context).also { instance = it }
             }
     }
 }

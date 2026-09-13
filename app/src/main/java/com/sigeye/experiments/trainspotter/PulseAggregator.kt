@@ -5,7 +5,7 @@ package com.sigeye.experiments.trainspotter
  * and flags bins that spike above a rolling baseline.
  *
  * Why a baseline rather than a raw threshold: phones rotate their BLE addresses roughly
- * every 15 minutes, so stationary neighbours mint a steady drip of "new" addresses.
+ * every 15 minutes, so stationary neighbors mint a steady drip of "new" addresses.
  * That drip is the baseline; a train is a sharp multiple of it.
  *
  * A run has three stages, see [Phase]. Enrollment exists because the first moments of any

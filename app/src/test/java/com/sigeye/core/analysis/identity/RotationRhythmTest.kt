@@ -21,7 +21,7 @@ class RotationRhythmTest {
 
     @Test
     fun `a device on the specification default measures as fifteen minutes`() {
-        val rhythm = RotationRhythm.analyse(changes(900_000L, 5))
+        val rhythm = RotationRhythm.analyze(changes(900_000L, 5))
         assertEquals(900_000L, rhythm.medianPeriodMs)
         assertTrue(rhythm.matchesSpecDefault)
         assertTrue(rhythm.describePeriod().contains("15.0 minutes"))
@@ -35,7 +35,7 @@ class RotationRhythmTest {
     fun `a device on something other than the default is not rounded to it`() {
         // The timeout is settable anywhere from a second to an hour. Reporting everything
         // as fifteen minutes would erase the only interesting thing about this device.
-        val rhythm = RotationRhythm.analyse(changes(300_000L, 5))
+        val rhythm = RotationRhythm.analyze(changes(300_000L, 5))
         assertEquals(300_000L, rhythm.medianPeriodMs)
         assertTrue(!rhythm.matchesSpecDefault)
         assertEquals("five minutes", RotationRhythm.familiarName(rhythm.medianPeriodMs))
@@ -48,7 +48,7 @@ class RotationRhythmTest {
 
     @Test
     fun `one address change is not a period`() {
-        val rhythm = RotationRhythm.analyse(listOf(1_000L))
+        val rhythm = RotationRhythm.analyze(listOf(1_000L))
         assertTrue(!rhythm.measurable)
         assertNull(rhythm.medianPeriodMs)
         assertNull(rhythm.phaseMs)
@@ -57,7 +57,7 @@ class RotationRhythmTest {
 
     @Test
     fun `nothing at all measures nothing`() {
-        val rhythm = RotationRhythm.analyse(emptyList())
+        val rhythm = RotationRhythm.analyze(emptyList())
         assertTrue(!rhythm.measurable)
         assertEquals(0, rhythm.changes)
     }
@@ -72,7 +72,7 @@ class RotationRhythmTest {
 
     @Test
     fun `a ragged timer is not called regular`() {
-        val ragged = RotationRhythm.analyse(
+        val ragged = RotationRhythm.analyze(
             listOf(0L, 900_000L, 1_200_000L, 3_000_000L, 3_100_000L),
         )
         assertTrue(!ragged.regular)
@@ -85,7 +85,7 @@ class RotationRhythmTest {
     fun `a free running timer keeps the same phase through every rotation`() {
         // This is the whole point: the offset survives the thing that was meant to
         // destroy continuity.
-        val rhythm = RotationRhythm.analyse(changes(900_000L, 6, startMs = 1_700_000_123_456L))
+        val rhythm = RotationRhythm.analyze(changes(900_000L, 6, startMs = 1_700_000_123_456L))
         assertTrue(rhythm.phaseUsable)
         assertEquals(1_700_000_123_456L % 900_000L, rhythm.phaseMs)
         assertEquals(0L, rhythm.phaseSpreadMs)
@@ -93,15 +93,15 @@ class RotationRhythmTest {
 
     @Test
     fun `two phones on the same period land on different phases`() {
-        val one = RotationRhythm.analyse(changes(900_000L, 5, startMs = 1_700_000_000_000L))
-        val other = RotationRhythm.analyse(changes(900_000L, 5, startMs = 1_700_000_400_000L))
+        val one = RotationRhythm.analyze(changes(900_000L, 5, startMs = 1_700_000_000_000L))
+        val other = RotationRhythm.analyze(changes(900_000L, 5, startMs = 1_700_000_400_000L))
         assertEquals(one.medianPeriodMs, other.medianPeriodMs)
         assertTrue(one.phaseMs != other.phaseMs)
     }
 
     @Test
     fun `two changes define a phase, so nothing is claimed from two`() {
-        val rhythm = RotationRhythm.analyse(changes(900_000L, 2))
+        val rhythm = RotationRhythm.analyze(changes(900_000L, 2))
         assertTrue(rhythm.measurable)
         assertTrue("changes were ${rhythm.changes}", !rhythm.phaseUsable)
     }
@@ -110,7 +110,7 @@ class RotationRhythmTest {
     fun `a little slop still counts as the same phase`() {
         // A change is only seen to the nearest advertising interval, and only after the
         // old address has been silent a while. Seconds of slop is measurement, not drift.
-        val rhythm = RotationRhythm.analyse(
+        val rhythm = RotationRhythm.analyze(
             changes(900_000L, 5, slop = listOf(0L, 4_000L, -3_000L, 8_000L, -6_000L)),
         )
         assertTrue(rhythm.phaseUsable)
@@ -124,7 +124,7 @@ class RotationRhythmTest {
         // and 500 - an arithmetic mean would put the phase at 225_250, on the far side of
         // the cycle from every reading it was built from.
         val start = 1_699_999_200_500L
-        val rhythm = RotationRhythm.analyse(
+        val rhythm = RotationRhythm.analyze(
             listOf(start, start + 900_000L, start + 1_799_000L, start + 2_700_000L),
         )
         assertEquals(900_000L, rhythm.medianPeriodMs)

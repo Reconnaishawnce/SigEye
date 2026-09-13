@@ -114,11 +114,11 @@ fun TrackChart(
                 }
 
                 drawn.forEachIndexed { index, track ->
-                    val colour = palette[index % palette.size]
+                    val color = palette[index % palette.size]
 
                     track.eventsMs.forEach { at ->
                         drawLine(
-                            color = colour.copy(alpha = 0.5f),
+                            color = color.copy(alpha = 0.5f),
                             start = Offset(x(at), 0f),
                             end = Offset(x(at), plotHeight),
                             strokeWidth = 2f,
@@ -140,7 +140,7 @@ fun TrackChart(
                         started = true
                         previousMs = atMs
                     }
-                    drawPath(path, color = colour, style = Stroke(width = 2f))
+                    drawPath(path, color = color, style = Stroke(width = 2f))
                 }
             }
         }
@@ -167,7 +167,7 @@ fun TrackChart(
     }
 }
 
-/** Colour a caller can use to match its own labels to the chart's lines. */
+/** Color a caller can use to match its own labels to the chart's lines. */
 @Composable
 fun trackColour(index: Int): Color = listOf(
     MaterialTheme.colorScheme.primary,

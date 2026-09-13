@@ -248,7 +248,7 @@ private fun Live(dwell: Boolean) {
             targets = present,
             selected = selectedBlip,
             onSelect = { selectedBlip = it },
-            footnote = "Rings are signal strength, strongest at the centre. Direction is " +
+            footnote = "Rings are signal strength, strongest at the center. Direction is " +
                 "not shown because one antenna cannot know it - the angle is only there " +
                 "to keep each device in its own spot.",
         ) { target ->
@@ -284,14 +284,14 @@ private fun Live(dwell: Boolean) {
     ) {
         Column(Modifier.padding(14.dp)) {
             Text(
-                "Read this sceptically",
+                "Read this skeptically",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 "${(snap.randomAddressShare * 100).roundToInt()}% of these addresses are " +
-                    "randomised. Those phones mint a fresh address every fifteen minutes " +
+                    "randomized. Those phones mint a fresh address every fifteen minutes " +
                     "or so, which inflates the passing count and any long-window total. " +
                     if (dwell) {
                         "Resident counts are the trustworthy ones: a device that keeps " +

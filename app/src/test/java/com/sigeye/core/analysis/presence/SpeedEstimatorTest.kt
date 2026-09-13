@@ -39,7 +39,7 @@ class SpeedEstimatorTest {
     @Test
     fun `recovers a known speed from a clean pass`() {
         val samples = syntheticPass(speedMps = 10.0, distanceMetres = 10.0)
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 10.0)
 
         assertEquals(PassQuality.GOOD, result.quality)
         assertNotNull(result.speedMetresPerSecond)
@@ -48,12 +48,12 @@ class SpeedEstimatorTest {
 
     @Test
     fun `a faster pass reads faster`() {
-        val slow = SpeedEstimator.analyse(
+        val slow = SpeedEstimator.analyze(
             "A",
             syntheticPass(speedMps = 5.0, distanceMetres = 12.0),
             distanceMetres = 12.0,
         )
-        val fast = SpeedEstimator.analyse(
+        val fast = SpeedEstimator.analyze(
             "A",
             syntheticPass(speedMps = 25.0, distanceMetres = 12.0, seconds = 8.0, hz = 10.0),
             distanceMetres = 12.0,
@@ -63,14 +63,14 @@ class SpeedEstimatorTest {
 
     @Test
     fun `a train at line speed comes out in the right range`() {
-        // 30 m/s is about 108 km/h, twenty metres from the track.
+        // 30 m/s is about 108 km/h, twenty meters from the track.
         val samples = syntheticPass(
             speedMps = 30.0,
             distanceMetres = 20.0,
             seconds = 8.0,
             hz = 10.0,
         )
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 20.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 20.0)
         assertNotNull(result.speedMetresPerSecond)
         assertEquals(108.0, result.kmh!!, 15.0)
     }
@@ -78,8 +78,8 @@ class SpeedEstimatorTest {
     @Test
     fun `getting the distance wrong scales the answer, and only that`() {
         val samples = syntheticPass(speedMps = 10.0, distanceMetres = 10.0)
-        val right = SpeedEstimator.analyse("A", samples, distanceMetres = 10.0)
-        val doubled = SpeedEstimator.analyse("A", samples, distanceMetres = 20.0)
+        val right = SpeedEstimator.analyze("A", samples, distanceMetres = 10.0)
+        val doubled = SpeedEstimator.analyze("A", samples, distanceMetres = 20.0)
         // Twice the assumed distance is twice the track length over the same time.
         assertEquals(
             right.speedMetresPerSecond!! * 2,
@@ -96,7 +96,7 @@ class SpeedEstimatorTest {
             hz = 8.0,
             noise = { index -> (index * 7 % 5) - 2 },
         )
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 15.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 15.0)
         assertNotNull(result.speedMetresPerSecond)
         assertEquals(15.0, result.speedMetresPerSecond!!, 4.0)
     }
@@ -104,14 +104,14 @@ class SpeedEstimatorTest {
     @Test
     fun `a single spurious dip near the peak does not narrow the crossing`() {
         val clean = syntheticPass(speedMps = 12.0, distanceMetres = 12.0, hz = 8.0)
-        val fromClean = SpeedEstimator.analyse("A", clean, distanceMetres = 12.0)
+        val fromClean = SpeedEstimator.analyze("A", clean, distanceMetres = 12.0)
 
         // One packet arrives 12 dB low, just before closest approach. Unsmoothed, that
         // would be read as an early crossing and report a much faster pass.
         val spiked = clean.toMutableList()
         val target = clean.size / 2 - 2
         spiked[target] = spiked[target].copy(rssi = spiked[target].rssi - 12)
-        val fromSpiked = SpeedEstimator.analyse("A", spiked, distanceMetres = 12.0)
+        val fromSpiked = SpeedEstimator.analyze("A", spiked, distanceMetres = 12.0)
 
         assertNotNull(fromSpiked.speedMetresPerSecond)
         assertEquals(
@@ -126,7 +126,7 @@ class SpeedEstimatorTest {
     @Test
     fun `a flat signal is not a pass`() {
         val samples = (0 until 40).map { PassSample(it * 200L, -70) }
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 10.0)
         assertEquals(PassQuality.REJECTED, result.quality)
         assertNull(result.speedMetresPerSecond)
         assertNotNull(result.reason)
@@ -137,7 +137,7 @@ class SpeedEstimatorTest {
         // Rises and then sits there - a device that walked up and stopped.
         val rising = (0 until 20).map { PassSample(it * 200L, -90 + it * 2) }
         val flat = (20 until 40).map { PassSample(it * 200L, -50) }
-        val result = SpeedEstimator.analyse("A", rising + flat, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", rising + flat, distanceMetres = 10.0)
         assertEquals(PassQuality.REJECTED, result.quality)
     }
 
@@ -145,14 +145,14 @@ class SpeedEstimatorTest {
     fun `something that leaves without arriving is not a pass`() {
         val flat = (0 until 20).map { PassSample(it * 200L, -50) }
         val falling = (20 until 40).map { PassSample(it * 200L, -50 - (it - 20) * 2) }
-        val result = SpeedEstimator.analyse("A", flat + falling, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", flat + falling, distanceMetres = 10.0)
         assertEquals(PassQuality.REJECTED, result.quality)
     }
 
     @Test
     fun `too few readings is rejected rather than guessed`() {
         val samples = (0 until 5).map { PassSample(it * 200L, -90 + it * 10) }
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 10.0)
         assertEquals(PassQuality.REJECTED, result.quality)
         assertTrue(result.reason!!.contains("too few"))
     }
@@ -166,7 +166,7 @@ class SpeedEstimatorTest {
         val departure = (30 until 40).map {
             PassSample(it * 200L, (-55 - (it - 30) * 3.5).toInt())
         }
-        val result = SpeedEstimator.analyse("A", approach + departure, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", approach + departure, distanceMetres = 10.0)
         assertEquals(PassQuality.ROUGH, result.quality)
         assertNotNull(result.speedMetresPerSecond)
         assertNotNull(result.reason)
@@ -177,7 +177,7 @@ class SpeedEstimatorTest {
     @Test
     fun `speed is offered in the units people actually use`() {
         val samples = syntheticPass(speedMps = 20.0, distanceMetres = 15.0, hz = 10.0)
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 15.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 15.0)
         val mps = result.speedMetresPerSecond!!
         assertEquals(mps * 3.6, result.kmh!!, 0.01)
         assertEquals(mps * 2.23694, result.mph!!, 0.01)
@@ -186,7 +186,7 @@ class SpeedEstimatorTest {
     @Test
     fun `the peak is reported where the pass actually happened`() {
         val samples = syntheticPass(speedMps = 10.0, distanceMetres = 10.0, seconds = 12.0)
-        val result = SpeedEstimator.analyse("A", samples, distanceMetres = 10.0)
+        val result = SpeedEstimator.analyze("A", samples, distanceMetres = 10.0)
         // Closest approach is the middle of the run by construction.
         val middle = samples[samples.size / 2].atMs
         assertTrue(kotlin.math.abs(result.peakAtMs - middle) < 600)

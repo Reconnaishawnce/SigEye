@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Addresses the user has muted. Shared across every experiment: your own earbuds, the
- * neighbour's TV and the fridge are noise in all of them, so muting is a property of the
+ * neighbor's TV and the fridge are noise in all of them, so muting is a property of the
  * app rather than of one screen.
  *
  * Ignored devices are dropped at the very first step, before dedup or counting, so they

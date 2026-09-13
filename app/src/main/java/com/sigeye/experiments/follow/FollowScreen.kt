@@ -222,7 +222,7 @@ private fun Live(onLocate: (String) -> Unit) {
         emphasis = true,
     ) {
         Text(
-            "This narrows a room down to the device travelling with you, without knowing " +
+            "This narrows a room down to the device traveling with you, without knowing " +
                 "anything about it in advance. It works by elimination: stand together and " +
                 "most of what is in range stays in range, which proves nothing. Walk a mile " +
                 "together and almost nothing does - the shops fall away, the parked cars " +

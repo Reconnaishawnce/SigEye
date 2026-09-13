@@ -114,7 +114,7 @@ private fun Live() {
 
     val walk = remember { mutableListOf<WalkSample>() }
     var liveRssi by remember { mutableStateOf<Int?>(null) }
-    var metresSoFar by remember { mutableStateOf(0.0) }
+    var metersSoFar by remember { mutableStateOf(0.0) }
     var samples by remember { mutableStateOf(0) }
     var result by remember { mutableStateOf<PathLossResult?>(null) }
 
@@ -156,7 +156,7 @@ private fun Live() {
             delay(TICK_MS)
             val snapshot = synchronized(walk) { walk.toList() }
             samples = snapshot.size
-            metresSoFar = snapshot.lastOrNull()?.metres ?: 0.0
+            metersSoFar = snapshot.lastOrNull()?.meters ?: 0.0
             result = PathLossFit.fit(snapshot)
         }
     }
@@ -183,7 +183,7 @@ private fun Live() {
             label = targetLabel,
             rssi = liveRssi,
             steps = stepCount.steps,
-            metres = metresSoFar,
+            meters = metersSoFar,
             samples = samples,
             hasStepCounter = stepSensor.available,
             manualMetres = manualMetres,
@@ -281,7 +281,7 @@ private fun Pick(
             steps = 11,
         )
         Text(
-            "Steps are counted by the phone; turning them into metres needs this. About " +
+            "Steps are counted by the phone; turning them into meters needs this. About " +
                 "0.415 times your height is the usual estimate, so 0.70 m for someone " +
                 "1.70 m tall - but pacing out a known distance and dividing is better, " +
                 "because an error here goes straight into the exponent.",
@@ -309,7 +309,7 @@ private fun Walking(
     label: String,
     rssi: Int?,
     steps: Int,
-    metres: Double,
+    meters: Double,
     samples: Int,
     hasStepCounter: Boolean,
     manualMetres: Float,
@@ -322,7 +322,7 @@ private fun Walking(
     Spacer(Modifier.height(8.dp))
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        Stat("Distance", String.format(Locale.US, "%.1f m", metres), "walked")
+        Stat("Distance", String.format(Locale.US, "%.1f m", meters), "walked")
         Stat("Signal", rssi?.toString() ?: "-", "dBm now")
         Stat("Readings", "$samples", "paired")
     }
@@ -357,7 +357,7 @@ private fun Walking(
     ) {
         Text(
             "Walk steadily away in a straight line, with the phone in your hand and the " +
-                "transmitter left where it is. Fifteen metres or so is plenty. Do not turn " +
+                "transmitter left where it is. Fifteen meters or so is plenty. Do not turn " +
                 "back until you have finished - the fit reads a return trip as the signal " +
                 "refusing to fall.",
             style = MaterialTheme.typography.bodySmall,
@@ -562,10 +562,10 @@ private fun FitChart(walk: List<WalkSample>, fit: PathLossResult) {
 
     Box(Modifier.fillMaxWidth().height(180.dp)) {
         Canvas(Modifier.fillMaxSize()) {
-            val usable = walk.filter { it.metres >= PathLossFit.NEAR_FIELD_METRES }
+            val usable = walk.filter { it.meters >= PathLossFit.NEAR_FIELD_METRES }
             if (usable.size < 2) return@Canvas
 
-            val xs = usable.map { log10(it.metres) }
+            val xs = usable.map { log10(it.meters) }
             val minX = xs.min()
             val maxX = xs.max()
             val spanX = (maxX - minX).coerceAtLeast(0.01)

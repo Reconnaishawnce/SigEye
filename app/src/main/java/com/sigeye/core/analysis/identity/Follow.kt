@@ -55,7 +55,7 @@ data class FollowCandidate(
      *
      * Moving legs count for far more than standing ones. Staying in range while two people
      * stand in a room together says only that a device is in that room; staying in range
-     * across a mile of city says it is travelling with them, and there are very few things
+     * across a mile of city says it is traveling with them, and there are very few things
      * that can be.
      */
     val weight: Int get() = legsSeen + movingLegsSeen * 2
@@ -99,7 +99,7 @@ data class FollowState(
 }
 
 /**
- * Narrowing a room down to the one device that is travelling with you.
+ * Narrowing a room down to the one device that is traveling with you.
  *
  * The method is elimination rather than recognition, and that is what makes it work
  * without knowing anything about the target in advance. Stand still together and most of
@@ -175,7 +175,7 @@ class FollowSession {
     /**
      * Starts a stretch of the session.
      *
-     * @param moving whether the phone is travelling during it. A standing leg cuts what
+     * @param moving whether the phone is traveling during it. A standing leg cuts what
      *   walks past; a moving leg cuts everything that stayed behind, which is nearly
      *   everything.
      */
@@ -267,7 +267,7 @@ class FollowSession {
         }
 
         val rhythm = if (targetChanges.size >= 2) {
-            RotationRhythm.analyse(targetChanges)
+            RotationRhythm.analyze(targetChanges)
         } else {
             null
         }

@@ -454,7 +454,7 @@ private fun DeviceDetail(
                 )
                 if (device.isRandomAddress) {
                     Text(
-                        "This address is randomised, so it will change within about " +
+                        "This address is randomized, so it will change within about " +
                             "fifteen minutes and the name will not follow it. Nicknames " +
                             "stick only to devices with a fixed address.",
                         style = MaterialTheme.typography.labelSmall,
@@ -619,7 +619,7 @@ private fun NewListDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Group devices you care about - Vehicles, Neighbours, Mine. A watch " +
+                    "Group devices you care about - Vehicles, Neighbors, Mine. A watch " +
                         "rule can then alert on the whole list at once.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

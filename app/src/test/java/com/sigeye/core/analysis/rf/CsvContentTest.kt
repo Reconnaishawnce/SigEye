@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * The exports carry arithmetic, not just formatting.
  *
- * A modelled value or a subtracted baseline written into a file is a claim like any other,
+ * A modeled value or a subtracted baseline written into a file is a claim like any other,
  * and one nobody checks until they open the file weeks later - by which time the walk
  * cannot be repeated.
  */
@@ -27,15 +27,15 @@ class CsvContentTest {
     }
 
     @Test
-    fun `the modelled column is the fit evaluated at that distance`() {
+    fun `the modeled column is the fit evaluated at that distance`() {
         val walk = (1..30).map { WalkSample(it * 0.7, -40 - it) }
         val fit = PathLossFit.fit(walk)
         val csv = PathLossFit.csv(walk, fit, 0.7)
         val first = rows(csv).first().split(",")
-        val metres = first[0].toDouble()
-        val modelled = first[3].toDouble()
-        val expected = fit.referenceRssi - 10.0 * fit.exponent * Math.log10(metres)
-        assertEquals(expected, modelled, 0.01)
+        val meters = first[0].toDouble()
+        val modeled = first[3].toDouble()
+        val expected = fit.referenceRssi - 10.0 * fit.exponent * Math.log10(meters)
+        assertEquals(expected, modeled, 0.01)
     }
 
     @Test
@@ -51,7 +51,7 @@ class CsvContentTest {
     fun `a walk with nothing in it still produces a readable file`() {
         val csv = PathLossFit.csv(emptyList(), PathLossFit.fit(emptyList()), 0.7)
         assertTrue(rows(csv).isEmpty())
-        assertTrue(csv.contains("metres,rssi_dbm"))
+        assertTrue(csv.contains("meters,rssi_dbm"))
     }
 
     // ------------------------------------------------------------ penetration
@@ -126,15 +126,15 @@ class CsvContentTest {
         assertTrue(!csv.contains("fivegig"))
     }
 
-    // --------------------------------------------------------- polarisation
+    // --------------------------------------------------------- polarization
 
     @Test
     fun `the roll export gives both the plotted angle and the measured one`() {
         val sweep = PolarSweep(sectorCount = 12, minSamplesPerSector = 3)
         listOf(0f, 45f, 90f, 135f).forEach { roll ->
-            repeat(4) { sweep.add(Polarisation.plotAngle(roll), -50) }
+            repeat(4) { sweep.add(Polarization.plotAngle(roll), -50) }
         }
-        val csv = Polarisation.csv(sweep, Polarisation.analyse(sweep))
+        val csv = Polarization.csv(sweep, Polarization.analyze(sweep))
         val row = rows(csv).first().split(",")
         val plot = row[1].toFloat()
         val roll = row[2].toFloat()
