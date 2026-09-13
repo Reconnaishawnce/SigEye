@@ -355,7 +355,7 @@ private fun Live(
 
             watchForRotations(
                 state = latest,
-                session = session,
+                session = session(),
                 live = live,
                 nowMs = now,
                 onMoved = { from, to, message ->
@@ -730,7 +730,7 @@ private fun watchForRotations(
 
         val decision = Following.decide(previous, successors, nowMs)
         if (decision is FollowDecision.Reacquired) {
-            if (session().reacquire(candidate.address, decision.address, nowMs)) {
+            if (session.reacquire(candidate.address, decision.address, nowMs)) {
                 onMoved(
                     candidate.address,
                     decision.address,
