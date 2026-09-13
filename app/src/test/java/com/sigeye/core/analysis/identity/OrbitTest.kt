@@ -145,16 +145,22 @@ class OrbitTest {
     }
 
     @Test
-    fun `a second circle is refused rather than mixed into the first`() {
-        // Two laps at different radii are not the same measurement, and averaging them
-        // would quietly destroy the only thing the test is looking at.
+    fun `a second circle is a second measurement, not a refusal`() {
+        // It used to be refused, on the grounds that two laps at different radii are not
+        // the same measurement. True, and an argument against merging them rather than
+        // against walking two - scored separately they are two readings of the same room.
         val session = circling()
         walk(session, "AA:BB:CC:DD:EE:08") { -55 }
         session.endProbe(start + lapMs)
 
         session.beginProbe(Probe.ORBIT, start + lapMs + 1_000L)
+        session.observe("AA:BB:CC:DD:EE:08", -55, start + lapMs + 2_000L, null, null, true)
+        session.endProbe(start + lapMs * 2)
 
-        assertEquals(1, session.state(start + lapMs + 2_000L).probes.size)
+        val candidate = session.state(start + lapMs * 2).candidates.single()
+
+        assertEquals(2, candidate.orbits.size)
+        assertEquals(listOf(0, 1), candidate.orbits.map { it.probeIndex })
     }
 
     @Test

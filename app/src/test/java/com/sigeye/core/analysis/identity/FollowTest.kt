@@ -394,8 +394,9 @@ class FollowTest {
         // Five minutes of wall clock has passed and five seconds of listening.
         assertEquals(2, session.state(start + 5 * minute).stillIn.size)
 
-        // And the drop-off still works once it is listening again.
-        session.hear("5A:01", start + 5 * minute + 1_000L)
+        // And the drop-off still works once it is listening again. 5A:01 keeps answering
+        // and 5A:02 does not, so only one of them is left a minute later.
+        session.hear("5A:01", start + 5 * minute + 40_000L)
         assertEquals(1, session.state(start + 6 * minute + 10_000L).stillIn.size)
     }
 

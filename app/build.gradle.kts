@@ -100,4 +100,9 @@ dependencies {
     implementation(libs.androidx.material3)
 
     testImplementation(libs.junit)
+    // Android's org.json is an empty stub in unit tests: every method throws "not mocked".
+    // Anything here that serialises itself - a saved follow, a snapshot, a store - would
+    // then be untestable on the JVM, which is exactly the code most worth testing. This
+    // puts a real implementation on the test classpath only; the app still uses Android's.
+    testImplementation(libs.json)
 }

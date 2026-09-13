@@ -170,14 +170,33 @@ class WalkByTest {
     }
 
     @Test
-    fun `a second walk-by is refused, like a second circle`() {
+    fun `each walk-by keeps its own readings`() {
+        // Two walks, and the second must not be drawn from the first one's trace. The usual
+        // reason for a second is that the first came out ambiguous, so mixing them would
+        // destroy the comparison it was done for.
         val session = walking()
         walk(session, "AA:BB:CC:DD:EE:0A") { passing(it) }
         finish(session)
 
-        session.beginProbe(Probe.WALK_BY, start + walkMs + 1_000L)
+        session.beginProbe(Probe.WALK_BY, start + walkMs + 10_000L)
+        repeat(10) {
+            session.observe(
+                "AA:BB:CC:DD:EE:0A", -70, start + walkMs + 10_000L + it * 1_000L,
+                null, null, true,
+            )
+        }
+        session.markClosest(start + walkMs + 15_000L)
+        session.endProbe(start + walkMs + 30_000L)
 
-        assertEquals(1, session.state(start + walkMs + 2_000L).probes.size)
+        val candidate = session.state(start + walkMs + 31_000L).candidates.single()
+
+        assertEquals(2, candidate.walkBys.size)
+        assertTrue("the first was a clean pass", candidate.walkBys.first().score.passed)
+        assertFalse("the second was flat", candidate.walkBys.last().score.passed)
+        assertTrue(
+            "and their traces are different lengths",
+            candidate.walkBys.first().trail.size != candidate.walkBys.last().trail.size,
+        )
     }
 
     @Test
