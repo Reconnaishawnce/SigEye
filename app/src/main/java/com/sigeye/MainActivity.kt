@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -53,6 +54,8 @@ import com.sigeye.experiments.watchlist.WatchlistScreen
 import com.sigeye.experiments.wifi.WifiScreen
 import com.sigeye.home.HomeScreen
 import com.sigeye.ui.SigEyeTheme
+import com.sigeye.ui.TargetBar
+import com.sigeye.ui.TargetRoutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -111,151 +114,179 @@ private fun SigEyeApp() {
     BackHandler(enabled = stack.isNotEmpty(), onBack = goBack)
 
     Scaffold { padding ->
-        val inset = Modifier.padding(padding)
-        val current = stack.lastOrNull()
-
-        if (current != null && current.startsWith(LOCATE_PREFIX)) {
-            LocateScreen(
-                address = current.removePrefix(LOCATE_PREFIX),
-                onBack = goBack,
-                modifier = inset,
+        Column(Modifier.padding(padding)) {
+            // One mount for the whole app. A pinned target is useful on every screen, and
+            // putting this bar in each of them would be twenty-eight places to forget it.
+            TargetBar(
+                TargetRoutes(
+                    onLocate = { address -> open(LOCATE_PREFIX + address) },
+                    onRadar = { address -> open(RADAR_PREFIX + address) },
+                    onRotation = { address -> open(ROTATION_PREFIX + address) },
+                ),
             )
-            return@Scaffold
+            Screen(stack, open, goBack)
         }
+    }
+}
 
-        val openLocate: (String) -> Unit = { address -> open(LOCATE_PREFIX + address) }
+/**
+ * Whichever experiment is on top of the stack.
+ *
+ * Its own function so [TargetBar] can sit above every one of them. As one long lambda
+ * inside the scaffold, the early returns for the addressed routes returned from the
+ * scaffold itself, and anything drawn before them was drawn only on the screens that fell
+ * through to the end.
+ */
+@Composable
+private fun Screen(
+    stack: SnapshotStateList<String>,
+    open: (String) -> Unit,
+    goBack: () -> Unit,
+) {
+    val inset = Modifier
+    val current = stack.lastOrNull()
 
-        if (current != null && current.startsWith(RADAR_PREFIX)) {
-            RadarScreen(
-                onBack = goBack,
-                onLocate = openLocate,
-                initialQuery = current.removePrefix(RADAR_PREFIX),
-                modifier = inset,
-            )
-            return@Scaffold
-        }
+    if (current != null && current.startsWith(LOCATE_PREFIX)) {
+        LocateScreen(
+            address = current.removePrefix(LOCATE_PREFIX),
+            onBack = goBack,
+            modifier = inset,
+        )
+        return
+    }
 
-        if (current != null && current.startsWith(ROTATION_PREFIX)) {
-            RotationScreen(
-                onBack = goBack,
-                initialAddress = current.removePrefix(ROTATION_PREFIX),
-                modifier = inset,
-            )
-            return@Scaffold
-        }
+    val openLocate: (String) -> Unit = { address -> open(LOCATE_PREFIX + address) }
 
-        when (current) {
-            null -> HomeScreen(onOpen = open, modifier = inset)
+    if (current != null && current.startsWith(RADAR_PREFIX)) {
+        RadarScreen(
+            onBack = goBack,
+            onLocate = openLocate,
+            initialQuery = current.removePrefix(RADAR_PREFIX),
+            modifier = inset,
+        )
+        return
+    }
 
-            Experiments.TRAIN_SPOTTER ->
-                TrainSpotterScreen(onBack = goBack, modifier = inset)
+    if (current != null && current.startsWith(ROTATION_PREFIX)) {
+        RotationScreen(
+            onBack = goBack,
+            initialAddress = current.removePrefix(ROTATION_PREFIX),
+            modifier = inset,
+        )
+        return
+    }
 
-            Experiments.INSPECTOR -> InspectorScreen(
-                onBack = goBack,
-                onLocate = openLocate,
-                modifier = inset,
-            )
+    when (current) {
+        null -> HomeScreen(onOpen = open, modifier = inset)
 
-            Experiments.WATCHLIST ->
-                WatchlistScreen(onBack = goBack, modifier = inset)
+        Experiments.TRAIN_SPOTTER ->
+            TrainSpotterScreen(onBack = goBack, modifier = inset)
 
-            Experiments.BEACONS ->
-                BeaconScreen(onBack = goBack, modifier = inset)
+        Experiments.INSPECTOR -> InspectorScreen(
+            onBack = goBack,
+            onLocate = openLocate,
+            modifier = inset,
+        )
 
-            Experiments.RADAR -> RadarScreen(
-                onBack = goBack,
-                onLocate = openLocate,
-                modifier = inset,
-            )
+        Experiments.WATCHLIST ->
+            WatchlistScreen(onBack = goBack, modifier = inset)
 
-            Experiments.ABSORPTION ->
-                AbsorptionScreen(onBack = goBack, modifier = inset)
+        Experiments.BEACONS ->
+            BeaconScreen(onBack = goBack, modifier = inset)
 
-            Experiments.MICROWAVE ->
-                MicrowaveScreen(onBack = goBack, modifier = inset)
+        Experiments.RADAR -> RadarScreen(
+            onBack = goBack,
+            onLocate = openLocate,
+            modifier = inset,
+        )
 
-            Experiments.FARADAY ->
-                FaradayScreen(onBack = goBack, modifier = inset)
+        Experiments.ABSORPTION ->
+            AbsorptionScreen(onBack = goBack, modifier = inset)
 
-            Experiments.FADING ->
-                FadingScreen(onBack = goBack, modifier = inset)
+        Experiments.MICROWAVE ->
+            MicrowaveScreen(onBack = goBack, modifier = inset)
 
-            Experiments.DISCOVERY ->
-                DiscoveryScreen(onBack = goBack, modifier = inset)
+        Experiments.FARADAY ->
+            FaradayScreen(onBack = goBack, modifier = inset)
 
-            Experiments.EXPLORER ->
-                ExplorerScreen(onBack = goBack, modifier = inset)
+        Experiments.FADING ->
+            FadingScreen(onBack = goBack, modifier = inset)
 
-            Experiments.WIFI ->
-                WifiScreen(onBack = goBack, modifier = inset)
+        Experiments.DISCOVERY ->
+            DiscoveryScreen(onBack = goBack, modifier = inset)
 
-            Experiments.PLACE ->
-                PlaceScreen(onBack = goBack, modifier = inset)
+        Experiments.EXPLORER ->
+            ExplorerScreen(onBack = goBack, modifier = inset)
 
-            Experiments.FORENSICS ->
-                ForensicsScreen(onBack = goBack, modifier = inset)
+        Experiments.WIFI ->
+            WifiScreen(onBack = goBack, modifier = inset)
 
-            Experiments.CONVOY ->
-                ConvoyScreen(onBack = goBack, modifier = inset)
+        Experiments.PLACE ->
+            PlaceScreen(onBack = goBack, modifier = inset)
 
-            Experiments.ROTATION ->
-                RotationScreen(onBack = goBack, modifier = inset)
+        Experiments.FORENSICS ->
+            ForensicsScreen(onBack = goBack, modifier = inset)
 
-            Experiments.DOPPLER ->
-                DopplerScreen(onBack = goBack, modifier = inset)
+        Experiments.CONVOY ->
+            ConvoyScreen(onBack = goBack, modifier = inset)
 
-            Experiments.POLARIZATION ->
-                PolarizationScreen(onBack = goBack, modifier = inset)
+        Experiments.ROTATION ->
+            RotationScreen(onBack = goBack, modifier = inset)
 
-            Experiments.CONGESTION ->
-                CongestionScreen(onBack = goBack, modifier = inset)
+        Experiments.DOPPLER ->
+            DopplerScreen(onBack = goBack, modifier = inset)
 
-            Experiments.BANDS ->
-                BandsScreen(onBack = goBack, modifier = inset)
+        Experiments.POLARIZATION ->
+            PolarizationScreen(onBack = goBack, modifier = inset)
 
-            Experiments.VULNERABILITY ->
-                VulnerabilityScreen(onBack = goBack, modifier = inset)
+        Experiments.CONGESTION ->
+            CongestionScreen(onBack = goBack, modifier = inset)
 
-            Experiments.FOLLOWING ->
-                FollowingScreen(onBack = goBack, modifier = inset)
+        Experiments.BANDS ->
+            BandsScreen(onBack = goBack, modifier = inset)
 
-            Experiments.ROTATION_LAB ->
-                RotationLabScreen(onBack = goBack, modifier = inset)
+        Experiments.VULNERABILITY ->
+            VulnerabilityScreen(onBack = goBack, modifier = inset)
 
-            Experiments.FOLLOW -> FollowScreen(
-                onBack = goBack,
-                onLocate = openLocate,
-                onRadar = { address -> open(RADAR_PREFIX + address) },
-                onRotation = { address -> open(ROTATION_PREFIX + address) },
-                modifier = inset,
-            )
+        Experiments.FOLLOWING ->
+            FollowingScreen(onBack = goBack, modifier = inset)
 
-            SETTINGS ->
-                SettingsScreen(onBack = goBack, modifier = inset)
+        Experiments.ROTATION_LAB ->
+            RotationLabScreen(onBack = goBack, modifier = inset)
 
-            Experiments.MOTION ->
-                MotionScreen(onBack = goBack, modifier = inset)
+        Experiments.FOLLOW -> FollowScreen(
+            onBack = goBack,
+            onLocate = openLocate,
+            onRadar = { address -> open(RADAR_PREFIX + address) },
+            onRotation = { address -> open(ROTATION_PREFIX + address) },
+            modifier = inset,
+        )
 
-            Experiments.SPEED ->
-                SpeedScreen(onBack = goBack, modifier = inset)
+        SETTINGS ->
+            SettingsScreen(onBack = goBack, modifier = inset)
 
-            Experiments.CELLS ->
-                CellScreen(onBack = goBack, modifier = inset)
+        Experiments.MOTION ->
+            MotionScreen(onBack = goBack, modifier = inset)
 
-            Experiments.DWELL -> PopulationScreen(
-                mode = PopulationMode.DWELL,
-                onBack = goBack,
-                modifier = inset,
-            )
+        Experiments.SPEED ->
+            SpeedScreen(onBack = goBack, modifier = inset)
 
-            Experiments.CROWD -> PopulationScreen(
-                mode = PopulationMode.CROWD,
-                onBack = goBack,
-                modifier = inset,
-            )
+        Experiments.CELLS ->
+            CellScreen(onBack = goBack, modifier = inset)
 
-            // An unknown id can only come from a stale saved state after an update.
-            else -> HomeScreen(onOpen = open, modifier = inset)
-        }
+        Experiments.DWELL -> PopulationScreen(
+            mode = PopulationMode.DWELL,
+            onBack = goBack,
+            modifier = inset,
+        )
+
+        Experiments.CROWD -> PopulationScreen(
+            mode = PopulationMode.CROWD,
+            onBack = goBack,
+            modifier = inset,
+        )
+
+        // An unknown id can only come from a stale saved state after an update.
+        else -> HomeScreen(onOpen = open, modifier = inset)
     }
 }

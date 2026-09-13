@@ -100,6 +100,10 @@ class TargetStore private constructor(context: Context) {
      * one seen once, and throwing the history away would erase it.
      */
     fun reacquire(oldAddress: String, newAddress: String, atMs: Long) {
+        // The pin follows the device too. Keeping them in step here rather than at every
+        // call site means a screen cannot move one and forget the other, which would leave
+        // the bar pointing at an address nothing is going to say again.
+        CurrentTarget.get(app).reacquire(oldAddress, newAddress)
         val existing = _targets.value.firstOrNull {
             it.address.equals(oldAddress, ignoreCase = true)
         } ?: return

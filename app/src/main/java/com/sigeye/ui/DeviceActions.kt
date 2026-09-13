@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.CurrentTarget
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
 import com.sigeye.experiments.watchlist.MatchKind
@@ -50,6 +52,8 @@ fun DeviceActions(
     val book = remember { DeviceBook.get(context) }
     val ignoreList = remember { IgnoreList.get(context) }
     val watchStore = remember { WatchStore.get(context) }
+    val current = remember { CurrentTarget.get(context) }
+    val pinned by current.pinned.collectAsStateWithLifecycle()
 
     val rules by watchStore.rules.collectAsStateWithLifecycle()
     val notes by book.notes.collectAsStateWithLifecycle()
@@ -62,6 +66,35 @@ fun DeviceActions(
     var draft by remember(address) { mutableStateOf(notes[key]?.nickname.orEmpty()) }
 
     Column(modifier.fillMaxWidth()) {
+        // Pinning first, because it is the thing somebody who has just found a device
+        // actually wants, and because until now the only way to look at a device on
+        // another screen was to read its address off this one and type it into a filter.
+        val isPinned = pinned?.address.equals(key, ignoreCase = true)
+        Button(
+            onClick = {
+                if (isPinned) {
+                    current.clear()
+                } else {
+                    current.pin(address, displayName, notes[key]?.nickname, "this screen")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (isPinned) "Unpin it" else "Pin as the current target")
+        }
+        Text(
+            if (isPinned) {
+                "On the bar at the top of every screen, and it follows this device through " +
+                    "its address changes."
+            } else {
+                "Puts it on the bar at the top of every screen, one tap from the radar, " +
+                    "Locate and Defeating Randomization."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+        )
+
         OutlinedTextField(
             value = draft,
             onValueChange = {

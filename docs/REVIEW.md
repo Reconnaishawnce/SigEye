@@ -321,6 +321,15 @@ exactly where it was.
 | 29. The shipped artifact | **Done.** CI builds and ships `app-release.apk`, so the published binary is no longer debuggable by anything holding adb. Minify stays off deliberately and says why in the build file: the app is an instrument for a paper and has to be readable, and CrashLog hands the user a stack trace that R8 would render useless without shipping a mapping file. |
 | 30. Crashes in the field | **Done in turn 13.** Traces written to app-private storage, listed in Settings, sent only on a tap. No network anywhere in it. |
 
+### One target, carried between experiments - *done*
+
+Finding a device was the hard part and the app made it the easy part. A follow narrowed a
+street to one phone and the only way to look at it anywhere else was to read the address off
+the screen and type it into a filter box - for a value that changes every fifteen minutes,
+in an app whose entire subject is that it changes. A pinned target now sits above every
+screen, one tap from Locate, the radar and Defeating Randomization, and it follows the
+device through its address changes.
+
 The honest summary: the shared work is largely done and the per-experiment work is largely
 not. Item 27 and item 23 were the two that bothered me, because one was a safety statement
 that cost nothing and the other was the app claiming something it had not measured. Both

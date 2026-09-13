@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.AlertStyle
 import com.sigeye.core.CsvExport
+import com.sigeye.core.CurrentTarget
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
@@ -239,6 +240,7 @@ private fun Live(
     val targetStore = remember { TargetStore.get(context) }
     val settings = remember { FollowSettings(context) }
     val ignoreList = remember { IgnoreList.get(context) }
+    val currentTarget = remember { CurrentTarget.get(context) }
     val feedback = remember { Feedback(context) }
 
     // No permission, works indoors, and only has to answer a coarse question: is somebody
@@ -594,6 +596,15 @@ private fun Live(
             onHold = {
                 acting = null
                 session().lock(candidate.address)
+                // Committing to a device in a follow is the moment the rest of the app
+                // becomes useful for it, so it pins itself rather than making somebody
+                // copy an address out of here and into a filter box.
+                currentTarget.pin(
+                    address = candidate.address,
+                    label = candidate.label,
+                    vendor = candidate.vendor,
+                    source = followName.ifBlank { "a follow" },
+                )
                 goTo(Step.HOLD)
             },
         )
