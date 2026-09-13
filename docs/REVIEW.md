@@ -227,7 +227,7 @@ variance is, so a 4 dB "blocking" result from a crisp packet is indistinguishabl
 multipath. Take thirty seconds of baseline variance before the first reading and report the
 block depth against it — the Fading machinery already computes exactly this.
 
-### 23. Microwave Interference needs a control band
+### 23. Microwave Interference needs a control band — *done*
 
 A microwave flattening 2.4 GHz is dramatic and unfalsifiable as presented. Watching a
 5 GHz access point at the same time gives a control: 2.4 collapses, 5 does not, and the
@@ -254,7 +254,7 @@ The phone knows its own speed from GPS. Comparing the RSSI-derived estimate agai
 speed, on a walk or a drive, would turn a plausible number into a calibrated one — and
 would show the user how good the method is, which is more interesting than the number.
 
-### 27. Bluetooth Explorer connects without a written-down rule about writes
+### 27. Bluetooth Explorer connects without a written-down rule about writes — *done*
 
 It performs GATT reads on a stranger's device on request. Reads are benign; the code should
 state plainly, in the file and on the screen, that it never writes and never pairs —
@@ -280,7 +280,7 @@ full symbols and no shrinking, and the release variant is effectively dead code.
 make release the shipped artifact with R8 on, or delete the release block so nobody assumes
 it is used.
 
-### 30. There is no way to learn about a crash in the field
+### 30. There is no way to learn about a crash in the field — *done*
 
 No crash reporting, deliberately and correctly — but the consequence is that a crash on
 someone else's phone is invisible forever. A local, opt-in crash log written to
@@ -312,18 +312,20 @@ exactly where it was.
 |---|---|
 | 21. Crowd Counter's people factor | **Open.** `Environment.devicesPerPerson` is still a constant per environment, 1.5 to 2.5, with no way to correct it from a headcount somebody actually took. |
 | 22. Faraday's noise floor | **Open.** Still a straight before-and-after with no idea what the room's own variance is. `FadingAnalysis` computes exactly the number needed and is not called. |
-| 23. Microwave's control band | **Open**, and worse than open: the verdict text says a 5 GHz link would be fine, which the experiment has not measured and cannot know. Either measure it or stop saying it. |
+| 23. Microwave's control band | **Done in turn 13.** Two radios pinned by BSSID and followed through both phases. 2.4 falling alone is the finding; both falling is a failed run and it says so. The unearned "5 GHz would have been untouched" line is gone. |
 | 24. Train Spotter's threshold | **Open.** The ground-truth button still only writes labels to CSV. Days of labelled data are being collected for a step nobody built. |
 | 25. Rotation Lab left running | **Open.** Not a `ScanService.Mode`, so its best output - half an hour of a busy carriage - still needs the screen awake and in your hand. |
 | 26. Speed Estimator's cross-check | **Open.** No GPS comparison. |
-| 27. Bluetooth Explorer's rule about writes | **Open**, and it is twenty minutes of work. Nothing in the file or on the screen says it never writes and never pairs. |
+| 27. Bluetooth Explorer's rule about writes | **Done in turn 13.** On the screen, in the KDoc, and enforced by `GattWriteRuleTest`, which reads the source and fails the build on a mutating call. |
 | 28. Wall Penetration's floor plan | **Half.** Saved runs now carry a name you choose and the excess loss, which is most of the survey. The in-screen spot list still says "Spot 1, Spot 2" and is not ordered by loss. |
 | 29. The shipped artifact | **Open.** `isMinifyEnabled = false` and CI still ships `app-debug.apk`. Fine as a decision, but the release block is dead code that reads as if it were used. |
-| 30. Crashes in the field | **Open.** No `Thread.setDefaultUncaughtExceptionHandler`. A crash on somebody else's phone is still invisible forever. |
+| 30. Crashes in the field | **Done in turn 13.** Traces written to app-private storage, listed in Settings, sent only on a tap. No network anywhere in it. |
 
 The honest summary: the shared work is largely done and the per-experiment work is largely
-not. Item 27 and item 23 are the two that bother me, because one is a safety statement that
-costs nothing and the other is the app claiming something it did not measure.
+not. Item 27 and item 23 were the two that bothered me, because one was a safety statement
+that cost nothing and the other was the app claiming something it had not measured. Both
+are done, with item 30, in turn 13. What is left of this half - 21, 22, 24, 25, 26, 28 and
+29 - is a satisfying evening each, and none of it is load-bearing for a first release.
 
 ---
 
