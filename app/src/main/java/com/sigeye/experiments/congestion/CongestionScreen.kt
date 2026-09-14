@@ -206,6 +206,12 @@ private fun Live() {
     Spacer(Modifier.height(8.dp))
     SpectrumChart(channels = channels, advertChannels = advertChannels)
 
+    // The same band as history rather than as a snapshot. A bar chart says what the air
+    // looks like now; a waterfall says what it has been doing, which is the difference
+    // between "channel 6 is busy" and "channel 11 went busy ten minutes ago".
+    Spacer(Modifier.height(16.dp))
+    SpectrumWaterfall(channels)
+
     Spacer(Modifier.height(14.dp))
     AdvertChannelCards(advertChannels)
 
