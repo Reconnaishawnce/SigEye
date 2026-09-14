@@ -1507,6 +1507,12 @@ private fun Following(
                     address = candidate.address,
                     label = candidate.label ?: candidate.vendor ?: candidate.address.takeLast(8),
                     smoothedRssi = candidate.recentRssi,
+                    // How far through the drop-off this one is. The elimination is the
+                    // measurement here, and it used to happen entirely off screen.
+                    fading = (
+                        (state.atMs - candidate.lastSeenMs).toFloat() /
+                            state.tuning.dropAfterMs
+                        ).coerceIn(0f, 1f),
                     flagged = candidate.carried(state.tuning),
                     watched = targets.any { it.address.equals(candidate.address, true) },
                 )
@@ -1514,7 +1520,10 @@ private fun Following(
             selected = null,
             onSelect = {},
             showSelectionCard = false,
-            footnote = "Only devices still with them. Something that drops out leaves the " +
+            footnote = "The ring around each blip is its drop-off running down: a device has " +
+            "to go ${state.tuning.dropAfterMs / 1000} seconds without a packet before it " +
+            "is out, and it dims as it gets there. " +
+            "Only devices still with them. Something that drops out leaves the " +
                 "radar for good, so every blip here is live - and the ring is where it is now, " +
                 "not where it has been on average.",
         )

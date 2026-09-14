@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -43,6 +44,16 @@ data class RadarTarget(
     val smoothedRssi: Double,
     val flagged: Boolean = false,
     val watched: Boolean = false,
+    /**
+     * How far through going quiet this device is, 0 heard just now and 1 about to be
+     * retired.
+     *
+     * The elimination is the measurement in Follow Me and it was invisible: a blip sat
+     * there at full brightness for a minute and then vanished between one frame and the
+     * next. Draining a ring around it turns the count falling into something you watch
+     * happen rather than a number that changes when you are not looking.
+     */
+    val fading: Float = 0f,
 )
 
 private class Blip(
@@ -54,6 +65,7 @@ private class Blip(
     var label: String,
     var flagged: Boolean,
     var watched: Boolean,
+    var fading: Float,
     val appearedAtMs: Long,
     var leavingSinceMs: Long? = null,
     /** Set when the sweep line last crossed it, for the illumination pulse. */
@@ -142,6 +154,7 @@ fun RadarScene(
                     label = target.label,
                     flagged = target.flagged,
                     watched = target.watched,
+                    fading = target.fading,
                     appearedAtMs = now,
                 )
             } else {
@@ -149,6 +162,7 @@ fun RadarScene(
                 existing.label = target.label
                 existing.flagged = target.flagged
                 existing.watched = target.watched
+                existing.fading = target.fading
                 existing.leavingSinceMs = null
             }
         }
@@ -351,6 +365,24 @@ private fun DrawScope.drawBlip(
         )
     }
 
+    // The drop-off, drawn as it runs down. A device has to be silent for a full minute
+    // before it counts as gone, and for that minute the old radar showed a blip at full
+    // brightness with nothing to say it was on its way out.
+    if (blip.fading > 0.02f) {
+        drawArc(
+            color = color.copy(alpha = 0.85f),
+            startAngle = -90f,
+            sweepAngle = 360f * (1f - blip.fading.coerceIn(0f, 1f)),
+            useCenter = false,
+            topLeft = Offset(
+                position.x - 11f * scale,
+                position.y - 11f * scale,
+            ),
+            size = Size(22f * scale, 22f * scale),
+            style = Stroke(width = 1.6f * scale),
+        )
+    }
+
     // Illumination: brief glow as the sweep passes, the way a real display refreshes.
     val sinceSwept = nowMs - blip.lastSweptMs
     val glow = if (sinceSwept in 0..SWEPT_GLOW_MS) {
@@ -359,13 +391,14 @@ private fun DrawScope.drawBlip(
         0f
     }
 
+    val alive = 1f - blip.fading.coerceIn(0f, 1f) * 0.7f
     drawCircle(
-        color = color.copy(alpha = 0.16f + glow * 0.42f),
+        color = color.copy(alpha = (0.16f + glow * 0.42f) * alive),
         radius = (10f + glow * 8f) * scale,
         center = position,
     )
     drawCircle(
-        color = color,
+        color = color.copy(alpha = alive),
         radius = (if (selected) 6.5f else 4.5f) * scale,
         center = position,
     )

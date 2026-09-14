@@ -330,6 +330,12 @@ private fun Monitor() {
         )
     }
 
+    // Days of recording, which also went into the CSV and nowhere else. The live chart
+    // shows the last ten minutes; this shows what the place does, which is what leaving a
+    // phone on a windowsill for a fortnight was for.
+    Spacer(Modifier.height(12.dp))
+    DayStripCard(state.config)
+
     // What the trains you marked say the threshold should be. The ground-truth button has
     // been here since this was written and the labels went into the CSV and nowhere else.
     Spacer(Modifier.height(12.dp))
