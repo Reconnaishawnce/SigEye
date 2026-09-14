@@ -65,7 +65,18 @@ in a real room, because it is the thing that decides whether fingerprinting work
 
 ---
 
-## 3. The phase argument — the most promising original contribution
+## 3. The phase argument (checked: not original, and that is better)
+
+**Checked 2026-09-13. This is not an original contribution and should not be presented as
+one.** The Bluetooth SIG says it themselves, in the announcement of Randomized RPA Updates
+in Core 6.1: *"Attackers may be able to model device behavior by observing RPA update
+patterns. Even with the maximum 15-minute update interval, RPA addresses can become
+predictable."* Core 6.1 adds a v2 of the HCI command with a randomized window, defaulting
+to 480 to 900 seconds.
+
+That is a stronger position than novelty. The standards body has already conceded the
+weakness and shipped the fix. The useful work is measuring what it looks like on hardware
+that does not have the fix, which is almost all of it.
 
 Because the RPA timer is free-running rather than clock-aligned, **two devices on the same
 900-second timeout change at different moments and keep doing so.** The offset within the
@@ -139,24 +150,38 @@ fingerprinting, and it is a text file anybody can open.
 
 ---
 
-## 6. Prior work — LEADS TO VERIFY, do not cite from here
+## 6. Prior work — checked 2026-09-13, safe to cite
 
-I am recording these from memory and **every one needs checking before it goes near a
-paper**. Authors, venues and claims may be wrong.
+Verified against the publishers. The earlier version of this section was written from
+memory and got the Becker mechanism wrong, which is recorded here so the mistake is not
+repeated: I had been attributing the rotation-timing argument to them and they do not make
+it.
 
-- **Becker et al., "Tracking Anonymized Bluetooth Devices", PETS 2019.** The
-  *address-carryover algorithm*: exploits the fact that the address and the identifying
-  tokens in the payload do not change synchronously, so an observer who sees the payload
-  token either side of an address change can link them. This is the closest prior art to
-  anything in this document and must be read first.
-- **Martin et al., "Handoff All Your Privacy", PETS 2019.** Analysis of Apple's Continuity
-  protocol and what its BLE messages leak.
-- **Celosia & Cunche**, work on BLE advertising fingerprinting and on Apple Continuity
-  payloads. Several papers, dates unverified.
+- **Becker, J. K., Li, D., Starobinski, D. "Tracking Anonymized Bluetooth Devices."**
+  *PoPETs* 2019(3):50-65. doi:10.2478/popets-2019-0036. The **address-carryover algorithm**,
+  which exploits, in their words, "the asynchronous nature of payload and address changes."
+  Identifying tokens in the payload change on a different schedule from the address, so an
+  observer bridges the boundary. **This is about payload asynchrony and not about timing.**
+- **Martin, J. et al. "Handoff All Your Privacy: A Review of Apple's Bluetooth Low Energy
+  Continuity Protocol."** *PoPETs* 2019(4). Continuity messages fingerprint device type and
+  OS version, and they found **predictable sequence numbers** usable to track across
+  randomization. Stronger than what SigEye reads, which is only the set of message types.
+- **Celosia, G., Cunche, M. "Discontinued Privacy: Personal Data Leaks in Apple
+  Bluetooth-Low-Energy Continuity Protocols."** *PoPETs* 2020(1):26-46.
+- **Gagnon, G., Gambs, S., Cunche, M. "RSSI-based attacks for identification of BLE
+  devices."** *Computers & Security*, 2024. doi:10.1016/j.cose.2024.104080. Links traces
+  across randomization using RSSI. **This is the closest published work to Follow Me and to
+  the RSSI-continuity signal, and nothing in this project should imply that idea is new.**
+- **Bluetooth SIG, "Enhancing device privacy and energy efficiency with Bluetooth
+  Randomized RPA Updates."** The Core 6.1 feature and the concession quoted in section 3.
+  v1 RPA timeout: default 0x0384 (900 s), range 0x0001 to 0x0E10 (1 s to 3600 s). v2
+  defaults: 0x01E0 to 0x0384 (480 to 900 s).
 
-**Where the phase argument sits relative to these**: I believe the free-running-timer phase
-as a *standalone* quasi-identifier is less explored than the carryover attack, but I cannot
-confirm that, and a literature check is the first task. It may well be known.
+**Where this project sits relative to those.** Not on mechanism. Every individual signal
+SigEye uses is published. What is not in the literature, as far as this check went, is the
+composition: these signals running together on a stock unrooted phone, in real time, for
+one person walking, with the co-presence elimination in section 4.6 doing the work that
+fingerprinting does in the papers. Claim the cheapness, not the cleverness.
 
 ---
 
