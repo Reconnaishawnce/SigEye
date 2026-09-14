@@ -114,7 +114,13 @@ enum class LinkConfidence(val label: String) {
 }
 
 /** One piece of evidence for or against a link. */
-data class LinkEvidence(val holds: Boolean, val weight: Int, val text: String)
+data class LinkEvidence(
+    val holds: Boolean,
+    val weight: Int,
+    val text: String,
+    /** Two or three words, for a scorecard. The prose in [text] is the explanation. */
+    val label: String = "",
+)
 
 data class LinkScore(
     val evidence: List<LinkEvidence>,
@@ -202,6 +208,7 @@ object Fingerprint {
             LinkEvidence(
                 holds = bothRandom,
                 weight = 0,
+                label = "Both randomized",
                 text = if (bothRandom) {
                     "Both addresses are randomized, which is what rotation looks like."
                 } else {
@@ -216,6 +223,7 @@ object Fingerprint {
             LinkEvidence(
                 holds = shapesMatch,
                 weight = 4,
+                label = "Same packet shape",
                 text = if (shapesMatch) {
                     "The advertisement has exactly the same structure: " +
                         describeShape(candidate.shape) + ". Firmware sets that, and " +
@@ -235,6 +243,7 @@ object Fingerprint {
             LinkEvidence(
                 holds = intervalMatch,
                 weight = 3,
+                label = "Same heartbeat",
                 text = if (intervalMatch) {
                     "Both advertise about every " + candidate.medianGapMs +
                         " ms. The interval is a firmware constant, not part of the " +
@@ -259,6 +268,7 @@ object Fingerprint {
                 LinkEvidence(
                     holds = typesMatch,
                     weight = 2,
+                    label = "Same Apple messages",
                     text = if (typesMatch) {
                         "Both send the same Apple messages: " +
                             com.sigeye.core.ble.Continuity.describe(sharedTypes) +
@@ -289,6 +299,7 @@ object Fingerprint {
                 LinkEvidence(
                     holds = jitterMatch,
                     weight = 1,
+                    label = "Same steadiness",
                     text = if (jitterMatch) {
                         "Both hold that interval about as tightly - " +
                             previous.intervalStability + " against " +
@@ -307,6 +318,7 @@ object Fingerprint {
             LinkEvidence(
                 holds = handover,
                 weight = 2,
+                label = "Right moment",
                 text = if (handover) {
                     "The new address appeared " + (gap / 1000) +
                         "s after the old one went quiet, which is what a handover " +
@@ -324,6 +336,7 @@ object Fingerprint {
             LinkEvidence(
                 holds = continuity,
                 weight = 2,
+                label = "Did not move",
                 text = if (continuity) {
                     String.format(
                         Locale.US,

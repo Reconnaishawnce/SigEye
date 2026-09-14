@@ -10,6 +10,13 @@ data class Rotation(
     val toAddress: String,
     val atMs: Long,
     val score: LinkScore,
+    /** Old address's last packet to the new one's first. Negative means they overlapped. */
+    val gapMs: Long = 0L,
+    /** How far the level moved across the swap. */
+    val rssiDeltaDb: Double = 0.0,
+    /** Advertising interval either side, in the 0.625 ms slots the specification uses. */
+    val fromSlots: Int = 0,
+    val toSlots: Int = 0,
     /** Set once a walk-away test has been run against the new address. */
     val proof: WalkProof? = null,
 ) {
@@ -80,6 +87,14 @@ data class Traits(
     val payloadMask: String = "",
     val payloadNote: String = "",
     val payloadLeaksIdentity: Boolean = false,
+    /**
+     * Gaps between the tracked device's recent packets, newest last.
+     *
+     * Handed out so the screen can draw the real packet train rather than a picture of one.
+     * A diagram of an advertising interval teaches what the words mean; the device's own
+     * gaps show what it is actually doing, which is the thing being measured.
+     */
+    val gaps: List<Long> = emptyList(),
 )
 
 /**
@@ -228,12 +243,17 @@ class RotationHunt(
             .maxByOrNull { it.second.points }
             ?: return
 
+        val successor = everything.getValue(best.first).identity(best.first)
         rotations.add(
             Rotation(
                 fromAddress = tracked,
                 toAddress = best.first,
                 atMs = nowMs,
                 score = best.second,
+                gapMs = successor.firstSeenMs - previous.lastSeenMs,
+                rssiDeltaDb = successor.recentRssi - previous.recentRssi,
+                fromSlots = previous.intervalSlots,
+                toSlots = successor.intervalSlots,
             ),
         )
         trackedAddress = best.first
@@ -344,6 +364,7 @@ class RotationHunt(
                     payloadMask = entry.payload.mask(),
                     payloadNote = entry.payload.describe(),
                     payloadLeaksIdentity = entry.payload.leaksIdentity(),
+                    gaps = entry.gaps.takeLast(GAPS_SHOWN),
                 )
             } ?: Traits(),
             rotations = rotations.toList(),
@@ -372,6 +393,9 @@ class RotationHunt(
     companion object {
         /** Enough packets to have an interval and a shape worth comparing. */
         const val MIN_CANDIDATE_PACKETS = 6
+
+        /** Recent gaps handed to the screen. Enough to see the rhythm and its wobble. */
+        const val GAPS_SHOWN = 40
 
         /**
          * How long an address is kept after it was last heard.

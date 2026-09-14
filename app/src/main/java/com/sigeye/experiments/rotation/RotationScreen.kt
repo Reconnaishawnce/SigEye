@@ -513,6 +513,17 @@ private fun Pick(
         return
     }
 
+    WhatRotationLooksLike()
+
+    Spacer(Modifier.height(12.dp))
+    Section(
+        title = "How anything gets recognized at all",
+        summary = "Six signals a rotation cannot change, and what each is worth.",
+    ) {
+        SixSignals()
+    }
+
+    Spacer(Modifier.height(14.dp))
     Text("Pick something to follow", style = MaterialTheme.typography.labelLarge)
     Text(
         "Randomized addresses are the interesting ones - a fixed address has nothing to " +
@@ -761,8 +772,16 @@ private fun RotationCard(rotation: Rotation) {
                 fontWeight = FontWeight.SemiBold,
             )
 
-            Spacer(Modifier.height(8.dp))
-            Text("Because", style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(10.dp))
+            HandoverStrip(rotation)
+
+            Spacer(Modifier.height(12.dp))
+            Text("What it scored", style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(4.dp))
+            SignalScorecard(rotation.score)
+
+            Spacer(Modifier.height(10.dp))
+            Text("In words", style = MaterialTheme.typography.labelSmall)
             rotation.score.supporting.forEach {
                 Text(
                     "✓  " + it.text,
@@ -823,7 +842,16 @@ private fun Fingerprint(state: HuntState) {
                 Stat("Packets", "${state.packets}", "heard")
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
+            // The gaps this device actually produced. The interval is one of the six
+            // signals, and a number on its own asks to be taken on trust.
+            Heartbeat(
+                gaps = traits.gaps,
+                baseMs = traits.intervalMs,
+                jitter = traits.intervalJitter,
+            )
+
+            Spacer(Modifier.height(12.dp))
 
             val staticAddress = traits.addressType == AddressType.RANDOM_STATIC
             Section(
