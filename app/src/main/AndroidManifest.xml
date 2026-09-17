@@ -38,6 +38,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <!-- Time-of-flight ranging. Most phones have no such radio, so the app must install
+         and run without it and True Ranging says so on its own screen. -->
+    <uses-feature android:name="android.hardware.wifi.rtt" android:required="false" />
 
     <application
         android:name=".SigEyeApplication"

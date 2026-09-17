@@ -44,6 +44,7 @@ import com.sigeye.experiments.polarization.PolarizationScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
+import com.sigeye.experiments.ranging.RangingScreen
 import com.sigeye.experiments.rotation.RotationScreen
 import com.sigeye.experiments.rotationlab.RotationLabScreen
 import com.sigeye.experiments.settings.SettingsScreen
@@ -253,6 +254,9 @@ private fun Screen(
 
         Experiments.ROTATION_LAB ->
             RotationLabScreen(onBack = goBack, modifier = inset)
+
+        Experiments.RTT ->
+            RangingScreen(onBack = goBack, modifier = inset)
 
         Experiments.FOLLOW -> FollowScreen(
             onBack = goBack,

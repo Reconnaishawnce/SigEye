@@ -99,6 +99,7 @@ object Experiments {
     const val FOLLOWING = "following"
     const val ROTATION_LAB = "rotationlab"
     const val FOLLOW = "follow"
+    const val RTT = "rtt"
 
     val all: List<Experiment> = listOf(
 
@@ -764,14 +765,41 @@ object Experiments {
                 "answer: your kitchen Wi-Fi problem is somewhere else.",
         ),
         Experiment(
-            id = "rtt",
-            title = "True Ranging (Wi-Fi RTT)",
-            blurb = "Distance by timing light, not by guessing from loudness.",
-            teaches = "802.11mc measures time of flight in centimetres. Put it beside an " +
-                "RSSI estimate and the gap is the whole lesson.",
+            id = RTT,
+            title = "True Ranging",
+            blurb = "Distance by timing light, rather than by guessing from loudness.",
+            teaches = "Every other distance in this app is loudness put through a model " +
+                "whose key number was chosen rather than measured. 802.11mc times how long " +
+                "light took. Putting the two beside each other says how wrong the model is " +
+                "in this room, which is the only external check this app has.",
             category = Experiment.Category.PHYSICS,
-            status = Experiment.Status.DEVELOPMENT,
-            needs = "802.11mc support on both this phone and the access point.",
+            status = Experiment.Status.BETA,
+            needs = "802.11mc on this phone and on the access point. Most phones do not " +
+                "have it, and most access points do not either - Pixels from the 3 onward " +
+                "mostly do, and Google Nest Wifi and a lot of recent mesh kit answer.",
+            howTo = listOf(
+                "Stand somewhere with a few access points at different distances. Two in " +
+                    "the same room and one down the hall is ideal.",
+                "Wait for the count of willing access points to settle.",
+                "Press measure. The phone transmits for this one, which is the only " +
+                    "experiment here that does.",
+                "Read the bars. The bar is what the radio timed; the mark on it is where " +
+                    "loudness thought the same access point was.",
+                "Walk to a different spot and measure again. The exponent is fitted across " +
+                    "distances, so readings all taken at one range say nothing.",
+            ),
+            reading = "The exponent is the number the rest of the app assumes. Two is open " +
+                "air, three or so is a normal room, four is walls. Fitted against timed " +
+                "distances it becomes a measurement of this room rather than a convention, " +
+                "and a gap of more than about 0.3 from the assumed value is why proximity " +
+                "features have been putting things in the wrong place here.",
+            limits = "Both ends have to support 802.11mc, which most access points do not, " +
+                "and there is no way to talk one into it. A blocked direct path makes " +
+                "ranging read long rather than fail, because the first arrival went the " +
+                "long way round - so a large spread on a reading matters more than the " +
+                "reading. And this only ever ranges access points, so it says nothing " +
+                "directly about the Bluetooth distances everywhere else in the app; what " +
+                "it calibrates is the model they share.",
         ),
         Experiment(
             id = "linkbudget",
@@ -1060,6 +1088,7 @@ object Experiments {
      */
     val featuredReasons: Map<String, String> = mapOf(
         ROTATION to "Follow a phone across the address changes meant to stop you.",
+        RTT to "Measure a distance by timing light, and catch the app guessing.",
         TRAIN_SPOTTER to "Count carriages going past from the signals inside them.",
         RADAR to "Everything around you, at the range it is at, live.",
         FORENSICS to "Record a place, then go through what was there afterwards.",
