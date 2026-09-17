@@ -101,6 +101,7 @@ object Experiments {
     const val FOLLOW = "follow"
     const val RTT = "rtt"
     const val SKY = "sky"
+    const val WEATHER = "weather"
 
     val all: List<Experiment> = listOf(
 
@@ -766,6 +767,37 @@ object Experiments {
                 "answer: your kitchen Wi-Fi problem is somewhere else.",
         ),
         Experiment(
+            id = WEATHER,
+            title = "Radio Weather",
+            blurb = "How much radio is landing on this phone, and what it is coming from.",
+            teaches = "Every transmitter in earshot, added up the only way decibels can be " +
+                "added, and split by which radio it came from. The shape matters more than " +
+                "the total: one cell tower usually outweighs every Wi-Fi and Bluetooth " +
+                "device in the building put together.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.BETA,
+            howTo = listOf(
+                "Stand still and let it settle for half a minute.",
+                "Read the split rather than the total. Which radio dominates is the " +
+                    "interesting number and it is rarely the one people expect.",
+                "Walk into a different sort of place - a basement, a train, a high street - " +
+                    "and watch the shape change more than the size.",
+                "Turn your own Wi-Fi off and watch nothing happen, because this counts " +
+                    "other people's transmitters rather than yours.",
+            ),
+            reading = "Busy and quiet differ by a factor of thousands in power and both sit " +
+                "far below any published exposure limit, which is why this says busy or " +
+                "quiet and never safe or unsafe. Decibels are logarithms: two transmitters " +
+                "at -70 arrive together as -67, not -140.",
+            limits = "This is not an exposure meter and cannot be turned into one. It " +
+                "ignores duty cycle, so an access point sitting idle and one running flat " +
+                "out read the same. RSSI is uncalibrated and moves several decibels with " +
+                "the hand holding the phone. And the largest transmitter near you is this " +
+                "phone's own uplink, which no application programming interface on any " +
+                "handset will report - so the thing people install a meter to measure is " +
+                "the one thing a phone cannot measure.",
+        ),
+        Experiment(
             id = SKY,
             title = "Satellites Overhead",
             blurb = "Every satellite your phone can hear, and which ones it trusts.",
@@ -1124,6 +1156,7 @@ object Experiments {
         ROTATION to "Follow a phone across the address changes meant to stop you.",
         RTT to "Measure a distance by timing light, and catch the app guessing.",
         SKY to "See every satellite overhead, and which ones your phone actually trusts.",
+        WEATHER to "Add up every radio landing on this phone, honestly.",
         TRAIN_SPOTTER to "Count carriages going past from the signals inside them.",
         RADAR to "Everything around you, at the range it is at, live.",
         FORENSICS to "Record a place, then go through what was there afterwards.",

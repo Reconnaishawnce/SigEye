@@ -53,6 +53,7 @@ import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.vulnerability.VulnerabilityScreen
 import com.sigeye.experiments.watchlist.WatchlistScreen
+import com.sigeye.experiments.weather.RadioWeatherScreen
 import com.sigeye.experiments.wifi.WifiScreen
 import com.sigeye.home.HomeScreen
 import com.sigeye.ui.SigEyeTheme
@@ -261,6 +262,9 @@ private fun Screen(
 
         Experiments.SKY ->
             SkyScreen(onBack = goBack, modifier = inset)
+
+        Experiments.WEATHER ->
+            RadioWeatherScreen(onBack = goBack, modifier = inset)
 
         Experiments.FOLLOW -> FollowScreen(
             onBack = goBack,
