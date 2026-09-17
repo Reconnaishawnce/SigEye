@@ -100,6 +100,7 @@ object Experiments {
     const val ROTATION_LAB = "rotationlab"
     const val FOLLOW = "follow"
     const val RTT = "rtt"
+    const val SKY = "sky"
 
     val all: List<Experiment> = listOf(
 
@@ -765,6 +766,39 @@ object Experiments {
                 "answer: your kitchen Wi-Fi problem is somewhere else.",
         ),
         Experiment(
+            id = SKY,
+            title = "Satellites Overhead",
+            blurb = "Every satellite your phone can hear, and which ones it trusts.",
+            teaches = "The faintest radio a phone receives by a wide margin, arriving from " +
+                "twenty thousand kilometres up weaker than the noise of the chip hearing " +
+                "it. The plot shows what is above you, what is in the fix, and the shape " +
+                "of whatever is standing in the way.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.BETA,
+            howTo = listOf(
+                "Go outside, or stand at a window. Indoors this finds very little, which " +
+                    "is itself the demonstration.",
+                "Give it a minute. A receiver has to work out which satellites are up " +
+                    "there before it can place any of them.",
+                "Read the plot. The middle is straight up, the rim is the horizon, and a " +
+                    "bare patch is whatever is in the way on that side.",
+                "Look for the L5 marks in the list. A phone that hears a second frequency " +
+                    "is metres better in a city than one that does not.",
+                "Walk to the other side of a building and watch the bare patch move.",
+            ),
+            reading = "The number that matters is how many are used rather than how many " +
+                "are heard. A position needs four: three for where you are and a fourth " +
+                "for how wrong the phone's own clock is. Carrier to noise is given in " +
+                "dB-Hz and is not comparable to the dBm anywhere else in this app - 45 " +
+                "dB-Hz is a strong satellite arriving at about -155 dBm.",
+            limits = "This reads what the receiver reports and cannot check it. A phone " +
+                "being deceived by a spoofed signal would show that signal here looking " +
+                "healthy, because the deception happens below anything an app can see. " +
+                "Elevation and azimuth come from the almanac rather than from measurement, " +
+                "so they are where a satellite should be. Nothing here requests a position " +
+                "or records one.",
+        ),
+        Experiment(
             id = RTT,
             title = "True Ranging",
             blurb = "Distance by timing light, rather than by guessing from loudness.",
@@ -1089,6 +1123,7 @@ object Experiments {
     val featuredReasons: Map<String, String> = mapOf(
         ROTATION to "Follow a phone across the address changes meant to stop you.",
         RTT to "Measure a distance by timing light, and catch the app guessing.",
+        SKY to "See every satellite overhead, and which ones your phone actually trusts.",
         TRAIN_SPOTTER to "Count carriages going past from the signals inside them.",
         RADAR to "Everything around you, at the range it is at, live.",
         FORENSICS to "Record a place, then go through what was there afterwards.",

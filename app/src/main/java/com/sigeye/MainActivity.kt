@@ -48,6 +48,7 @@ import com.sigeye.experiments.ranging.RangingScreen
 import com.sigeye.experiments.rotation.RotationScreen
 import com.sigeye.experiments.rotationlab.RotationLabScreen
 import com.sigeye.experiments.settings.SettingsScreen
+import com.sigeye.experiments.sky.SkyScreen
 import com.sigeye.experiments.speed.SpeedScreen
 import com.sigeye.experiments.trainspotter.TrainSpotterScreen
 import com.sigeye.experiments.vulnerability.VulnerabilityScreen
@@ -257,6 +258,9 @@ private fun Screen(
 
         Experiments.RTT ->
             RangingScreen(onBack = goBack, modifier = inset)
+
+        Experiments.SKY ->
+            SkyScreen(onBack = goBack, modifier = inset)
 
         Experiments.FOLLOW -> FollowScreen(
             onBack = goBack,
