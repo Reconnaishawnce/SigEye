@@ -6,6 +6,9 @@
          unfiltered scans and we already hold FINE_LOCATION for API 26-30 anyway. -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Blink is the only experiment that transmits. Asked for here because the manifest
+         has to declare it, and requested at runtime only on that screen. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
     <!-- Android 11 and below -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />

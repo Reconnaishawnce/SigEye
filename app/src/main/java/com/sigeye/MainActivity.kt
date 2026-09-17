@@ -24,6 +24,7 @@ import com.sigeye.core.Recordings
 import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.bands.BandsScreen
 import com.sigeye.experiments.beacons.BeaconScreen
+import com.sigeye.experiments.blink.BlinkScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.convoy.ConvoyScreen
@@ -265,6 +266,9 @@ private fun Screen(
 
         Experiments.WEATHER ->
             RadioWeatherScreen(onBack = goBack, modifier = inset)
+
+        Experiments.BLINK ->
+            BlinkScreen(onBack = goBack, modifier = inset)
 
         Experiments.FOLLOW -> FollowScreen(
             onBack = goBack,

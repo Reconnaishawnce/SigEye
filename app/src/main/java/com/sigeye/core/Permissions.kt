@@ -43,6 +43,20 @@ object Permissions {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
     }.toTypedArray()
 
+    /**
+     * What Blink needs on top of everything else.
+     *
+     * Kept out of [required] deliberately. Thirty-five experiments listen and one
+     * transmits, and asking every user of this app for permission to broadcast because one
+     * screen does would be asking for more than the app generally needs.
+     */
+    fun advertising(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.BLUETOOTH_ADVERTISE)
+        } else {
+            emptyArray()
+        }
+
     fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 

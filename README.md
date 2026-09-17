@@ -2,7 +2,7 @@
 
 Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
 
-Thirty-six of them, from *how many dB does a crisp packet block* to *follow one phone
+Thirty-seven of them, from *how many dB does a crisp packet block* to *follow one phone
 through the address changes designed to stop you*. Everything runs on the phone. No
 network code, no accounts, no analytics, nothing leaves the device.
 
@@ -17,7 +17,7 @@ Every experiment carries one of three states, and the home screen shows it.
 - **Active** — run on real hardware, in the real world, and behaved.
   27 of them are.
 - **Beta** — complete and tested, but never yet run anywhere but a build server.
-  5 of them are, marked *(beta)* below.
+  6 of them are, marked *(beta)* below.
 - **In development** — described and not built, and tapping one does nothing.
   4 of them are, marked *(soon)* below. They are listed on purpose: a list of what is
   planned is more honest than a list that pretends the app is finished.
@@ -70,6 +70,7 @@ home screen.
 | **True Ranging** *(beta)* | Distance by timing light, rather than by guessing from loudness. |
 | **Satellites Overhead** *(beta)* | Every satellite your phone can hear, and which ones it trusts. |
 | **Radio Weather** *(beta)* | How much radio is landing on this phone, and what it is coming from. |
+| **Blink** *(beta)* | Send a message between two phones using only silence and its absence. |
 | **Two-Phone Link Budget** *(soon)* | Two phones, a known distance, and what the link actually costs. |
 
 ### What is being broadcast

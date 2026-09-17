@@ -102,6 +102,7 @@ object Experiments {
     const val RTT = "rtt"
     const val SKY = "sky"
     const val WEATHER = "weather"
+    const val BLINK = "blink"
 
     val all: List<Experiment> = listOf(
 
@@ -767,6 +768,37 @@ object Experiments {
                 "answer: your kitchen Wi-Fi problem is somewhere else.",
         ),
         Experiment(
+            id = BLINK,
+            title = "Blink",
+            blurb = "Send a message between two phones using only silence and its absence.",
+            teaches = "A Bluetooth advertisement has a payload and this uses none of it. " +
+                "Every packet is identical and the message is carried entirely in whether " +
+                "the radio is transmitting during each half second, which is the same " +
+                "channel Follow Me and Defeating Randomization read by accident.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.BETA,
+            needs = "Two phones. One transmits and one listens, and some chipsets receive " +
+                "Bluetooth perfectly well while refusing to advertise it.",
+            howTo = listOf(
+                "Open this on both phones and put them a few feet apart.",
+                "On one, stay on Send, type a short message and press send.",
+                "On the other, switch to Listen. Watch the packet train fill in before any " +
+                    "letters appear - the receiver has to find the slot boundaries first.",
+                "Read the message as it arrives, a character every few seconds.",
+                "Send it again with a shorter slot and watch it start to break.",
+            ),
+            reading = "Roughly two bits a second, which is about a character every three " +
+                "and a half seconds and slower than a person sending morse by hand. A " +
+                "character arriving with its parity wrong is drawn as a block rather than " +
+                "quietly becoming a different letter.",
+            limits = "This is a demonstration and not a way to communicate. It is slow, it " +
+                "carries no encryption of any kind, anything in range can read it, and a " +
+                "wall between the phones will break it. The one piece of content in the " +
+                "packet is a marker saying which device to watch, because the address " +
+                "rotates partway through a long message and the sender cannot be " +
+                "recognized by address.",
+        ),
+        Experiment(
             id = WEATHER,
             title = "Radio Weather",
             blurb = "How much radio is landing on this phone, and what it is coming from.",
@@ -1157,6 +1189,7 @@ object Experiments {
         RTT to "Measure a distance by timing light, and catch the app guessing.",
         SKY to "See every satellite overhead, and which ones your phone actually trusts.",
         WEATHER to "Add up every radio landing on this phone, honestly.",
+        BLINK to "Send a sentence between two phones with no data in any packet.",
         TRAIN_SPOTTER to "Count carriages going past from the signals inside them.",
         RADAR to "Everything around you, at the range it is at, live.",
         FORENSICS to "Record a place, then go through what was there afterwards.",
