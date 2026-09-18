@@ -56,6 +56,7 @@ import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.rf.ProximityEstimator
 import com.sigeye.core.analysis.rf.ProximityReading
 import com.sigeye.core.analysis.rf.Trend
+import com.sigeye.core.ble.Arrivals
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
@@ -134,23 +135,36 @@ private fun Hunt(address: String) {
     var pathLoss by remember { mutableStateOf(2.0f) }
     var buzz by remember { mutableStateOf(true) }
     var stale by remember { mutableStateOf(false) }
+    var arrivals by remember(address) { mutableStateOf<List<Long>>(emptyList()) }
 
-    DisposableEffect(Unit) {
+    val health by BleScanHub.health.collectAsStateWithLifecycle()
+
+    DisposableEffect(address) {
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
-        onDispose { BleScanHub.release(HUB_TAG) }
+        // Everything else in the app wants the whole room. This screen wants one device,
+        // and asking the controller for one device by address is the difference between
+        // hearing it and hearing it occasionally when the air is busy.
+        BleScanHub.focus(address)
+        onDispose {
+            BleScanHub.focus(null)
+            BleScanHub.release(HUB_TAG)
+        }
     }
 
     LaunchedEffect(address) {
         BleScanHub.adverts.collect { advert ->
-            if (advert.address != address) return@collect
+            if (!advert.address.equals(address, ignoreCase = true)) return@collect
             estimator.pathLossExponent = pathLoss.toDouble()
             val next = estimator.observe(advert.rssi, advert.atMs)
             reading = next
             lastHeardMs = advert.atMs
+            arrivals = Arrivals.record(arrivals, advert.atMs)
             history = (history + next.smoothedRssi).takeLast(120)
         }
     }
+
+    val gapMs = remember(arrivals) { Arrivals.typicalGapMs(arrivals) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -188,6 +202,30 @@ private fun Hunt(address: String) {
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val trendColour by animateColorAsState(warm, tween(600), label = "trend")
+
+    Arrivals.advice(gapMs, health.crowded)?.let { advice ->
+        Card(
+            Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            ),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    Arrivals.describe(gapMs),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    advice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        }
+    }
 
     if (stale) {
         Card(

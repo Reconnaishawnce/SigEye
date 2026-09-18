@@ -133,9 +133,38 @@ data class ScanHealth(
      * report rather than a thing nobody notices for a month.
      */
     val claims: Set<String> = emptySet(),
+    /**
+     * Packets that have arrived from the radio and not yet been decoded.
+     *
+     * Decoding happens off the main thread, so a queue that stays empty means the phone is
+     * comfortably ahead of the air. One that stays deep means packets are being dropped,
+     * which is the measurable version of "this place is too busy".
+     */
+    val backlog: Int = 0,
+    /** The device under a hardware address filter of its own, if any. */
+    val focusedOn: String? = null,
     val error: String? = null,
 ) {
     /** Delivery has collapsed relative to what this phone managed a moment ago. */
     val starved: Boolean
         get() = scanning && referenceRate >= 1.0 && advertsPerSecond < referenceRate * 0.25
+
+    /**
+     * Busy enough that the phone, not the radio, is the limit.
+     *
+     * Two symptoms of the same thing. A deep queue is the direct evidence and is worth
+     * trusting on its own. The rate is the early warning: a few hundred packets a second
+     * is a concourse rather than a room, and a screen showing one device should say so
+     * before somebody concludes the app is broken.
+     */
+    val crowded: Boolean
+        get() = scanning && (backlog > BUSY_BACKLOG || advertsPerSecond >= BUSY_RATE)
+
+    companion object {
+        /** Packets queued for decoding before the crowd is worth mentioning. */
+        const val BUSY_BACKLOG = 256
+
+        /** Packets a second that no ordinary room produces. */
+        const val BUSY_RATE = 250.0
+    }
 }
