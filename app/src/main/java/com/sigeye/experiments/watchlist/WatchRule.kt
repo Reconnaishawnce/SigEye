@@ -2,6 +2,8 @@ package com.sigeye.experiments.watchlist
 
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.Vendors
+import com.sigeye.core.analysis.surveillance.Certainty
+import com.sigeye.core.analysis.surveillance.Surveillance
 import com.sigeye.core.ble.Advert
 
 /**
@@ -45,6 +47,11 @@ enum class MatchKind(val label: String, val hint: String) {
         "Anything on a list",
         "Every device you have added to one of your lists.",
     ),
+    SURVEILLANCE(
+        "Known surveillance hardware",
+        "Anything SigEye can recognize - Flock camera batteries, Axon gear. The value is " +
+            "the weakest match worth an alert: CONFIRMED, LIKELY or POSSIBLE.",
+    ),
     ;
 }
 
@@ -87,6 +94,14 @@ data class WatchRule(
 
             MatchKind.LIST ->
                 book.listsOf(advert.address).contains(needle)
+
+            MatchKind.SURVEILLANCE -> {
+                // One rule for every signature the app knows, rather than a rule per
+                // company identifier that somebody has to come back and edit each time a
+                // vendor changes a name. Flock did exactly that in March 2025.
+                val sighting = Surveillance.fromBle(advert)
+                sighting != null && sighting.certainty.ordinal <= floorOf(needle).ordinal
+            }
         }
     }
 
@@ -105,6 +120,11 @@ data class WatchRule(
     }
 
     companion object {
+        /** The weakest certainty an alert is worth. Anything unreadable means confirmed only. */
+        fun floorOf(raw: String): Certainty =
+            runCatching { Certainty.valueOf(raw.trim().uppercase()) }
+                .getOrDefault(Certainty.CONFIRMED)
+
         fun normalizeOui(raw: String): String =
             raw.uppercase().replace('-', ':').filter { it.isLetterOrDigit() || it == ':' }
                 .split(':').filter { it.isNotEmpty() }.take(3).joinToString(":")
@@ -115,19 +135,20 @@ data class WatchRule(
         }
 
         /**
-         * Seeded on first run. Axon's IEEE block is 00:25:DF, verified against the
-         * registry - their only one, registered originally as TASER International.
+         * What a new install starts with, and what an existing one gains on upgrade.
          *
-         * It covers docks, TASERs and fleet gear as well as body cameras, and a hit says
-         * nothing about whether anything is recording. The rule label says so, because
-         * that caveat needs to travel with the alert rather than live in a README.
+         * Ids are permanent. [WatchStore] remembers which of these it has already offered,
+         * so a rule deleted on purpose stays deleted while a genuinely new one still
+         * arrives. Adding to this list is therefore safe; renaming an id is not.
          */
         fun defaults(): List<WatchRule> = listOf(
             WatchRule(
-                id = "axon-oui",
-                label = "Axon hardware",
-                kind = MatchKind.OUI,
-                value = Vendors.AXON_OUI,
+                id = "surveillance-known",
+                label = "Surveillance hardware",
+                kind = MatchKind.SURVEILLANCE,
+                value = Certainty.LIKELY.name,
+                // Quiet enough to mean "on this street" rather than "in this district",
+                // since the point of the alert is to be able to look up and see the thing.
                 minRssi = -95,
                 cooldownSeconds = 300,
             ),
@@ -149,6 +170,21 @@ data class WatchRule(
                 minRssi = -85,
                 cooldownSeconds = 600,
             ),
+        )
+        /**
+         * The Axon rule that shipped before [MatchKind.SURVEILLANCE] existed.
+         *
+         * Superseded rather than deleted: the new rule catches the same block and explains
+         * itself better. [WatchStore] drops this one only if it is untouched, because a
+         * copy somebody has edited is theirs.
+         */
+        val RETIRED_AXON_OUI = WatchRule(
+            id = "axon-oui",
+            label = "Axon hardware",
+            kind = MatchKind.OUI,
+            value = Vendors.AXON_OUI,
+            minRssi = -95,
+            cooldownSeconds = 300,
         )
     }
 }

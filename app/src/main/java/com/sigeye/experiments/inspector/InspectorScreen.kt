@@ -49,6 +49,7 @@ import com.sigeye.core.IgnoreList
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Vendors
+import com.sigeye.core.analysis.surveillance.Certainty
 import com.sigeye.core.ble.Appearance
 import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
@@ -167,6 +168,17 @@ private fun Live(onLocate: (String) -> Unit) {
     if (health.starved) {
         Banner("Signal starved. Restarting the scan automatically.", error = true)
     }
+    // Strongest first, so a confirmed camera battery is not hidden behind a maybe.
+    devices.mapNotNull { it.sighting }
+        .minByOrNull { it.certainty.ordinal }
+        ?.let { seen ->
+            Banner(
+                "${seen.certainty.label}: ${seen.product}. ${seen.why}." +
+                    (seen.caveat?.let { " $it" } ?: ""),
+                error = seen.certainty != Certainty.POSSIBLE,
+            )
+        }
+
     devices.firstNotNullOfOrNull { device ->
         Vendors.surveillanceNote(device.address, device.companyId, device.name)
     }?.let { note -> Banner(note, error = true) }
@@ -543,6 +555,33 @@ private fun DeviceDetail(
                     Field("Service data ${uuid.take(8)}", bytes.toHex())
                 }
                 device.manufacturerData?.let { Field("Mfg data", it.toHex()) }
+
+                device.sighting?.let { seen ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${seen.certainty.label.uppercase(Locale.US)} · ${seen.product}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        seen.why,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    // The serial is the durable identity. The address beside it is not,
+                    // so the two deserve different treatment on screen.
+                    seen.serial?.let { serial ->
+                        Field("Serial (survives rotation)", serial)
+                    }
+                    seen.caveat?.let { caveat ->
+                        Text(
+                            caveat,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
                 Vendors.surveillanceNote(
                     device.address,

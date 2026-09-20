@@ -1,6 +1,8 @@
 package com.sigeye.experiments.inspector
 
 import com.sigeye.core.Vendors
+import com.sigeye.core.analysis.surveillance.Sighting
+import com.sigeye.core.analysis.surveillance.Surveillance
 import com.sigeye.core.ble.Advert
 
 /**
@@ -30,9 +32,19 @@ data class SeenDevice(
 
     val isAxon: Boolean get() = Vendors.isAxon(address)
 
-    /** Worth highlighting in the list: a vendor we have something to say about. */
+    /**
+     * Surveillance hardware this device has identified itself as, if any.
+     *
+     * Built from the accumulated record rather than from one packet, which matters for
+     * Flock battery packs: the name and the manufacturer data arrive in different frames,
+     * so a single advertisement often has one and not the other.
+     */
+    val sighting: Sighting?
+        get() = Surveillance.fromBle(address, name, companyId, manufacturerData)
+
+    /** Worth highlighting in the list: something we have a thing to say about. */
     val flagged: Boolean
-        get() = Vendors.surveillanceNote(address, companyId, name) != null
+        get() = sighting != null || Vendors.surveillanceNote(address, companyId, name) != null
 
     /** Best label when the user has not supplied one of their own. */
     val fallbackName: String

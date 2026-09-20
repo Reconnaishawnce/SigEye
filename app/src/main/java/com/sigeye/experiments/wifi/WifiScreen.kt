@@ -34,9 +34,10 @@ import com.sigeye.core.Experiments
 import com.sigeye.core.OuiRegistry
 import com.sigeye.core.Permissions
 import com.sigeye.core.wifi.AccessPoint
-import com.sigeye.core.wifi.Confidence
+import com.sigeye.core.analysis.surveillance.Certainty
+import com.sigeye.core.analysis.surveillance.Sighting
+import com.sigeye.core.analysis.surveillance.Surveillance
 import com.sigeye.core.wifi.WifiScanHub
-import com.sigeye.core.wifi.WifiSurveillance
 import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
@@ -105,9 +106,9 @@ private fun Live() {
     }
 
     val flagged = state.results.mapNotNull { access ->
-        WifiSurveillance.match(access.bssid, access.ssid)?.let { access to it }
+        Surveillance.fromWifi(access.bssid, access.ssid)?.let { access to it }
     }
-    val strong = flagged.count { it.second.confidence == Confidence.STRONG }
+    val strong = flagged.count { it.second.certainty != Certainty.POSSIBLE }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -165,8 +166,8 @@ private fun Live() {
         diagnostics = listOf(
             Diagnostic("Networks", "${state.results.size}", "access points"),
             Diagnostic("Scans", "${state.scans}", "since opening"),
-            Diagnostic("Strong", "$strong", "registry matches"),
-            Diagnostic("Weak", "${flagged.size - strong}", "hints only"),
+            Diagnostic("Named", "$strong", "hardware or scheme"),
+            Diagnostic("Hints", "${flagged.size - strong}", "self-reported"),
             Diagnostic("Hidden", "${state.results.count { it.hidden }}", "no name"),
             Diagnostic("Open", "${state.results.count { it.open }}", "no encryption"),
         ),
@@ -193,7 +194,7 @@ private fun Live() {
 
     shown.forEach { access ->
         Spacer(Modifier.height(8.dp))
-        AccessPointCard(access, WifiSurveillance.match(access.bssid, access.ssid))
+        AccessPointCard(access, Surveillance.fromWifi(access.bssid, access.ssid))
     }
 
     Spacer(Modifier.height(14.dp))
@@ -206,9 +207,9 @@ private fun Live() {
 @Composable
 private fun AccessPointCard(
     access: AccessPoint,
-    match: com.sigeye.core.wifi.WifiMatch?,
+    match: Sighting?,
 ) {
-    val strong = match?.confidence == Confidence.STRONG
+    val strong = match != null && match.certainty != Certainty.POSSIBLE
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -251,7 +252,7 @@ private fun AccessPointCard(
             Text(
                 listOfNotNull(
                     access.security,
-                    OuiRegistry.lookup(WifiSurveillance.ouiOf(access.bssid)),
+                    OuiRegistry.lookup(Surveillance.ouiOf(access.bssid)),
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -261,7 +262,8 @@ private fun AccessPointCard(
             match?.let {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    it.confidence.label.uppercase(Locale.US) + " · " + it.reason,
+                    it.certainty.label.uppercase(Locale.US) + " · " + it.product +
+                        " · " + it.why,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (strong) {

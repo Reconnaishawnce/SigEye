@@ -57,8 +57,12 @@ class WatchStore private constructor(context: Context) {
 
     private fun load(): List<WatchRule> {
         val raw = prefs.getString(KEY_RULES, null)
-            ?: return WatchRule.defaults().also { seed -> persist(seed) }
-        return runCatching {
+            ?: return WatchRule.defaults().also { seed ->
+                persist(seed)
+                rememberOffered()
+            }
+        return adopt(
+            runCatching {
             val array = JSONArray(raw)
             (0 until array.length()).mapNotNull { index ->
                 val obj = array.getJSONObject(index)
@@ -75,7 +79,22 @@ class WatchStore private constructor(context: Context) {
                     notify = obj.optBoolean("notify", true),
                 )
             }
-        }.getOrDefault(WatchRule.defaults())
+            }.getOrDefault(WatchRule.defaults()),
+        )
+    }
+
+    /** Storage around [WatchDefaults], which decides what an upgrade should change. */
+    private fun adopt(existing: List<WatchRule>): List<WatchRule> {
+        val offered = prefs.getStringSet(KEY_OFFERED, emptySet()).orEmpty()
+        val next = WatchDefaults.adopt(existing, offered)
+        if (next != existing) persist(next)
+        rememberOffered(offered)
+        return next
+    }
+
+    private fun rememberOffered(offered: Set<String> = prefs.getStringSet(KEY_OFFERED, emptySet()).orEmpty()) {
+        val all = WatchDefaults.offeredAfter(offered)
+        if (all != offered) prefs.edit().putStringSet(KEY_OFFERED, all).apply()
     }
 
     private fun save() = persist(_rules.value)
@@ -100,6 +119,9 @@ class WatchStore private constructor(context: Context) {
 
     companion object {
         private const val KEY_RULES = "rules"
+
+        /** Default rule ids this install has already been given, deleted or not. */
+        private const val KEY_OFFERED = "offered_default_ids"
         private const val KEY_ARMED = "armed"
         private const val MAX_HITS = 200
 

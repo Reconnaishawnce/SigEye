@@ -54,7 +54,7 @@ object ScanFilters {
         0x00D2, // Dialog Semiconductor
         0x0171, // Amazon
         0x03DA, // Tile
-        0x09C8, // XUNTONG - the tyre sensors
+        0x09C8, // XUNTONG - tyre sensors, and Flock Safety camera batteries
     )
 
     /**
