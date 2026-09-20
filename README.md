@@ -2,7 +2,7 @@
 
 Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
 
-Thirty-seven of them, from *how many dB does a crisp packet block* to *follow one phone
+Thirty-eight of them, from *how many dB does a crisp packet block* to *follow one phone
 through the address changes designed to stop you*. Everything runs on the phone. No
 network code, no accounts, no analytics, nothing leaves the device.
 
@@ -15,7 +15,7 @@ a plain public APK download, no login and no zip. See [INSTALL.md](INSTALL.md).
 Every experiment carries one of three states, and the home screen shows it.
 
 - **Active** — run on real hardware, in the real world, and behaved.
-  27 of them are.
+  28 of them are.
 - **Beta** — complete and tested, but never yet run anywhere but a build server.
   6 of them are, marked *(beta)* below.
 - **In development** — described and not built, and tapping one does nothing.
@@ -41,7 +41,6 @@ home screen.
 | **Proximity Radar** | Everything around you, arranged by how close it sounds. |
 | **Signal Watch** | Alerts when something you care about comes into range. |
 | **Forensics** | Record everything, then work out afterwards what mattered. |
-| **Persistent Tracking** | Keep a device's name attached to it after it changes address. |
 
 ### Counting and sensing — who and what is moving past
 
@@ -77,14 +76,16 @@ home screen.
 
 | | |
 |---|---|
-| **Defeating Randomization** | Follow one phone through its address changes, and check whether it worked. |
-| **Rotation Lab** | A whole room's address privacy, grouped by maker and measured by clock. |
+| **Identity** | Recognize a device after it changes the address meant to hide it. One screen, four modes: |
+| &nbsp;&nbsp;↳ **Defeating Randomization** | Follow one phone through its address changes, and check whether it worked. |
+| &nbsp;&nbsp;↳ **Rotation Lab** | A whole room's address privacy, grouped by maker and measured by clock. |
+| &nbsp;&nbsp;↳ **Persistent Tracking** | Keep a device's name attached to it after it changes address. |
 | **Exposure Scan** | Insecure and over-sharing things in range, from what they broadcast. |
 | **Wi-Fi Survey** | Every network around you, and what its address gives away. |
 | **Bluetooth Explorer** | Ask a device what it has, and learn what the answers mean. |
 | **Beacon Decoder** | Reads the beacon formats hiding in the noise. |
 | **Traveling Companions** | Record here, then there, then somewhere else. What appears in all of it? |
-| **Follow Me** *(beta)* | Narrow a room down to the device travelling with somebody. |
+| &nbsp;&nbsp;↳ **Follow Me** *(beta)* | Narrow a room down to the device travelling with somebody. |
 
 ### Mapping
 

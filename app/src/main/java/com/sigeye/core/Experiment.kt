@@ -23,7 +23,20 @@ data class Experiment(
     val reading: String? = null,
     /** The honest limits. Shown in red, because this is the part that gets skipped. */
     val limits: String? = null,
+    /**
+     * The suite this is a mode of, if it is not a front door of its own.
+     *
+     * A member keeps its whole registry row - title, walkthrough, reading, limits - and
+     * loses only its card on the home screen. That is the point: the explainer a mode
+     * shows in its header is read from here by id, so consolidating four experiments into
+     * one screen must not mean four descriptions collapsing into one. What somebody can
+     * learn about rotation is the same before and after; there is one fewer thing to find
+     * on the way in.
+     */
+    val partOf: String? = null,
 ) {
+    /** Whether this gets a card of its own, or is reached through [partOf]. */
+    val standalone: Boolean get() = partOf == null
     /**
      * How much this experiment has been put through.
      *
@@ -99,6 +112,7 @@ object Experiments {
     const val FOLLOWING = "following"
     const val ROTATION_LAB = "rotationlab"
     const val FOLLOW = "follow"
+    const val IDENTITY = "identity"
     const val RTT = "rtt"
     const val SKY = "sky"
     const val WEATHER = "weather"
@@ -109,6 +123,7 @@ object Experiments {
         // ------------------------------------------------------------- tools
         Experiment(
             id = FOLLOWING,
+            partOf = IDENTITY,
             title = "Persistent Tracking",
             blurb = "Keep a device's name attached to it after it changes address.",
             teaches = "A nickname sticks to an address. A phone changes its address every " +
@@ -954,7 +969,47 @@ object Experiments {
 
         // ----------------------------------------------------------- privacy
         Experiment(
+            id = IDENTITY,
+            title = "Identity",
+            blurb = "Recognize a device after it changes the address meant to hide it.",
+            teaches = "Address randomization is one countermeasure against one attack, and " +
+                "everything else a radio gives away is untouched by it. The shape of an " +
+                "advertisement, how often it is sent, the signal fading as somebody walks " +
+                "off, the gap between one address going quiet and another arriving: none " +
+                "of those rotate. Four ways of using that, sharing one screen because " +
+                "they are one idea.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.ACTIVE,
+            needs = "Bluetooth, and for the more involved modes your own phone plus " +
+                "somewhere to walk. Every mode says what it needs when you open it.",
+            howTo = listOf(
+                "Defeat starts you off. Pick your own phone, learn its fingerprint, and " +
+                    "watch what happens when the address changes. It explains itself as " +
+                    "it goes and it is the one to show somebody else.",
+                "Lab is the room rather than the device. It splits everything in range by " +
+                    "maker and times how often each fleet rotates, which is how you find " +
+                    "out that fifteen minutes is a default and not a rule.",
+                "Follow is the field exercise. Walk with somebody who agreed to it and " +
+                    "watch a whole street narrow down to the one phone that came along.",
+                "Watch is the quiet one. Put a name on a device and this keeps the name " +
+                    "attached across the changes, and says so when it cannot be sure.",
+                "A device pinned in one mode stays pinned in the others, so you can find " +
+                    "something in Lab and take it straight into Defeat.",
+            ),
+            reading = "Every mode reports confidence rather than a verdict, because none " +
+                "of this is proof. The walk-away test in Defeat is the only part that is " +
+                "not inference: if a link is real, carrying the phone out of range makes " +
+                "both addresses fade together, and a link it disproves is worth more than " +
+                "one it supports.",
+            limits = "A well-implemented device defeats all of this, and saying so is the " +
+                "point. iOS rotates its payload alongside its address on the same " +
+                "schedule, which is the correct way to do it. A plain advertisement " +
+                "carrying nothing distinctive cannot be matched at all, and the app says " +
+                "so rather than guessing.",
+        ),
+        Experiment(
             id = FOLLOW,
+            partOf = IDENTITY,
             title = "Follow Me",
             blurb = "Narrow a whole street down to the one device traveling with you.",
             teaches = "You do not need to know anything about a phone in advance to follow " +
@@ -994,6 +1049,7 @@ object Experiments {
         ),
         Experiment(
             id = ROTATION_LAB,
+            partOf = IDENTITY,
             title = "Rotation Lab",
             blurb = "A whole room's address privacy, grouped by maker and measured by clock.",
             teaches = "Rotation is a firmware decision, so a maker's whole fleet behaves the " +
@@ -1122,6 +1178,7 @@ object Experiments {
         ),
         Experiment(
             id = ROTATION,
+            partOf = IDENTITY,
             title = "Defeating Randomization",
             blurb = "Follow one phone through its address changes, and check whether it worked.",
             teaches = "An address changes every quarter of an hour, but the shape of the " +
@@ -1159,6 +1216,9 @@ object Experiments {
 
     fun byId(id: String): Experiment? = all.firstOrNull { it.id == id }
 
+    /** The modes of a suite, in registry order. Empty for an ordinary experiment. */
+    fun membersOf(id: String): List<Experiment> = all.filter { it.partOf == id }
+
     /**
      * What a new install starts with starred.
      *
@@ -1173,7 +1233,7 @@ object Experiments {
      * where they belong is a maze.
      */
     val featuredIds: List<String> =
-        listOf(FOLLOW, ROTATION, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
+        listOf(IDENTITY, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
 
     /** Why each featured experiment earned the spot, in a few words. */
     /**
@@ -1218,6 +1278,7 @@ object Experiments {
         MICROWAVE to "Watch a microwave flatten the band your Wi-Fi is on.",
         CELLS to "See how often your phone hands you to a different tower.",
         FOLLOW to "Narrow a street down to the one phone that is coming with you.",
+        IDENTITY to "Follow a phone through the address changes meant to stop you.",
     )
 
     /**
@@ -1235,6 +1296,7 @@ object Experiments {
             .map { category ->
                 category to all
                     .filter { it.category == category }
+                    .filter { it.standalone }
                     .filter { includeUnbuilt || it.status.openable }
                     .sortedBy { it.status.ordinal }
             }

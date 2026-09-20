@@ -61,7 +61,41 @@ class ExperimentRegistryTest {
     @Test
     fun `every experiment belongs to a category that is actually shown`() {
         val shown = Experiments.byCategory().flatMap { it.second }.map { it.id }.toSet()
-        assertEquals(Experiments.all.map { it.id }.toSet(), shown)
+        val standalone = Experiments.all.filter { it.standalone }.map { it.id }.toSet()
+
+        assertEquals(standalone, shown)
+    }
+
+    @Test
+    fun `nothing is unreachable, so a mode of a suite is still openable`() {
+        // The consolidation moved four experiments off the home screen and into one
+        // screen. Off the home screen has to mean inside something, not gone.
+        Experiments.all.filterNot { it.standalone }.forEach { member ->
+            val suite = Experiments.byId(member.partOf!!)
+            assertNotNull("${member.id} claims to be part of ${member.partOf}", suite)
+            assertTrue(
+                "${member.id} is inside ${suite!!.id}, which is not itself reachable",
+                suite.standalone,
+            )
+            assertTrue(
+                "${member.id} is a mode of a suite nobody can open",
+                suite.status.openable,
+            )
+        }
+    }
+
+    @Test
+    fun `a suite keeps its modes explaining themselves separately`() {
+        // The point of consolidating is one card instead of four, not four descriptions
+        // collapsing into one. Each mode still teaches what it taught.
+        val modes = Experiments.membersOf(Experiments.IDENTITY)
+
+        assertEquals(4, modes.size)
+        modes.forEach { mode ->
+            assertTrue(mode.id, mode.teaches.isNotBlank())
+            assertTrue(mode.id, mode.howTo.isNotEmpty())
+            assertTrue(mode.id, mode.limits != null || mode.reading != null)
+        }
     }
 
     @Test

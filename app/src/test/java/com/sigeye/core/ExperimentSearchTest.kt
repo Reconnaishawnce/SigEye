@@ -82,8 +82,9 @@ class ExperimentSearchTest {
             .flatMap { it.second }
         assertTrue(shown.isNotEmpty())
         assertTrue(shown.all { it.status.openable })
-        // And together with the wish list, nothing has gone missing.
-        assertEquals(Experiments.all.size, shown.size + Experiments.unbuilt().size)
+        // And together with the wish list and the suite modes, nothing has gone missing.
+        val modes = Experiments.all.count { !it.standalone }
+        assertEquals(Experiments.all.size, shown.size + Experiments.unbuilt().size + modes)
     }
 
     @Test

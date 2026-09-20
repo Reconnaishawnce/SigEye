@@ -33,8 +33,6 @@ import com.sigeye.experiments.doppler.DopplerScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
 import com.sigeye.experiments.fading.FadingScreen
 import com.sigeye.experiments.faraday.FaradayScreen
-import com.sigeye.experiments.follow.FollowScreen
-import com.sigeye.experiments.following.FollowingScreen
 import com.sigeye.experiments.forensics.ForensicsScreen
 import com.sigeye.experiments.inspector.InspectorScreen
 import com.sigeye.experiments.locate.LocateScreen
@@ -46,8 +44,8 @@ import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.ranging.RangingScreen
-import com.sigeye.experiments.rotation.RotationScreen
-import com.sigeye.experiments.rotationlab.RotationLabScreen
+import com.sigeye.experiments.identity.IdentityScreen
+import com.sigeye.experiments.identity.Mode
 import com.sigeye.experiments.settings.SettingsScreen
 import com.sigeye.experiments.sky.SkyScreen
 import com.sigeye.experiments.speed.SpeedScreen
@@ -172,8 +170,11 @@ private fun Screen(
     }
 
     if (current != null && current.startsWith(ROTATION_PREFIX)) {
-        RotationScreen(
+        IdentityScreen(
             onBack = goBack,
+            onLocate = openLocate,
+            onRadar = { address -> open(RADAR_PREFIX + address) },
+            initialMode = Mode.DEFEAT,
             initialAddress = current.removePrefix(ROTATION_PREFIX),
             modifier = inset,
         )
@@ -234,8 +235,20 @@ private fun Screen(
         Experiments.CONVOY ->
             ConvoyScreen(onBack = goBack, modifier = inset)
 
-        Experiments.ROTATION ->
-            RotationScreen(onBack = goBack, modifier = inset)
+        Experiments.IDENTITY, Experiments.ROTATION, Experiments.ROTATION_LAB,
+        Experiments.FOLLOWING, Experiments.FOLLOW,
+        -> IdentityScreen(
+            onBack = goBack,
+            onLocate = openLocate,
+            onRadar = { address -> open(RADAR_PREFIX + address) },
+            initialMode = when (current) {
+                Experiments.ROTATION_LAB -> Mode.LAB
+                Experiments.FOLLOW -> Mode.FOLLOW
+                Experiments.FOLLOWING -> Mode.WATCH
+                else -> Mode.DEFEAT
+            },
+            modifier = inset,
+        )
 
         Experiments.DOPPLER ->
             DopplerScreen(onBack = goBack, modifier = inset)
@@ -252,12 +265,6 @@ private fun Screen(
         Experiments.VULNERABILITY ->
             VulnerabilityScreen(onBack = goBack, modifier = inset)
 
-        Experiments.FOLLOWING ->
-            FollowingScreen(onBack = goBack, modifier = inset)
-
-        Experiments.ROTATION_LAB ->
-            RotationLabScreen(onBack = goBack, modifier = inset)
-
         Experiments.RTT ->
             RangingScreen(onBack = goBack, modifier = inset)
 
@@ -269,14 +276,6 @@ private fun Screen(
 
         Experiments.BLINK ->
             BlinkScreen(onBack = goBack, modifier = inset)
-
-        Experiments.FOLLOW -> FollowScreen(
-            onBack = goBack,
-            onLocate = openLocate,
-            onRadar = { address -> open(RADAR_PREFIX + address) },
-            onRotation = { address -> open(ROTATION_PREFIX + address) },
-            modifier = inset,
-        )
 
         SETTINGS ->
             SettingsScreen(onBack = goBack, modifier = inset)
