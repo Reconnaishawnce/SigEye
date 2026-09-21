@@ -113,6 +113,7 @@ object Experiments {
     const val ROTATION_LAB = "rotationlab"
     const val FOLLOW = "follow"
     const val IDENTITY = "identity"
+    const val BENCH = "bench"
     const val RTT = "rtt"
     const val SKY = "sky"
     const val WEATHER = "weather"
@@ -495,7 +496,39 @@ object Experiments {
 
         // ----------------------------------------------------------- physics
         Experiment(
+            id = BENCH,
+            title = "RF Bench",
+            blurb = "Measure what radio actually does in your rooms, and keep the numbers.",
+            teaches = "Every number the rest of this app quotes about distance rests on " +
+                "assumptions about how signal falls off, how much a wall takes, how much " +
+                "a body blocks. Those are not constants. They are properties of the " +
+                "building you are standing in, and they are measurable in a few minutes " +
+                "each. Seven measurements that share a method: hold a pose, watch the " +
+                "level, keep the result.",
+            category = Experiment.Category.PHYSICS,
+            status = Experiment.Status.ACTIVE,
+            needs = "Bluetooth, a device to measure against, and for some of them a second " +
+                "phone or a tape measure. Each one says what it needs when you open it.",
+            howTo = listOf(
+                "Pick the measurement. Path loss is the one to start with, because the " +
+                    "exponent it produces is the number every distance estimate in the " +
+                    "app is quietly assuming.",
+                "Each one saves its runs, so the useful question is not what the number " +
+                    "is but whether it has changed. Name a run before you move.",
+                "The notebook holds every run from every measurement in one place, which " +
+                    "is how you find out what you already know about a building.",
+            ),
+            reading = "None of these produce a constant. They produce a property of one " +
+                "place, and the same measurement in the next room will differ - which is " +
+                "the finding, not the error.",
+            limits = "A phone's radio is not an instrument. It reports RSSI in whole " +
+                "decibels with no calibration and no guarantee that two phones agree, so " +
+                "these are good for comparing one reading against another on the same " +
+                "phone and poor for absolute numbers.",
+        ),
+        Experiment(
             id = DOPPLER,
+            partOf = BENCH,
             title = "Doppler Walk",
             blurb = "The path loss exponent where you are, paced out instead of assumed.",
             teaches = "Signal turns into distance through one formula with one unknown in " +
@@ -530,6 +563,7 @@ object Experiments {
         ),
         Experiment(
             id = POLARIZATION,
+            partOf = BENCH,
             title = "Rotational Polarization",
             blurb = "How much signal is lost when two antennas stop lining up.",
             teaches = "Radio has an orientation. Turn a receiving antenna across the field " +
@@ -602,6 +636,7 @@ object Experiments {
         ),
         Experiment(
             id = BANDS,
+            partOf = BENCH,
             title = "Wall Penetration",
             blurb = "Measure how much more the building takes from 5 GHz than from 2.4.",
             teaches = "Everyone has heard that 5 GHz does not go through walls as well. The " +
@@ -640,6 +675,7 @@ object Experiments {
         ),
         Experiment(
             id = FADING,
+            partOf = BENCH,
             title = "Multipath Fading",
             blurb = "How much a signal wanders on its own, with nothing moving.",
             teaches = "Reflections add and cancel, so signal swings several dB with " +
@@ -673,6 +709,7 @@ object Experiments {
         ),
         Experiment(
             id = ABSORPTION,
+            partOf = BENCH,
             title = "Body Absorption",
             blurb = "How much of the signal your own body blocks, in decibels.",
             teaches = "You are mostly water and water absorbs 2.4 GHz, so a notch appears " +
@@ -732,6 +769,7 @@ object Experiments {
         ),
         Experiment(
             id = FARADAY,
+            partOf = BENCH,
             title = "Faraday Cage Test",
             blurb = "What a tin, a fridge or a crisp packet really blocks, in decibels.",
             teaches = "Shielding, apertures, and why the seams matter more than the metal. " +
@@ -759,6 +797,7 @@ object Experiments {
         ),
         Experiment(
             id = MICROWAVE,
+            partOf = BENCH,
             title = "Microwave Interference",
             blurb = "How much a microwave oven costs the 2.4 GHz band, if anything.",
             teaches = "A consumer microwave leaks around 2.45 GHz, right in the middle of " +
@@ -1279,6 +1318,7 @@ object Experiments {
         CELLS to "See how often your phone hands you to a different tower.",
         FOLLOW to "Narrow a street down to the one phone that is coming with you.",
         IDENTITY to "Follow a phone through the address changes meant to stop you.",
+        BENCH to "Measure what your walls, your body and your building do to a signal.",
     )
 
     /**

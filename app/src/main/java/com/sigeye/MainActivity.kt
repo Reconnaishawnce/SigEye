@@ -21,29 +21,24 @@ import androidx.lifecycle.lifecycleScope
 import com.sigeye.core.Experiments
 import com.sigeye.core.OuiRegistry
 import com.sigeye.core.Recordings
-import com.sigeye.experiments.absorption.AbsorptionScreen
-import com.sigeye.experiments.bands.BandsScreen
 import com.sigeye.experiments.beacons.BeaconScreen
 import com.sigeye.experiments.blink.BlinkScreen
 import com.sigeye.experiments.cells.CellScreen
 import com.sigeye.experiments.congestion.CongestionScreen
 import com.sigeye.experiments.convoy.ConvoyScreen
 import com.sigeye.experiments.discovery.DiscoveryScreen
-import com.sigeye.experiments.doppler.DopplerScreen
 import com.sigeye.experiments.explorer.ExplorerScreen
-import com.sigeye.experiments.fading.FadingScreen
-import com.sigeye.experiments.faraday.FaradayScreen
 import com.sigeye.experiments.forensics.ForensicsScreen
 import com.sigeye.experiments.inspector.InspectorScreen
 import com.sigeye.experiments.locate.LocateScreen
-import com.sigeye.experiments.microwave.MicrowaveScreen
 import com.sigeye.experiments.motion.MotionScreen
 import com.sigeye.experiments.place.PlaceScreen
-import com.sigeye.experiments.polarization.PolarizationScreen
 import com.sigeye.experiments.population.PopulationMode
 import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.ranging.RangingScreen
+import com.sigeye.experiments.bench.Bench
+import com.sigeye.experiments.bench.BenchScreen
 import com.sigeye.experiments.identity.IdentityScreen
 import com.sigeye.experiments.mine.MyDevicesScreen
 import com.sigeye.experiments.identity.Mode
@@ -212,18 +207,6 @@ private fun Screen(
             modifier = inset,
         )
 
-        Experiments.ABSORPTION ->
-            AbsorptionScreen(onBack = goBack, modifier = inset)
-
-        Experiments.MICROWAVE ->
-            MicrowaveScreen(onBack = goBack, modifier = inset)
-
-        Experiments.FARADAY ->
-            FaradayScreen(onBack = goBack, modifier = inset)
-
-        Experiments.FADING ->
-            FadingScreen(onBack = goBack, modifier = inset)
-
         Experiments.DISCOVERY ->
             DiscoveryScreen(onBack = goBack, modifier = inset)
 
@@ -242,6 +225,23 @@ private fun Screen(
         Experiments.CONVOY ->
             ConvoyScreen(onBack = goBack, modifier = inset)
 
+        Experiments.BENCH, Experiments.DOPPLER, Experiments.BANDS, Experiments.FADING,
+        Experiments.ABSORPTION, Experiments.POLARIZATION, Experiments.FARADAY,
+        Experiments.MICROWAVE,
+        -> BenchScreen(
+            onBack = goBack,
+            modifier = inset,
+            initialMode = when (current) {
+                Experiments.BANDS -> Bench.WALLS
+                Experiments.FADING -> Bench.FADING
+                Experiments.ABSORPTION -> Bench.BODY
+                Experiments.POLARIZATION -> Bench.ANGLE
+                Experiments.FARADAY -> Bench.SHIELDING
+                Experiments.MICROWAVE -> Bench.MICROWAVE
+                else -> Bench.PATH_LOSS
+            },
+        )
+
         Experiments.IDENTITY, Experiments.ROTATION, Experiments.ROTATION_LAB,
         Experiments.FOLLOWING, Experiments.FOLLOW,
         -> IdentityScreen(
@@ -257,17 +257,8 @@ private fun Screen(
             modifier = inset,
         )
 
-        Experiments.DOPPLER ->
-            DopplerScreen(onBack = goBack, modifier = inset)
-
-        Experiments.POLARIZATION ->
-            PolarizationScreen(onBack = goBack, modifier = inset)
-
         Experiments.CONGESTION ->
             CongestionScreen(onBack = goBack, modifier = inset)
-
-        Experiments.BANDS ->
-            BandsScreen(onBack = goBack, modifier = inset)
 
         Experiments.VULNERABILITY ->
             VulnerabilityScreen(onBack = goBack, modifier = inset)

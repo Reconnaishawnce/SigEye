@@ -127,6 +127,16 @@ class RunStore private constructor(context: Context) {
             .sortedByDescending { it.takenAtMs }
     }.getOrDefault(emptyList())
 
+    /**
+     * Every run from a set of experiments, newest first.
+     *
+     * One file per experiment is the right storage and the wrong shape for the question
+     * "what have I already measured in this building", which spans all of them. Reading a
+     * handful of small files is cheap enough that nothing more clever is warranted.
+     */
+    fun runs(experiments: List<String>): List<SavedRun> =
+        experiments.flatMap { runs(it) }.sortedByDescending { it.takenAtMs }
+
     fun save(run: SavedRun) {
         val kept = (runs(run.experiment) + run)
             .sortedByDescending { it.takenAtMs }

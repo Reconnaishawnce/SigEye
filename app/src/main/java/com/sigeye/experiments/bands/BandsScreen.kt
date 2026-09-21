@@ -74,7 +74,18 @@ private const val SCAN_INTERVAL_MS = 6_000L
 private const val WINDOW = 6
 
 @Composable
-fun BandsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun BandsScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * The suite's mode switcher, drawn under this screen's own header.
+     *
+     * A slot rather than a bar the container draws above everything, so the switcher lands
+     * below the title it belongs to instead of above the back button. Empty by default,
+     * which is what keeps this screen openable on its own.
+     */
+    modes: @Composable () -> Unit = {},
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -83,6 +94,7 @@ fun BandsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Spacer(Modifier.height(12.dp))
         ExperimentHeader(Experiments.BANDS, onBack)
+        modes()
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(

@@ -2,7 +2,7 @@
 
 Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
 
-Thirty-eight of them, from *how many dB does a crisp packet block* to *follow one phone
+Thirty-nine of them, from *how many dB does a crisp packet block* to *follow one phone
 through the address changes designed to stop you*. Everything runs on the phone. No
 network code, no accounts, no analytics, nothing leaves the device.
 
@@ -15,7 +15,7 @@ a plain public APK download, no login and no zip. See [INSTALL.md](INSTALL.md).
 Every experiment carries one of three states, and the home screen shows it.
 
 - **Active** — run on real hardware, in the real world, and behaved.
-  28 of them are.
+  29 of them are.
 - **Beta** — complete and tested, but never yet run anywhere but a build server.
   6 of them are, marked *(beta)* below.
 - **In development** — described and not built, and tapping one does nothing.
@@ -58,14 +58,15 @@ home screen.
 
 | | |
 |---|---|
-| **Doppler Walk** *(beta)* | Walk away counting your steps, and measure the number everything guesses. |
-| **Rotational Polarization** | Roll the phone over and watch the signal die. |
+| **RF Bench** | Measure what radio actually does in your rooms, and keep the numbers. One screen, seven measurements and a notebook: |
+| &nbsp;&nbsp;↳ **Doppler Walk** *(beta)* | Walk away counting your steps, and measure the number everything guesses. |
+| &nbsp;&nbsp;↳ **Wall Penetration** | Measure how much more the building takes from 5 GHz than from 2.4. |
+| &nbsp;&nbsp;↳ **Multipath Fading** | Stand still and watch the signal move anyway. |
+| &nbsp;&nbsp;↳ **Body Absorption** | Turn slowly in a circle and find your own shadow. |
+| &nbsp;&nbsp;↳ **Rotational Polarization** | Roll the phone over and watch the signal die. |
+| &nbsp;&nbsp;↳ **Faraday Cage Test** | How many dB does a tin, a fridge or a crisp packet really block? |
+| &nbsp;&nbsp;↳ **Microwave Interference** | Watch a microwave flatten the 2.4 GHz band. |
 | **Channel Congestion** | Who is using the 2.4 GHz band, and whether Bluetooth has room to shout. |
-| **Wall Penetration** | Measure how much more the building takes from 5 GHz than from 2.4. |
-| **Multipath Fading** | Stand still and watch the signal move anyway. |
-| **Body Absorption** | Turn slowly in a circle and find your own shadow. |
-| **Faraday Cage Test** | How many dB does a tin, a fridge or a crisp packet really block? |
-| **Microwave Interference** | Watch a microwave flatten the 2.4 GHz band. |
 | **True Ranging** *(beta)* | Distance by timing light, rather than by guessing from loudness. |
 | **Satellites Overhead** *(beta)* | Every satellite your phone can hear, and which ones it trusts. |
 | **Radio Weather** *(beta)* | How much radio is landing on this phone, and what it is coming from. |

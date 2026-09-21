@@ -74,7 +74,18 @@ private const val MIN_SAMPLES_PER_SECTOR = 3
 private enum class Stage { PICK_SOURCE, SWEEP, RESULT }
 
 @Composable
-fun AbsorptionScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun AbsorptionScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * The suite's mode switcher, drawn under this screen's own header.
+     *
+     * A slot rather than a bar the container draws above everything, so the switcher lands
+     * below the title it belongs to instead of above the back button. Empty by default,
+     * which is what keeps this screen openable on its own.
+     */
+    modes: @Composable () -> Unit = {},
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -83,6 +94,7 @@ fun AbsorptionScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Spacer(Modifier.height(12.dp))
         ExperimentHeader(Experiments.ABSORPTION, onBack)
+        modes()
         Spacer(Modifier.height(16.dp))
 
         PermissionGate(
