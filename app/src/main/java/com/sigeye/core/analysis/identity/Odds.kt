@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis.identity
 
+import com.sigeye.core.analysis.Crowd
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -161,7 +162,13 @@ object Scoring {
         trails: Map<String, List<Pair<Long, Int>>> = emptyMap(),
     ): List<CandidateScore> {
         val live = candidates.filter { it.stillIn }
-        val companions = companions(live, trails)
+        // Every pair is compared, so the work grows with the square of the pool. The limit
+        // moves with the room rather than being one number chosen in a quiet kitchen.
+        val companions = companions(
+            live,
+            trails,
+            Crowd.companionLimit(Crowd.densityOf(live.size)),
+        )
 
         val raw = candidates.associate { candidate ->
             candidate.address to reasons(
@@ -319,8 +326,10 @@ object Scoring {
     fun companions(
         candidates: List<FollowCandidate>,
         trails: Map<String, List<Pair<Long, Int>>>,
+        /** Above this many, the every-pair comparison costs more than it is worth. */
+        limit: Int = COMPANION_LIMIT,
     ): Map<String, List<String>> {
-        if (candidates.size < 2 || candidates.size > COMPANION_LIMIT) return emptyMap()
+        if (candidates.size < 2 || candidates.size > limit) return emptyMap()
 
         val buckets = candidates.associate { it.address to bucket(trails[it.address].orEmpty()) }
         val found = mutableMapOf<String, MutableList<String>>()

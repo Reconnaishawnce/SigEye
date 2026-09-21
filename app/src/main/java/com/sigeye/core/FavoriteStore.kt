@@ -56,7 +56,34 @@ class FavoriteStore private constructor(context: Context) {
             ?.split(SEPARATOR)
             ?.filter { it.isNotBlank() }
             .orEmpty()
-        return Ordering.sanitise(stored, known)
+        return Ordering.sanitise(offer(stored), known)
+    }
+
+    /**
+     * Gives an existing install the recommended experiments that did not exist when it
+     * was set up.
+     *
+     * Favourites are seeded once and then belong to whoever is using them, so a new one
+     * would otherwise never reach anybody who already had the app. Each id is offered
+     * exactly once and that is remembered separately, so a favourite somebody removed on
+     * purpose is not quietly put back on the next launch.
+     */
+    private fun offer(stored: List<String>): List<String> {
+        val offered = prefs.getStringSet(KEY_OFFERED, emptySet()).orEmpty()
+        val additions = Experiments.featuredIds.filter { it !in offered && it !in stored }
+        val all = offered + Experiments.featuredIds
+
+        if (additions.isEmpty()) {
+            if (all != offered) prefs.edit().putStringSet(KEY_OFFERED, all).apply()
+            return stored
+        }
+
+        val next = additions + stored
+        prefs.edit()
+            .putString(KEY_IDS, next.joinToString(SEPARATOR))
+            .putStringSet(KEY_OFFERED, all)
+            .apply()
+        return next
     }
 
     private fun knownIds(): Set<String> = Experiments.all
@@ -67,6 +94,9 @@ class FavoriteStore private constructor(context: Context) {
     companion object {
         private const val KEY_IDS = "ids"
         private const val KEY_SEEDED = "seeded"
+
+        /** Recommended ids this install has already been given, kept or not. */
+        private const val KEY_OFFERED = "offered_ids"
         /** Ids are lowercase words, so a comma cannot appear inside one. */
         private const val SEPARATOR = ","
 

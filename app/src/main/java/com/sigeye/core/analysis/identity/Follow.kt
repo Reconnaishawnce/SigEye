@@ -582,6 +582,12 @@ data class FollowState(
 
     /** The level above which devices are being muted outright, or null when they are not. */
     val autoMuting: Int? = null,
+
+    /**
+     * Devices left out of the pool because nothing in their advertisement could be matched
+     * to a successor. Only ever non-zero in a packed place. See [Crowd.thinsThePool].
+     */
+    val tooPlainToFollow: Int = 0,
 ) {
     /** How many were in range when the follow started. The number that falls from here. */
     val poolSize: Int get() = candidates.count { it.inPool }
@@ -1031,10 +1037,24 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
      * Everything heard up to this instant is in; everything first heard after it is not.
      * That is the whole reason the number can only fall.
      */
+    /**
+     * Set when the room was packed as the follow began. See [Crowd.thinsThePool].
+     *
+     * Decided once, at the same instant as the pool, because a pool that changed its
+     * admission rule halfway through would make the falling count mean two things.
+     */
+    @Volatile
+    var thinPool: Boolean = false
+
+    /** How many were left out for carrying nothing matchable, so a screen can say so. */
+    var tooPlainToFollow: Int = 0
+        private set
+
     @Synchronized
     fun startFollowing(atMs: Long) {
         if (baselineEndedAtMs == null) baselineEndedAtMs = atMs
         followStartedAtMs = atMs
+        tooPlainToFollow = 0
         tracked.values.forEach { entry ->
             // Heard enough to be a device rather than a blip, and heard before now. Both
             // halves are decided at this instant and never revisited, which is what makes
@@ -1043,7 +1063,18 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             // minimum packet threshold for the next minute and appearing one by one, so
             // the number climbed after the baseline and looked like the opposite of what
             // this experiment does.
-            entry.inPool = entry.firstSeenMs <= atMs && entry.packets >= tuning.minPackets
+            val heardInTime = entry.firstSeenMs <= atMs && entry.packets >= tuning.minPackets
+
+            // In a packed place, leave out devices that could never survive a rotation
+            // anyway. Their advertisement carries nothing distinctive, so the app already
+            // refuses to match them to a successor and says so; in a terminal they are
+            // most of eight hundred and they dilute the pool for the whole walk. Only when
+            // packed, and the number left out is shown, because this is the one adjustment
+            // that changes what is being followed rather than how it is drawn.
+            val followable = !thinPool || !entry.shape.tooPlainToMatchOn
+            if (heardInTime && !followable) tooPlainToFollow++
+
+            entry.inPool = heardInTime && followable
             entry.droppedAtMs = null
             entry.returnedAtMs = null
         }
@@ -1523,6 +1554,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
             tuning = tuning,
             blindMs = followStartedAtMs?.let { blindMsBetween(it, nowMs) } ?: 0L,
             questions = pending.values.toList(),
+            tooPlainToFollow = tooPlainToFollow,
             goingQuiet = goingQuiet(nowMs),
             nextDropInMs = nextDropInMs(nowMs),
             autoMuting = tuning.autoMuteAboveDbm,

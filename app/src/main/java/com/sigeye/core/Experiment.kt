@@ -1272,7 +1272,7 @@ object Experiments {
      * where they belong is a maze.
      */
     val featuredIds: List<String> =
-        listOf(IDENTITY, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
+        listOf(IDENTITY, BENCH, TRAIN_SPOTTER, RADAR, FORENSICS, DISCOVERY)
 
     /** Why each featured experiment earned the spot, in a few words. */
     /**

@@ -15,11 +15,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.sigeye.core.Experiments
+import com.sigeye.core.SuiteMemory
 import com.sigeye.experiments.absorption.AbsorptionScreen
 import com.sigeye.experiments.bands.BandsScreen
 import com.sigeye.experiments.doppler.DopplerScreen
@@ -49,12 +52,31 @@ fun BenchScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     /** Which measurement to open on, for a link that means one of them specifically. */
-    initialMode: Bench = Bench.PATH_LOSS,
+    initialMode: Bench? = null,
 ) {
-    var mode by rememberSaveable { mutableStateOf(initialMode) }
+    val context = LocalContext.current
+    val memory = remember(context) { SuiteMemory.get(context) }
+
+    // A link naming a measurement wins. Otherwise the one left last time, because going in
+    // and out of the same screen a dozen times while measuring six rooms is the normal way
+    // to use this.
+    var mode by rememberSaveable {
+        mutableStateOf(
+            initialMode
+                ?: memory.lastTab(Experiments.BENCH)
+                    ?.let { name -> Bench.entries.firstOrNull { it.name == name } }
+                ?: Bench.PATH_LOSS,
+        )
+    }
 
     val switcher: @Composable () -> Unit = {
-        BenchBar(current = mode, onPick = { mode = it })
+        BenchBar(
+            current = mode,
+            onPick = {
+                mode = it
+                memory.remember(Experiments.BENCH, it.name)
+            },
+        )
     }
 
     when (mode) {

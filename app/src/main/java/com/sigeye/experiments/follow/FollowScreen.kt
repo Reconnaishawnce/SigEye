@@ -61,6 +61,7 @@ import com.sigeye.core.SweepExport
 import com.sigeye.core.Takeaway
 import com.sigeye.core.TargetDevice
 import com.sigeye.core.TargetStore
+import com.sigeye.core.analysis.Crowd
 import com.sigeye.core.analysis.identity.AskPolicy
 import com.sigeye.core.analysis.identity.AskUrgency
 import com.sigeye.core.analysis.identity.CandidateWalkBy
@@ -93,6 +94,7 @@ import com.sigeye.ui.Diagnostic
 import com.sigeye.ui.DiagnosticsPanel
 import com.sigeye.ui.ExperimentHeader
 import com.sigeye.ui.Field
+import com.sigeye.ui.CrowdNote
 import com.sigeye.ui.GeigerBar
 import com.sigeye.ui.KeepScreenOn
 import com.sigeye.ui.LiveBars
@@ -119,14 +121,6 @@ private const val LOG_LINES = 60
 
 private const val HUB_TAG = "follow"
 
-/**
- * How many devices the radar will draw.
- *
- * The loudest, because the radar is for watching something approach rather than for
- * counting. Above this it stops being readable and starts being expensive: every blip is a
- * text measure and a trail redraw on every frame.
- */
-private const val RADAR_BLIPS = 24
 private const val TICK_MS = 1_000L
 
 /** A minute of bars, one a second. */
@@ -577,6 +571,8 @@ private fun Live(
                     null -> step = Step.ASK_HERE
 
                     true -> {
+                        session().thinPool =
+                            Crowd.thinsThePool(Crowd.densityOf(state.watching))
                         session().startFollowing(now)
                         ScanService.start(context, ScanService.Mode.FOLLOW)
                         bars.clear()
@@ -714,6 +710,15 @@ private fun Live(
             },
         )
     }
+
+    // One line when the room is busy, nothing at all when it is not.
+    CrowdNote(
+        devices = if (state.followStartedAtMs != null) state.stillIn.size else state.watching,
+        extra = state.tooPlainToFollow.takeIf { it > 0 }?.let {
+            "$it left out: they broadcast nothing we could recognize them by later."
+        },
+    )
+    if (state.watching > 0) Spacer(Modifier.height(10.dp))
 
     // Everything the policy held back, with a count and a reason. Nothing is discarded;
     // this is the difference between a question deferred and a question suppressed.
@@ -1569,7 +1574,8 @@ private fun Following(
         // costs a text measure and a trail redraw each every frame - which on a phone already
         // holding a scan is where the stutter comes from.
         RadarPanel(
-            targets = state.stillIn.sortedByDescending { it.recentRssi }.take(RADAR_BLIPS)
+            targets = state.stillIn.sortedByDescending { it.recentRssi }
+                .take(Crowd.radarBlips(Crowd.densityOf(state.stillIn.size)))
                 .map { candidate ->
                 RadarTarget(
                     address = candidate.address,

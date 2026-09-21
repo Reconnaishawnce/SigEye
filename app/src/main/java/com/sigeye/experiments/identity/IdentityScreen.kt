@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CurrentTarget
 import com.sigeye.core.Experiments
+import com.sigeye.core.SuiteMemory
 import com.sigeye.experiments.follow.FollowScreen
 import com.sigeye.experiments.following.FollowingScreen
 import com.sigeye.experiments.rotation.RotationScreen
@@ -56,13 +57,23 @@ fun IdentityScreen(
     modifier: Modifier = Modifier,
     onRadar: (String) -> Unit = {},
     /** Which mode to open on, for a link that means one of them specifically. */
-    initialMode: Mode = Mode.DEFEAT,
+    initialMode: Mode? = null,
     /** A device to start on, for arriving from somewhere that already found one. */
     initialAddress: String = "",
 ) {
-    var mode by rememberSaveable { mutableStateOf(initialMode) }
-
     val context = LocalContext.current
+    val memory = remember(context) { SuiteMemory.get(context) }
+
+    // A link naming a mode wins. Otherwise the one left last time.
+    var mode by rememberSaveable {
+        mutableStateOf(
+            initialMode
+                ?: memory.lastTab(Experiments.IDENTITY)
+                    ?.let { name -> Mode.entries.firstOrNull { it.name == name } }
+                ?: Mode.DEFEAT,
+        )
+    }
+
     val target = remember(context) { CurrentTarget.get(context) }
     val pinned by target.pinned.collectAsStateWithLifecycle()
 
@@ -76,7 +87,13 @@ fun IdentityScreen(
     val startOn = initialAddress.ifBlank { pinned?.address.orEmpty() }
 
     val switcher: @Composable () -> Unit = {
-        ModeBar(current = mode, onPick = { mode = it })
+        ModeBar(
+            current = mode,
+            onPick = {
+                mode = it
+                memory.remember(Experiments.IDENTITY, it.name)
+            },
+        )
     }
 
     when (mode) {
@@ -103,6 +120,7 @@ fun IdentityScreen(
             onRotation = { address ->
                 target.pin(address, label = null, vendor = null, source = "Follow Me")
                 mode = Mode.DEFEAT
+                memory.remember(Experiments.IDENTITY, Mode.DEFEAT.name)
             },
             modes = switcher,
         )
