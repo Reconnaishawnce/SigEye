@@ -1,5 +1,6 @@
 package com.sigeye.experiments.radar
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -174,7 +175,7 @@ private fun Live(onLocate: (String) -> Unit, initialQuery: String) {
     // a device you are walking towards should glide inward, not vibrate.
     LaunchedEffect(filter, rules, notes, query) {
         while (true) {
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             latest.entries.removeAll { now - it.value.atMs > STALE_MS }
             targets = latest.values
                 .filter { matches(it, filter, book, watchStore) }

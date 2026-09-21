@@ -98,7 +98,7 @@ object Recordings {
             }
             while (isActive) {
                 delay(5_000)
-                _follower?.tick(System.currentTimeMillis())
+                _follower?.tick(Clock.nowMs())
             }
         }
     }

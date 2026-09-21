@@ -1,5 +1,6 @@
 package com.sigeye.experiments.discovery
 
+import com.sigeye.core.Clock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -167,7 +168,7 @@ private fun Live() {
     LaunchedEffect(stage) {
         while (stage != DiscoveryStage.IDLE) {
             delay(TICK_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             engine.tick(now)
             stage = engine.stage
             progress = engine.baselineProgress(now)
@@ -241,7 +242,7 @@ private fun Live() {
             nicknameOf = { notes[it.uppercase(Locale.US)]?.nickname },
             onStart = {
                 engine.baselineMs = (baselineSeconds.roundToInt() * 1000).toLong()
-                engine.start(System.currentTimeMillis())
+                engine.start(Clock.nowMs())
                 announced = emptySet()
                 arrivals = emptyList()
                 stage = DiscoveryStage.BASELINE
@@ -309,7 +310,7 @@ private fun Live() {
                                 .clickable {
                                     engine.seedBaseline(
                                         snapshot.devices.map { it.address },
-                                        System.currentTimeMillis(),
+                                        Clock.nowMs(),
                                     )
                                     announced = emptySet()
                                     arrivals = emptyList()
@@ -354,7 +355,7 @@ private fun Live() {
             confirmButton = {
                 TextButton(onClick = {
                     val name = label.ifBlank { "Unnamed" }
-                    store.save(engine.snapshot(name, System.currentTimeMillis()))
+                    store.save(engine.snapshot(name, Clock.nowMs()))
                     naming = false
                 }) { Text("Save") }
             },

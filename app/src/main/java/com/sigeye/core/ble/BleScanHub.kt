@@ -14,6 +14,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.Replay
+import com.sigeye.core.ReplayClock
 import com.sigeye.core.Permissions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -273,32 +275,54 @@ object BleScanHub {
     }
 
     /**
-     * Plays a recorded capture onto the advertisement flow in its original timing.
+     * Plays a recorded capture onto the advertisement flow.
      *
      * Every experiment reads this flow and none of them needs to know where it came from,
      * which is the whole point: a bug that happens on a train can be reproduced at a desk
      * without a single screen being aware it is looking at a recording.
      *
-     * The timing is preserved rather than replayed as fast as possible, because half the
-     * app measures gaps between packets. An advertising interval is a fingerprint, a burst
-     * is a train, and a capture flushed through in one go would say every device in the
-     * room advertises infinitely fast.
+     * **Packets keep their own timestamps.** They used to be restamped with the wall clock
+     * as they went out, which worked because the replay slept in real time between them -
+     * and which is exactly why it could only ever run at real time. Half this app measures
+     * gaps between packets, an advertising interval is a fingerprint and a burst is a
+     * train, so a capture flushed through quickly under restamped clocks would report that
+     * every device in the room advertises infinitely fast.
+     *
+     * Carrying the original spacing instead means [speed] costs nothing. Three seconds
+     * between two packets is three seconds at sixty times as much as at one, because the
+     * number travels with the packet rather than being read off the wall on arrival. What
+     * has to move with it is the app's idea of now, which is [Clock].
+     *
+     * @param speed how much faster than life, for a capture nobody wants to sit through.
      */
-    fun startReplay(adverts: List<Advert>, onFinished: () -> Unit = {}) {
+    fun startReplay(
+        adverts: List<Advert>,
+        label: String = "capture",
+        speed: Double = 1.0,
+        onFinished: () -> Unit = {},
+    ) {
         stopReplay()
         if (adverts.isEmpty()) return
+
+        val clock = ReplayClock(
+            startedAtMs = System.currentTimeMillis(),
+            firstPacketMs = adverts.first().atMs,
+            lastPacketMs = adverts.last().atMs,
+            speed = speed.coerceAtLeast(0.1),
+        )
         replaying = true
-        val startedAt = System.currentTimeMillis()
-        val firstAt = adverts.first().atMs
+        Replay.began(label, clock, adverts.size)
+
         replayJob = scope.launch {
             adverts.forEach { advert ->
-                val due = startedAt + (advert.atMs - firstAt)
-                val wait = due - System.currentTimeMillis()
+                val wait = clock.dueAtMs(advert.atMs) - System.currentTimeMillis()
                 if (wait > 0) delay(wait)
                 if (!replaying) return@launch
-                _adverts.tryEmit(advert.copy(atMs = System.currentTimeMillis()))
+                _adverts.tryEmit(advert)
+                Replay.progressed(clock.progress(System.currentTimeMillis()))
             }
             replaying = false
+            Replay.ended()
             onFinished()
         }
     }
@@ -307,6 +331,7 @@ object BleScanHub {
         replaying = false
         replayJob?.cancel()
         replayJob = null
+        Replay.ended()
     }
 
     // --------------------------------------------------------------- scanning

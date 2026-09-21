@@ -1,5 +1,6 @@
 package com.sigeye.experiments.rotationlab
 
+import com.sigeye.core.Clock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -189,10 +190,10 @@ private fun Live() {
     }
 
     LaunchedEffect(lab) {
-        val startedAt = System.currentTimeMillis()
+        val startedAt = Clock.nowMs()
         while (true) {
             delay(TICK_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             lab.tick(now)
             cohorts = lab.cohorts(now)
             tracks = lab.tracks { book.nicknameOf(it) }
@@ -342,7 +343,7 @@ private fun Live() {
         onClick = {
             val directory = File(context.getExternalFilesDir(null), "rotations")
             directory.mkdirs()
-            val file = File(directory, "lab-${System.currentTimeMillis()}.csv")
+            val file = File(directory, "lab-${Clock.nowMs()}.csv")
             runCatching { file.writeText(lab.csv()) }
             SweepExport.share(context, file)
         },

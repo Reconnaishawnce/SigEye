@@ -1,5 +1,6 @@
 package com.sigeye.experiments.inspector
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -141,7 +142,7 @@ private fun Live(onLocate: (String) -> Unit) {
     LaunchedEffect(paused) {
         while (!paused) {
             delay(REFRESH_MS)
-            devices = table.snapshot().freshWithin(FRESH_MILLIS, System.currentTimeMillis())
+            devices = table.snapshot().freshWithin(FRESH_MILLIS, Clock.nowMs())
         }
     }
 

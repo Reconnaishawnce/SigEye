@@ -1,5 +1,6 @@
 package com.sigeye.experiments.beacons
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -145,7 +146,7 @@ private fun Live() {
     LaunchedEffect(paused) {
         while (!paused) {
             delay(REFRESH_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             devices = decoded.values
                 .filter { now - it.lastSeenMs <= FRESH_MS }
                 .sortedByDescending { it.rssi }

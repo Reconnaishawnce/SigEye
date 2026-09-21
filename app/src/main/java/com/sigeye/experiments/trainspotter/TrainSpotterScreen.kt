@@ -1,5 +1,6 @@
 package com.sigeye.experiments.trainspotter
 
+import com.sigeye.core.Clock
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -149,7 +150,7 @@ private fun Monitor() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val alerting = state.lastAlertMs > 0 &&
-            System.currentTimeMillis() - state.lastAlertMs < 60_000
+            Clock.nowMs() - state.lastAlertMs < 60_000
         // Runs up to the new count rather than jumping to it. Forty new devices arriving
         // in one five second bin is a train, and it should look like one.
         CountUp(
@@ -377,7 +378,7 @@ private fun ArmingCard(state: ScanUiState) {
     // on the value means a steady rate stops producing bars, so the one time the chart
     // would go still is the one time the radio is behaving.
     val latest by rememberUpdatedState(state)
-    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var nowMs by remember { mutableStateOf(Clock.nowMs()) }
     val found = remember(state.startedAtMs) { mutableStateListOf<Float>() }
     var lastSampleSeq by remember(state.startedAtMs) { mutableStateOf(0) }
 
@@ -387,7 +388,7 @@ private fun ArmingCard(state: ScanUiState) {
     // twenty consecutive bars were the same number, which is why the chart looked like it
     // was not measuring anything. It was not.
     LaunchedEffect(state.sampleSeq) {
-        nowMs = System.currentTimeMillis()
+        nowMs = Clock.nowMs()
         if (state.sampleSeq > lastSampleSeq) {
             lastSampleSeq = state.sampleSeq
             found.add(state.sampleNew.toFloat())
@@ -398,7 +399,7 @@ private fun ArmingCard(state: ScanUiState) {
     // The clock, separately, because it has to move whether or not the radio is delivering.
     LaunchedEffect(state.startedAtMs) {
         while (true) {
-            nowMs = System.currentTimeMillis()
+            nowMs = Clock.nowMs()
             delay(SAMPLE_MS)
         }
     }

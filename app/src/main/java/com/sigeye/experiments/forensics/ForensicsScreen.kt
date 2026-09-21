@@ -1,5 +1,6 @@
 package com.sigeye.experiments.forensics
 
+import com.sigeye.core.Clock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -149,7 +150,7 @@ private fun Live() {
 
     // Reattach to a recording that was already running when this screen opened.
     LaunchedEffect(recording) {
-        if (recording && startedAtMs == 0L) startedAtMs = System.currentTimeMillis()
+        if (recording && startedAtMs == 0L) startedAtMs = Clock.nowMs()
     }
 
     // No claim on the radio from here: the service holds it while recording, and this
@@ -162,7 +163,7 @@ private fun Live() {
     LaunchedEffect(recording) {
         while (recording) {
             delay(TICK_MS)
-            elapsedMs = System.currentTimeMillis() - startedAtMs
+            elapsedMs = Clock.nowMs() - startedAtMs
             devices = recorder.deviceCount
             packets = recorder.packetCount
         }
@@ -200,7 +201,7 @@ private fun Live() {
         Spacer(Modifier.height(16.dp))
         Button(
             onClick = {
-                startedAtMs = System.currentTimeMillis()
+                startedAtMs = Clock.nowMs()
                 recorder.start(startedAtMs)
                 elapsedMs = 0L
                 selected = null
@@ -244,7 +245,7 @@ private fun Live() {
         Button(
             onClick = {
                 ScanService.stop(context, ScanService.Mode.FORENSICS)
-                recorder.stop(System.currentTimeMillis())
+                recorder.stop(Clock.nowMs())
                 reviewing = true
             },
             modifier = Modifier.fillMaxWidth(),
@@ -542,7 +543,7 @@ private fun Live() {
                     store.save(
                         ForensicHistory.save(
                             label = label.ifBlank { "Unnamed" },
-                            atMs = System.currentTimeMillis(),
+                            atMs = Clock.nowMs(),
                             spanMs = recorder.spanMs,
                             tracks = tracks,
                         ),

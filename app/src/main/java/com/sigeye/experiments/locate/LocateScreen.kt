@@ -1,5 +1,6 @@
 package com.sigeye.experiments.locate
 
+import com.sigeye.core.Clock
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
@@ -169,7 +170,7 @@ private fun Hunt(address: String) {
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
-            stale = lastHeardMs > 0 && System.currentTimeMillis() - lastHeardMs > 6_000
+            stale = lastHeardMs > 0 && Clock.nowMs() - lastHeardMs > 6_000
         }
     }
 

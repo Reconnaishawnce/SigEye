@@ -1,5 +1,6 @@
 package com.sigeye.experiments.speed
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -149,7 +150,7 @@ private fun Live() {
         watcher.pathLossExponent = pathLoss.toDouble()
         while (watching) {
             delay(TICK_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             val found = watcher.tick(now)
             if (found.isNotEmpty()) {
                 passes = (found.reversed() + passes).take(40)

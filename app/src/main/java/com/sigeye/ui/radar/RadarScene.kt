@@ -1,5 +1,6 @@
 package com.sigeye.ui.radar
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -119,7 +120,7 @@ fun RadarScene(
     blipScale: Float = 1f,
 ) {
     val blips = remember { mutableStateMapOf<String, Blip>() }
-    var frameMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var frameMs by remember { mutableLongStateOf(Clock.nowMs()) }
     val measurer = rememberTextMeasurer()
 
     val grid = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
@@ -133,12 +134,12 @@ fun RadarScene(
     // running coroutines in a busy street.
     LaunchedEffect(Unit) {
         while (true) {
-            withFrameMillis { frameMs = System.currentTimeMillis() }
+            withFrameMillis { frameMs = Clock.nowMs() }
         }
     }
 
     LaunchedEffect(targets, outerDbm, innerDbm) {
-        val now = System.currentTimeMillis()
+        val now = Clock.nowMs()
         val byAddress = targets.associateBy { it.address }
 
         byAddress.forEach { (address, target) ->

@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis.identity
 
+import com.sigeye.core.Clock
 import com.sigeye.core.analysis.Stats
 import com.sigeye.core.ble.DeviceKind
 import com.sigeye.core.ble.DeviceKinds
@@ -1129,7 +1130,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
         val key = address.uppercase(Locale.US)
         targetKey = key
         phase = FollowPhase.HOLDING
-        journal.add(Moment.Held(System.currentTimeMillis(), key, tracked[key]?.label))
+        journal.add(Moment.Held(Clock.nowMs(), key, tracked[key]?.label))
     }
 
     /** Records something the operator saw and the radio could not. */
@@ -1856,7 +1857,7 @@ class FollowSession(var tuning: FollowTuning = FollowTuning.DEFAULT) {
                 "dropped_at_ms,returned_at_ms,packets,mean_rssi,orbit_arcs,orbit_arcs_total," +
                 "orbit_spread_db,walkby_rise_db,walkby_passed,addresses",
         )
-        candidates(System.currentTimeMillis()).forEach { candidate ->
+        candidates(Clock.nowMs()).forEach { candidate ->
             appendLine(
                 listOf(
                     candidate.address,

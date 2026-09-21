@@ -1,5 +1,6 @@
 package com.sigeye.experiments.follow
 
+import com.sigeye.core.Clock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -288,7 +289,7 @@ private fun Live(
 
     var step by remember { mutableStateOf(Step.LIBRARY) }
     var stepStartedMs by remember { mutableStateOf(0L) }
-    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var nowMs by remember { mutableStateOf(Clock.nowMs()) }
     var followName by remember { mutableStateOf("") }
     var startedAtMs by remember { mutableStateOf(0L) }
     var theyAreHere by remember { mutableStateOf<Boolean?>(null) }
@@ -381,7 +382,7 @@ private fun Live(
 
     fun goTo(next: Step) {
         step = next
-        stepStartedMs = System.currentTimeMillis()
+        stepStartedMs = Clock.nowMs()
     }
 
     /**
@@ -413,17 +414,17 @@ private fun Live(
         ScanService.start(context, ScanService.Mode.FOLLOW)
         bars.clear()
         lastWatched = 0
-        startedAtMs = restored.state(System.currentTimeMillis()).followStartedAtMs ?: 0L
+        startedAtMs = restored.state(Clock.nowMs()).followStartedAtMs ?: 0L
         theyAreHere = true
         // Whatever gap there was while nothing was listening does not count as silence.
         // Without this, coming back to a follow would find every device dropped at once.
-        restored.resume(System.currentTimeMillis())
+        restored.resume(Clock.nowMs())
         step = when (restored.phase) {
             FollowPhase.HOLDING, FollowPhase.LOST -> Step.HOLD
             FollowPhase.FOLLOWING -> Step.FOLLOWING
             else -> Step.BRIEF
         }
-        stepStartedMs = System.currentTimeMillis()
+        stepStartedMs = Clock.nowMs()
     }
 
     fun reset() {
@@ -455,7 +456,7 @@ private fun Live(
         BleScanHub.init(context)
         BleScanHub.acquire(HUB_TAG)
         onDispose {
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             if (session().state(now).followStartedAtMs != null) {
                 // The service is still listening, so the clock keeps running - only the
                 // screen has gone. Written down anyway, because a killed process would
@@ -492,7 +493,7 @@ private fun Live(
     LaunchedEffect(Unit) {
         while (true) {
             delay(TICK_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             nowMs = now
 
             // Ticked here as well as on the service, so the screen is live even in the
@@ -679,11 +680,11 @@ private fun Live(
                 ask = question,
                 label = name,
                 onPick = { to ->
-                    session().answer(address, to, System.currentTimeMillis())
+                    session().answer(address, to, Clock.nowMs())
                     asking = null
                 },
                 onNone = {
-                    session().answer(address, null, System.currentTimeMillis())
+                    session().answer(address, null, Clock.nowMs())
                     log = (listOf("$name was none of the options, dropped") + log).take(LOG_LINES)
                     asking = null
                 },
@@ -724,7 +725,7 @@ private fun Live(
             muted = askingMuted,
             onOpen = {
                 asking = waiting.first().departure.address
-                lastInterruptMs = System.currentTimeMillis()
+                lastInterruptMs = Clock.nowMs()
             },
             onMute = { askingMuted = it },
         )
@@ -752,7 +753,7 @@ private fun Live(
             onName = { followName = it },
             onSettings = { showSettings = true },
             onStart = {
-                val now = System.currentTimeMillis()
+                val now = Clock.nowMs()
                 startedAtMs = now
                 session().startBaseline(now)
                 tests += "baseline"
@@ -775,7 +776,7 @@ private fun Live(
             onAnswer = { here ->
                 theyAreHere = here
                 if (here) {
-                    session().startFollowing(System.currentTimeMillis())
+                    session().startFollowing(Clock.nowMs())
                     ScanService.start(context, ScanService.Mode.FOLLOW)
                     bars.clear()
                     goTo(Step.FOLLOWING)
@@ -789,7 +790,7 @@ private fun Live(
             state = state,
             onArrived = {
                 theyAreHere = true
-                session().startFollowing(System.currentTimeMillis())
+                session().startFollowing(Clock.nowMs())
                 ScanService.start(context, ScanService.Mode.FOLLOW)
                 bars.clear()
                 goTo(Step.FOLLOWING)
@@ -811,7 +812,7 @@ private fun Live(
             onDetails = { details = it },
             marks = marked,
             onMark = { mark ->
-                session().mark(mark, System.currentTimeMillis())
+                session().mark(mark, Clock.nowMs())
                 marked++
                 feedback.alert(AlertStyle.BUZZ)
             },
@@ -849,7 +850,7 @@ private fun Live(
             rebaselinePrompt = state.shouldRebaseline && !dismissedRebaseline,
             onDismissRebaseline = { dismissedRebaseline = true },
             onRebaseline = {
-                val now = System.currentTimeMillis()
+                val now = Clock.nowMs()
                 session().rebaseline(now)
                 bars.clear()
                 tests += "re-baseline"
@@ -857,13 +858,13 @@ private fun Live(
                 beginBaseline()
             },
             onCircle = {
-                session().beginProbe(Probe.ORBIT, System.currentTimeMillis())
+                session().beginProbe(Probe.ORBIT, Clock.nowMs())
                 tests += "circled them"
                 goTo(Step.CIRCLE)
             },
             onWalkBy = {
                 levelMarked = false
-                session().beginProbe(Probe.WALK_BY, System.currentTimeMillis())
+                session().beginProbe(Probe.WALK_BY, Clock.nowMs())
                 tests += "walked past them"
                 goTo(Step.WALK_BY)
             },
@@ -898,12 +899,12 @@ private fun Live(
             elapsedMs = nowMs - stepStartedMs,
             marked = levelMarked,
             onLevel = {
-                session().markClosest(System.currentTimeMillis())
+                session().markClosest(Clock.nowMs())
                 levelMarked = true
                 feedback.alert(AlertStyle.BOTH, urgent = false)
             },
             onDone = {
-                session().endProbe(System.currentTimeMillis())
+                session().endProbe(Clock.nowMs())
                 goTo(if (levelMarked) Step.REVIEW else Step.FOLLOWING)
             },
         )
@@ -918,7 +919,7 @@ private fun Live(
             onHold = { acting = it },
             onNewWalkBy = {
                 levelMarked = false
-                session().beginProbe(Probe.WALK_BY, System.currentTimeMillis())
+                session().beginProbe(Probe.WALK_BY, Clock.nowMs())
                 tests += "walked past them"
                 goTo(Step.WALK_BY)
             },
@@ -956,7 +957,7 @@ private fun Live(
             onClick = {
                 val directory = File(context.getExternalFilesDir(null), "follow")
                 directory.mkdirs()
-                val file = File(directory, "follow-${System.currentTimeMillis()}.csv")
+                val file = File(directory, "follow-${Clock.nowMs()}.csv")
                 runCatching { file.writeText(session().csv()) }
                 SweepExport.share(context, file)
             },
@@ -1000,7 +1001,7 @@ private fun FollowCandidate.asTarget(followName: String) = TargetDevice(
     vendor = vendor,
     evidence = describe(),
     fromFollow = followName.ifBlank { "Unnamed follow" },
-    addedAtMs = System.currentTimeMillis(),
+    addedAtMs = Clock.nowMs(),
     addresses = addresses,
 )
 

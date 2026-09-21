@@ -135,7 +135,7 @@ class ScanService : Service() {
     // ------------------------------------------------------------------ modes
 
     private fun startMode(mode: Mode) {
-        val now = System.currentTimeMillis()
+        val now = Clock.nowMs()
         if (!modes.add(mode)) {
             Log.i(TAG, "$mode already running")
             return
@@ -184,7 +184,7 @@ class ScanService : Service() {
                 watch = null
             }
 
-            Mode.FORENSICS -> Recordings.forensics.stop(System.currentTimeMillis())
+            Mode.FORENSICS -> Recordings.forensics.stop(Clock.nowMs())
             // Place, Convoy and Follow keep whatever they have: stopping the service should
             // not throw away four hours of profile or half an hour of walking, and the
             // screen decides what to do with it.
@@ -237,11 +237,11 @@ class ScanService : Service() {
         }
         if (ticker == null) {
             ticker = scope.launch {
-                var lastPrune = System.currentTimeMillis()
+                var lastPrune = Clock.nowMs()
                 var lastNotification = 0L
                 while (isActive) {
                     delay(500)
-                    val now = System.currentTimeMillis()
+                    val now = Clock.nowMs()
                     trainSpotter?.tick(now)
                     trainSpotter?.publish(BleScanHub.health.value)
                     if (modes.contains(Mode.FOLLOW)) FollowRunner.tick(now, IgnoreList.get(this@ScanService))

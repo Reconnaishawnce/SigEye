@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CrashLog
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.Replay
 import com.sigeye.core.MyDevices
 import com.sigeye.core.SettingsStore
 import com.sigeye.core.SweepExport
@@ -494,6 +496,7 @@ private fun CaptureSection() {
 
     var saved by remember { mutableStateOf(captures.list()) }
     var replaying by remember { mutableStateOf<String?>(null) }
+    var speed by remember { mutableStateOf(1.0) }
 
     Section(
         title = "Capture and replay",
@@ -572,6 +575,29 @@ private fun CaptureSection() {
         }
 
         if (saved.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Playback speed",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Replay.SPEEDS.forEach { option ->
+                    FilterChip(
+                        selected = option == speed,
+                        onClick = { speed = option },
+                        enabled = replaying == null,
+                        label = { Text(if (option == 1.0) "1x" else "${option.toInt()}x") },
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                Replay.describe(speed, saved.maxOfOrNull { it.spanMs } ?: 0L),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             Spacer(Modifier.height(10.dp))
             saved.forEach { capture ->
                 Row(
@@ -591,9 +617,13 @@ private fun CaptureSection() {
                         enabled = !recording && replaying == null && capture.packets > 0,
                         onClick = {
                             BleScanHub.init(context)
-                            val adverts = captures.read(capture.file, System.currentTimeMillis())
+                            val adverts = captures.read(capture.file, capture.savedAtMs)
                             replaying = capture.name
-                            BleScanHub.startReplay(adverts) { replaying = null }
+                            BleScanHub.startReplay(
+                                adverts = adverts,
+                                label = capture.name,
+                                speed = speed,
+                            ) { replaying = null }
                         },
                     ) { Text("Play") }
                     TextButton(

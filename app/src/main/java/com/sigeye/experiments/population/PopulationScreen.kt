@@ -1,5 +1,6 @@
 package com.sigeye.experiments.population
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -173,7 +174,7 @@ private fun Live(dwell: Boolean) {
     LaunchedEffect(paused) {
         while (!paused) {
             delay(REFRESH_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             tracker.prune(now)
             snapshot = tracker.snapshot(now)
         }
@@ -230,7 +231,7 @@ private fun Live(dwell: Boolean) {
 
     if (!dwell) {
         Spacer(Modifier.height(12.dp))
-        val now = System.currentTimeMillis()
+        val now = Clock.nowMs()
         val present = snap.devices
             .filter { it.isPresent(now, tracker.config) }
             .map { device ->
@@ -533,9 +534,9 @@ private fun DwellDetail(
                 DetailField("Sightings", device.sightings.toString())
                 DetailField("Signal", "${device.lastRssi} dBm now, best ${device.bestRssi}")
                 DetailField("First heard", formatDuration(
-                    System.currentTimeMillis() - device.firstSeenMs) + " ago")
+                    Clock.nowMs() - device.firstSeenMs) + " ago")
                 DetailField("Last heard", formatDuration(
-                    System.currentTimeMillis() - device.lastSeenMs) + " ago")
+                    Clock.nowMs() - device.lastSeenMs) + " ago")
 
                 Vendors.surveillanceNote(
                     device.address,

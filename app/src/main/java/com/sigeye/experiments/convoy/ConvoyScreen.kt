@@ -1,5 +1,6 @@
 package com.sigeye.experiments.convoy
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -262,7 +263,7 @@ private fun Live() {
             Button(
                 onClick = {
                     ScanService.stop(context, ScanService.Mode.CONVOY)
-                    tracker.closeLeg(System.currentTimeMillis())
+                    tracker.closeLeg(Clock.nowMs())
                     report = tracker.report(mine = mine)
                     journeys.keepCurrent(tracker.export())
                 },
@@ -355,7 +356,7 @@ private fun Live() {
                 onClick = {
                     val directory = File(context.getExternalFilesDir(null), "journeys")
                     directory.mkdirs()
-                    val file = File(directory, "journey-${System.currentTimeMillis()}.csv")
+                    val file = File(directory, "journey-${Clock.nowMs()}.csv")
                     runCatching { file.writeText(tracker.csv()) }
                     exported = file.name
                     SweepExport.share(context, file)
@@ -454,7 +455,7 @@ private fun Live() {
                     journeys.save(
                         SavedJourney(
                             label = label.ifBlank { "Unnamed journey" },
-                            savedAtMs = System.currentTimeMillis(),
+                            savedAtMs = Clock.nowMs(),
                             legs = tracker.export(),
                         ),
                     )
@@ -550,7 +551,7 @@ private fun Live() {
                 TextButton(onClick = {
                     tracker.startLeg(
                         label.ifBlank { "Leg ${tracker.legCount + 1}" },
-                        System.currentTimeMillis(),
+                        Clock.nowMs(),
                     )
                     ScanService.start(context, ScanService.Mode.CONVOY)
                     naming = false

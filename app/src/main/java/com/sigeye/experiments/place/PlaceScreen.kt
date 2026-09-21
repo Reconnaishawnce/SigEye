@@ -1,5 +1,6 @@
 package com.sigeye.experiments.place
 
+import com.sigeye.core.Clock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -111,14 +112,14 @@ private fun Live() {
     // Reattach: if a profile was already running when this screen opened, adopt its start.
     LaunchedEffect(running) {
         if (running && startedAtMs == 0L) {
-            startedAtMs = System.currentTimeMillis() - profile.report().spanMs
+            startedAtMs = Clock.nowMs() - profile.report().spanMs
         }
     }
 
     LaunchedEffect(running) {
         while (running) {
             delay(TICK_MS)
-            report = profile.report(System.currentTimeMillis())
+            report = profile.report(Clock.nowMs())
         }
     }
 
@@ -172,7 +173,7 @@ private fun Live() {
         Spacer(Modifier.height(16.dp))
         Button(
             onClick = {
-                startedAtMs = System.currentTimeMillis()
+                startedAtMs = Clock.nowMs()
                 profile.bucketMs = (sliceMinutes.roundToInt() * 60_000).toLong()
                 profile.start(startedAtMs)
                 report = profile.report(startedAtMs)
@@ -190,7 +191,7 @@ private fun Live() {
         return
     }
 
-    val elapsed = System.currentTimeMillis() - startedAtMs
+    val elapsed = Clock.nowMs() - startedAtMs
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Stat("Running", formatSpan(elapsed), "so far")
         Stat("Devices", "${report.totalDevices}", "ever heard")

@@ -53,7 +53,7 @@ object FollowRunner {
 
     fun adopt(restored: FollowSession) {
         session = restored
-        _state.value = restored.state(System.currentTimeMillis())
+        _state.value = restored.state(Clock.nowMs())
     }
 
     fun end() {

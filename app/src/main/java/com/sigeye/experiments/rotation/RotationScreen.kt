@@ -1,5 +1,6 @@
 package com.sigeye.experiments.rotation
 
+import com.sigeye.core.Clock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -182,7 +183,7 @@ private fun Live(initialAddress: String) {
     LaunchedEffect(Unit) {
         while (true) {
             delay(TICK_MS)
-            val now = System.currentTimeMillis()
+            val now = Clock.nowMs()
             chains.seed(watched)
             hunt.tick(now)
             chains.tick(now)
@@ -203,7 +204,7 @@ private fun Live(initialAddress: String) {
     BackHandler(enabled = state.stage != HuntStage.PICK) {
         hunt.reset()
         walkNote = null
-        state = hunt.state(System.currentTimeMillis())
+        state = hunt.state(Clock.nowMs())
     }
 
     // Arriving with a device already chosen skips the picker, which is the whole point of
@@ -211,8 +212,8 @@ private fun Live(initialAddress: String) {
     // a rotation past this point is exactly what the experiment is here to watch.
     LaunchedEffect(initialAddress) {
         if (initialAddress.isNotBlank() && state.stage == HuntStage.PICK) {
-            hunt.track(initialAddress, System.currentTimeMillis())
-            state = hunt.state(System.currentTimeMillis())
+            hunt.track(initialAddress, Clock.nowMs())
+            state = hunt.state(Clock.nowMs())
         }
     }
 
@@ -224,10 +225,10 @@ private fun Live(initialAddress: String) {
             onAlertStyle = { alertStyle = it },
             feedback = feedback,
             onPick = {
-                hunt.track(it, System.currentTimeMillis())
+                hunt.track(it, Clock.nowMs())
                 announced = 0
                 walkNote = null
-                state = hunt.state(System.currentTimeMillis())
+                state = hunt.state(Clock.nowMs())
             },
         )
 
@@ -241,13 +242,13 @@ private fun Live(initialAddress: String) {
             onStartWalk = { hunt.startWalkTest() },
             onFinishWalk = {
                 walkNote = hunt.finishWalkTest()?.note
-                state = hunt.state(System.currentTimeMillis())
+                state = hunt.state(Clock.nowMs())
             },
             onRestart = {
                 hunt.reset()
                 announced = 0
                 walkNote = null
-                state = hunt.state(System.currentTimeMillis())
+                state = hunt.state(Clock.nowMs())
             },
         )
     }
@@ -267,7 +268,7 @@ private fun Live(initialAddress: String) {
         onExport = {
             val directory = File(context.getExternalFilesDir(null), "rotations")
             directory.mkdirs()
-            val file = File(directory, "chains-${System.currentTimeMillis()}.csv")
+            val file = File(directory, "chains-${Clock.nowMs()}.csv")
             runCatching { file.writeText(chains.csv()) }
             exported = file.name
             SweepExport.share(context, file)

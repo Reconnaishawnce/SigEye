@@ -57,6 +57,8 @@ import com.sigeye.experiments.weather.RadioWeatherScreen
 import com.sigeye.experiments.wifi.WifiScreen
 import com.sigeye.home.HomeScreen
 import com.sigeye.ui.SigEyeTheme
+import com.sigeye.core.ble.BleScanHub
+import com.sigeye.ui.ReplayBanner
 import com.sigeye.ui.TargetBar
 import com.sigeye.ui.TargetRoutes
 import kotlinx.coroutines.Dispatchers
@@ -121,6 +123,9 @@ private fun SigEyeApp() {
         Column(Modifier.padding(padding)) {
             // One mount for the whole app. A pinned target is useful on every screen, and
             // putting this bar in each of them would be twenty-eight places to forget it.
+            // Above everything, because a recording that renders identically to live data
+            // is the one thing in this app that could quietly mislead somebody.
+            ReplayBanner(onStop = { BleScanHub.stopReplay() })
             TargetBar(
                 TargetRoutes(
                     onLocate = { address -> open(LOCATE_PREFIX + address) },

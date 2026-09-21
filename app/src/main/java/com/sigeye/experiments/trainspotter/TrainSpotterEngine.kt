@@ -1,5 +1,6 @@
 package com.sigeye.experiments.trainspotter
 
+import com.sigeye.core.Clock
 import android.content.Context
 import android.util.Log
 import com.sigeye.core.CsvLogger
@@ -31,7 +32,7 @@ class TrainSpotterEngine(
 
     private var nextCloseAtMs = 0L
     private var lastAlertMs = 0L
-    private var lastPublishMs = System.currentTimeMillis()
+    private var lastPublishMs = Clock.nowMs()
 
     /**
      * False between an alert firing and the count coming back down.
@@ -133,7 +134,7 @@ class TrainSpotterEngine(
     }
 
     fun publish(health: ScanHealth) {
-        val publishedAtMs = System.currentTimeMillis()
+        val publishedAtMs = Clock.nowMs()
         val rolling = aggregator.rollingNew(publishedAtMs)
         PulseState.update {
             it.copy(
