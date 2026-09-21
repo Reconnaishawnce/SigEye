@@ -4,6 +4,8 @@ import com.sigeye.core.Vendors
 import com.sigeye.core.analysis.surveillance.Sighting
 import com.sigeye.core.analysis.surveillance.Surveillance
 import com.sigeye.core.ble.Advert
+import com.sigeye.core.ble.Product
+import com.sigeye.core.ble.Products
 
 /**
  * Everything one advertiser has told us about itself, accumulated across sightings.
@@ -31,6 +33,29 @@ data class SeenDevice(
         get() = Vendors.byAddress(address) ?: companyId?.let { Vendors.byCompanyId(it) }
 
     val isAxon: Boolean get() = Vendors.isAxon(address)
+
+    /**
+     * What this thing appears to be, named as specifically as the evidence allows.
+     *
+     * Built from the accumulated record rather than one packet, which matters: a device
+     * sends a rich advertisement and a bare one in turn, so the services arrive in one and
+     * the manufacturer data in another.
+     */
+    val product: Product
+        get() = Products.of(
+            Advert(
+                address = address,
+                rssi = rssi,
+                atMs = lastSeenMs,
+                name = name,
+                companyId = companyId,
+                manufacturerData = manufacturerData,
+                serviceUuids = serviceUuids,
+                serviceData = serviceData,
+                txPower = txPower,
+                appearance = appearance,
+            ),
+        )
 
     /**
      * Surveillance hardware this device has identified itself as, if any.

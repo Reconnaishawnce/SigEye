@@ -69,6 +69,32 @@ object Continuity {
         return if (index == data.size) found else emptySet()
     }
 
+    /**
+     * The messages with their bodies, for anything that needs to read inside one.
+     *
+     * [types] answers "what is it sending", which is all a fingerprint needs. Working out
+     * which Apple device it is means reading the body: the model number lives inside
+     * Proximity Pairing and nowhere else.
+     *
+     * Empty on the same terms as [types]. A payload whose lengths do not add up was
+     * misread, and guessing at the rest would put invented structure into an answer.
+     */
+    fun messages(companyId: Int?, data: ByteArray?): Map<Int, ByteArray> {
+        if (companyId != APPLE || data == null || data.isEmpty()) return emptyMap()
+
+        val found = LinkedHashMap<Int, ByteArray>()
+        var index = 0
+        while (index + 1 < data.size) {
+            val type = data[index].toInt() and 0xFF
+            val length = data[index + 1].toInt() and 0xFF
+            val body = index + 2
+            if (body + length > data.size) return emptyMap()
+            found[type] = data.copyOfRange(body, body + length)
+            index = body + length
+        }
+        return if (index == data.size) found else emptyMap()
+    }
+
     fun name(type: Int): String = NAMES[type] ?: String.format("type 0x%02X", type)
 
     /** What a set of types reads as, for a screen explaining why two addresses were linked. */

@@ -548,6 +548,18 @@ private fun DeviceDetail(
                 Field("Signal", "${device.rssi} dBm, best ${device.bestRssi}")
                 Field("Rough range", String.format(Locale.US, "~%.1f m", device.roughMetres()))
                 device.txPower?.let { Field("TX power", "$it dBm") }
+                // What it is, first, because that is what somebody opened the row for.
+                val product = device.product
+                Field("Looks like", product.name)
+                product.maker?.let { Field("Maker", it) }
+                Text(
+                    product.because,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+                product.details.forEach { (label, value) -> Field(label, value) }
+
                 Field("Sightings", device.sightings.toString())
                 if (device.serviceUuids.isNotEmpty()) {
                     Field("Services", device.serviceUuids.joinToString("\n"))

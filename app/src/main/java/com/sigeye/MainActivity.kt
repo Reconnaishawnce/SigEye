@@ -110,6 +110,7 @@ private fun SigEyeApp() {
         ),
     ) { mutableStateListOf<String>() }
 
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val goBack: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
     val open: (String) -> Unit = { stack.add(it) }
 
@@ -127,6 +128,9 @@ private fun SigEyeApp() {
                     onLocate = { address -> open(LOCATE_PREFIX + address) },
                     onRadar = { address -> open(RADAR_PREFIX + address) },
                     onRotation = { address -> open(ROTATION_PREFIX + address) },
+                    // Wired here rather than inside the bar, so the bar stays a piece of
+                    // chrome and does not reach into an experiment's storage.
+                    onAlert = { address, label -> armWatch(appContext, address, label) },
                 ),
             )
             Screen(stack, open, goBack)
@@ -309,4 +313,29 @@ private fun Screen(
         // An unknown id can only come from a stale saved state after an update.
         else -> HomeScreen(onOpen = open, modifier = inset)
     }
+}
+
+/**
+ * Puts a watch on one device and turns alerts on, in one tap from the target bar.
+ *
+ * An address rule, which is the honest choice and a short-lived one: a phone changes its
+ * address every quarter of an hour and the alert goes quiet when it does. The returned line
+ * says so rather than letting somebody believe the watch is still set a day later.
+ */
+private fun armWatch(context: android.content.Context, address: String, label: String?): String {
+    val store = com.sigeye.experiments.watchlist.WatchStore.get(context)
+    val name = label?.takeIf { it.isNotBlank() } ?: address
+    store.upsert(
+        com.sigeye.experiments.watchlist.WatchRule(
+            id = "target-" + address.uppercase().replace(":", ""),
+            label = "Target: $name",
+            kind = com.sigeye.experiments.watchlist.MatchKind.ADDRESS,
+            value = address,
+            minRssi = -95,
+            cooldownSeconds = 300,
+        ),
+    )
+    store.armed = true
+    return "Watching for $name. If it changes address the alert stops, so this is good for " +
+        "the next few minutes rather than tomorrow."
 }

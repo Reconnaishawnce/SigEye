@@ -34,6 +34,8 @@ data class TargetRoutes(
     val onLocate: (String) -> Unit,
     val onRadar: (String) -> Unit,
     val onRotation: (String) -> Unit,
+    /** Arms a watch on this device and turns alerts on. Returns what to tell the user. */
+    val onAlert: (String, String?) -> String = { _, _ -> "" },
 )
 
 /**
@@ -54,6 +56,7 @@ fun TargetBar(routes: TargetRoutes, modifier: Modifier = Modifier) {
     val current = remember { CurrentTarget.get(context) }
     val pinned by current.pinned.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
 
     val held = pinned ?: return
 
@@ -122,6 +125,16 @@ fun TargetBar(routes: TargetRoutes, modifier: Modifier = Modifier) {
                     Route("Put it on the radar", "Proximity Radar, filtered to this one.") {
                         open = false
                         routes.onRadar(held.address)
+                    }
+                    Route("Tell me when it is back", "Alerts the next time this is in range.") {
+                        note = routes.onAlert(held.address, held.label ?: held.vendor)
+                    }
+                    note?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     }
 
                     Spacer(Modifier.height(12.dp))
