@@ -84,7 +84,12 @@ private fun ExperimentInfoDialog(experiment: Experiment, onDismiss: () -> Unit) 
         title = { Text(experiment.title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Section("What it measures", experiment.teaches)
+                Section("What it shows", experiment.teaches)
+
+                experiment.needs?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Section("What you need", it)
+                }
 
                 if (experiment.howTo.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
@@ -107,29 +112,11 @@ private fun ExperimentInfoDialog(experiment: Experiment, onDismiss: () -> Unit) 
                     }
                 }
 
-                experiment.reading?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Section("Reading the result", it)
-                }
-
+                // Last, and in the same quiet grey as everything else. It used to be first
+                // and in red, so every experiment opened with a warning.
                 experiment.limits?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "LIMITATIONS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                experiment.needs?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Section("Needs", it)
+                    Spacer(Modifier.height(12.dp))
+                    Section("Limitations", it)
                 }
             }
         },

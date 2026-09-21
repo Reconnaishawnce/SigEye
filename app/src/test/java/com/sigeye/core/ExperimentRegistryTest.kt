@@ -53,7 +53,6 @@ class ExperimentRegistryTest {
         // where it lies to you. A ready one with an empty howTo is half-finished.
         ready.forEach { experiment ->
             assertTrue("${experiment.id} has no howTo", experiment.howTo.isNotEmpty())
-            assertTrue("${experiment.id} has no reading", !experiment.reading.isNullOrBlank())
             assertTrue("${experiment.id} has no limits", !experiment.limits.isNullOrBlank())
         }
     }
@@ -94,7 +93,7 @@ class ExperimentRegistryTest {
         modes.forEach { mode ->
             assertTrue(mode.id, mode.teaches.isNotBlank())
             assertTrue(mode.id, mode.howTo.isNotEmpty())
-            assertTrue(mode.id, mode.limits != null || mode.reading != null)
+            assertTrue(mode.id, mode.limits != null)
         }
     }
 

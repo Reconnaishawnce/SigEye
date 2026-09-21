@@ -54,13 +54,56 @@ class ExperimentCopyTest {
         }
     }
 
+    /**
+     * Keeps the copy short enough to read.
+     *
+     * The panel used to open with a paragraph on what the experiment measures, a second on
+     * how to read the result, and a red warning about what it could not tell you, before
+     * getting to the steps. Somebody meeting radio for the first time closed it. These
+     * bounds are generous against what is actually written now; they exist to catch the
+     * drift back, not to police a sentence.
+     */
+    @Test
+    fun `nothing explains itself at length`() {
+        Experiments.all.forEach { experiment ->
+            assertTrue(
+                "${experiment.id}: the blurb is a card subtitle, not a summary",
+                experiment.blurb.length <= 90,
+            )
+            assertTrue(
+                "${experiment.id}: what it shows should be a sentence or two",
+                experiment.teaches.length <= 280,
+            )
+            experiment.limits?.let {
+                assertTrue("${experiment.id}: limitations should be a sentence or two", it.length <= 280)
+            }
+            experiment.needs?.let {
+                assertTrue("${experiment.id}: what you need should be one line", it.length <= 220)
+            }
+            assertTrue(
+                "${experiment.id}: ${experiment.howTo.size} steps. Three or four is the shape.",
+                experiment.howTo.size <= 5,
+            )
+            experiment.howTo.forEach { step ->
+                assertTrue(
+                    "${experiment.id}: a step ran to ${step.length} characters",
+                    step.length <= 150,
+                )
+            }
+        }
+    }
+
     @Test
     fun `anything openable explains itself, including what it cannot tell you`() {
         // DEVELOPMENT entries are descriptions of things that do not exist yet and open
         // nothing, so they owe nobody a walkthrough.
         Experiments.all.filter { it.status.openable }.forEach { experiment ->
             assertTrue("${experiment.id} has no howTo", experiment.howTo.isNotEmpty())
-            assertTrue("${experiment.id} has no reading", experiment.reading != null)
+            assertTrue(
+                "${experiment.id} needs more than one step. Three or four is the shape; " +
+                    "one is a description pretending to be instructions.",
+                experiment.howTo.size >= 2,
+            )
             assertTrue(
                 "${experiment.id} has no limits. Every measurement has some, and this is " +
                     "the section that gets skipped when it is optional.",

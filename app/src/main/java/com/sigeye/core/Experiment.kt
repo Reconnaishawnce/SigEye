@@ -19,9 +19,13 @@ data class Experiment(
     val needs: String? = null,
     /** Numbered walkthrough, shown behind "How this works" on the experiment screen. */
     val howTo: List<String> = emptyList(),
-    /** What the output means once you have it. */
-    val reading: String? = null,
-    /** The honest limits. Shown in red, because this is the part that gets skipped. */
+    /**
+     * What it misses, in a sentence or two.
+     *
+     * Last in the panel and quiet rather than red. It used to be shouted, which made every
+     * experiment open with a warning and taught people to skip the whole panel. It still
+     * matters; it is not the first thing a fifteen-year-old needs to read.
+     */
     val limits: String? = null,
     /**
      * The suite this is a mode of, if it is not a front door of its own.
@@ -128,9 +132,8 @@ object Experiments {
             partOf = IDENTITY,
             title = "Persistent Tracking",
             blurb = "Keep a device's name attached to it after it changes address.",
-            teaches = "A nickname sticks to an address. A phone changes its address every " +
-                "quarter of an hour, so the thing you named comes back a stranger. This " +
-                "follows it across, and says so loudly when it cannot be sure.",
+            teaches = "Give a device a name and it keeps that name even after it changes its address. " +
+                "When it cannot be sure, it says so instead of guessing.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             needs = "At least one named device on a list, made in Device Inspector. " +
@@ -138,34 +141,23 @@ object Experiments {
                 "own.",
             howTo = listOf(
                 "Name a device in Device Inspector and put it on a list.",
-                "Turn that list on here. Only devices on a followed list are touched.",
-                "Leave something scanning. This screen holds the radio while it is open; " +
-                    "for an afternoon, start a Forensics or Journey recording instead.",
-                "Watch the log. Every move is recorded with the evidence behind it, and " +
-                    "every move can be undone.",
-                "Check its work. Walk the device out of range and see whether the name " +
-                    "goes with it - that is ground truth, and it beats any confidence " +
-                    "score.",
+                "Turn that list on here.",
+                "Leave something else scanning. This screen is a passenger and never starts the " +
+                    "radio itself.",
+                "When the device changes address the name follows it, or it tells you it could " +
+                    "not be sure.",
             ),
-            reading = "The move is made on the same four signals Defeating Randomization " +
-                "shows: the advertisement's structure, the advertising interval, the " +
-                "signal not jumping across the swap, and the swap's timing. Only the " +
-                "strongest rating is acted on, and a device that matches two candidates " +
-                "equally well is left alone rather than assigned to the better of them.",
-            limits = "Getting this wrong is worse than getting nothing: a name on the " +
-                "wrong phone becomes a fact that Signal Watch, Discovery, Forensics and " +
-                "Traveling Companions all repeat, and nothing later corrects it. So it " +
-                "refuses on plain advertisements, on ambiguity, on anything already " +
-                "broadcasting before the swap, and on a device gone more than ten " +
-                "minutes. It follows nothing while the app is idle, because it never " +
-                "starts a scan.",
+            limits = "Only moves a name when the evidence is strong, so it will lose devices rather " +
+                "than guess. A device with a plain, featureless signal cannot be matched at " +
+                "all.",
         ),
         Experiment(
             id = INSPECTOR,
             title = "Device Inspector",
             blurb = "Everything broadcasting around you, decoded.",
-            teaches = "Who made it, what it is saying, how close it is. Name devices and " +
-                "group them into lists that other experiments can use.",
+            teaches = "Everything broadcasting around you, decoded: who made it, what it is saying, " +
+                "and roughly how close it is. Name things here and the other experiments can " +
+                "use your lists.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -177,54 +169,32 @@ object Experiments {
                 "Muting is global: a muted device is dropped before counting in " +
                     "every experiment.",
             ),
-            reading = "Sort by Closest to find what is near you, or Chattiest to find " +
-                "beacons, which advertise far more often than phones.",
-            limits = "A nickname sticks to an address, and phones change theirs " +
-                "every fifteen minutes or so. Name fixed hardware, not people's " +
-                "phones.",
+            limits = "A name is whatever the device chose to broadcast. Nothing here is verified.",
         ),
         Experiment(
             id = DISCOVERY,
             title = "Discovery",
             blurb = "Learn what is normally here, then watch for what is not.",
-            teaches = "A scan of anywhere returns dozens of devices and no way to rank " +
-                "them. Almost every useful question is about change rather than presence - " +
-                "what arrived, what left, what got closer since last time.",
+            teaches = "Learn what is normally in a place, then watch for anything new. Almost every " +
+                "interesting question is about change rather than presence.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             needs = "Somewhere to stand still for half a minute while it learns the room.",
             howTo = listOf(
-                "Stand where you mean to watch from and start the baseline. Everything " +
-                    "heard during it is filed as normal and will never be reported.",
-                "Thirty seconds suits most places. Somewhere with slow beacons needs " +
-                    "longer, or they will be announced as arrivals afterwards.",
-                "After that, only new devices appear. Anything getting steadily stronger " +
-                    "is marked as approaching and sorted to the top.",
-                "Tap 'not interesting' to file something away, or add the whole list to " +
-                    "the baseline once you have identified it.",
-                "For the at-home use: save a snapshot of a room you trust, then take " +
-                    "another next week and compare the two.",
-                "For the traveling-with-you use: snapshot three genuinely different " +
-                    "places and look at what fixed addresses appear in all of them.",
+                "Stand somewhere and let it learn what is normally there.",
+                "Save that as a snapshot.",
+                "Come back later and compare. Anything new is listed first, with an arrow " +
+                    "showing whether it is getting closer.",
             ),
-            reading = "Arrivals are devices unheard of during the baseline. The arrow is " +
-                "the signal trend, so a rising one is coming towards you. A comparison of " +
-                "two snapshots lists what arrived, what left, and what shifted by more " +
-                "than eight dB, which is about where a change stops being multipath.",
-            limits = "Randomized addresses defeat most of this and the app says so rather " +
-                "than pretending otherwise: a phone changes address roughly every fifteen " +
-                "minutes, which is indistinguishable from a stranger arriving, so " +
-                "suspected rotations are listed but not alerted on, and snapshot " +
-                "comparisons cover only fixed addresses. Something with no fixed address " +
-                "that never advertises during your baseline cannot be caught this way.",
+            limits = "A phone that has just changed its address looks like a brand new arrival, so " +
+                "expect some false arrivals anywhere busy.",
         ),
         Experiment(
             id = RADAR,
             title = "Proximity Radar",
             blurb = "Everything around you, arranged by how close it sounds.",
-            teaches = "Signal strength is a usable proxy for distance and a useless one " +
-                "for direction. Filter to a watchlist or a list of your own to hunt for " +
-                "one kind of thing.",
+            teaches = "Everything nearby, arranged by how strong its signal is. Closer to the middle " +
+                "means closer to you.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -235,51 +205,34 @@ object Experiments {
                 "Tap a blip to select it and see its signal, range and trend.",
                 "Tap Locate to hunt it down on foot.",
             ),
-            reading = "Distance from the center is signal strength, strongest in the " +
-                "middle. A blip drifting inward is getting closer.",
-            limits = "The angle is not a direction. One antenna cannot measure a " +
-                "bearing, so the angle is only a hash of the address that keeps " +
-                "each device in its own spot. Never read the radar as a map.",
+            limits = "Signal strength is a rough guide to distance and says nothing at all about " +
+                "direction. A wall or a body moves a blip more than walking does.",
         ),
         Experiment(
             id = CONVOY,
             title = "Traveling Companions",
             blurb = "The devices that turned up in every place you recorded, not just one.",
-            teaches = "Anything present in three unrelated places was traveling with you " +
-                "rather than living in any of them. The idea is simple; being honest " +
-                "about how weak it is takes most of the work.",
+            teaches = "Record two or three places, then see what turned up in all of them. Anything " +
+                "in every one of them came with you rather than living in any of them.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Genuinely different places, and enough time between them. File your " +
                 "own devices under a list called Mine first.",
             howTo = listOf(
-                "In Device Inspector, put your own earbuds, watch and car on a list " +
-                    "called Mine. They follow you perfectly, and without this the results " +
-                    "are forty rows of your own belongings.",
-                "Start a leg where you are and give it a few minutes, so everything nearby " +
-                    "has a chance to advertise at least once.",
-                "Finish the leg, travel somewhere genuinely different, and start another.",
-                "Three legs over an hour is the point at which the answer starts to mean " +
-                    "something. It will tell you when it is not there yet.",
-                "Tap any candidate for the reasoning, and mark it as yours if it is.",
+                "Record where you are now, and give it a name.",
+                "Go somewhere unrelated and record that too.",
+                "Do it once more, somewhere else again.",
+                "Anything that turned up in all three came with you.",
             ),
-            reading = "Something in every leg with a fixed address, over a real span of " +
-                "time, is the only thing rated strongly. Anything randomized is capped at " +
-                "the weakest rating however often it appears, because the same random " +
-                "address turning up repeatedly means either it is not rotating or the " +
-                "legs were too close together, and nothing here can tell those apart.",
-            limits = "This cannot catch a phone that rotates its address, which is most " +
-                "phones - it catches fitted equipment, tyre sensors and cheap trackers. " +
-                "Legs recorded close together in time and place share their contents by " +
-                "accident, so short journeys produce long innocent lists, and the app " +
-                "refuses to conclude anything until there is real separation.",
+            limits = "Only devices with a fixed address prove anything. A randomized address " +
+                "appearing twice is usually two different devices.",
         ),
         Experiment(
             id = WATCHLIST,
             title = "Signal Watch",
             blurb = "Alerts when something you care about comes into range.",
-            teaches = "Which identifiers survive address randomization and which do not. " +
-                "Manufacturer prefixes and service data outlive a rotating MAC.",
+            teaches = "Get told the moment something you care about comes into range. Watch for a " +
+                "maker, a device type, or anything on one of your lists.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -292,20 +245,17 @@ object Experiments {
                 "The cooldown keeps one arrival to one buzz rather than one per " +
                     "packet.",
             ),
-            reading = "Recent hits show what fired, when, and how strong it was at " +
-                "the time.",
-            limits = "Rules matching an address only work on hardware with a fixed " +
-                "one. Manufacturer prefixes, company IDs and service data " +
-                "survive address randomization; addresses do not.",
+            limits = "A rule based on an address stops working the moment that device changes it. " +
+                "Company and service rules survive.",
         ),
 
         // ----------------------------------------------------------- sensing
         Experiment(
             id = TRAIN_SPOTTER,
             title = "Train Spotter",
-            blurb = "Counts new Bluetooth devices nearby and flags the bursts.",
-            teaches = "A passing train is a hundred phones crossing your radio horizon at " +
-                "once. That shows up as a spike in previously unseen addresses.",
+            blurb = "Count a train going past from the phones inside it.",
+            teaches = "A passing train is a hundred phones crossing your radio horizon at once, which " +
+                "shows up as a sudden spike of devices you have never seen before.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -318,19 +268,15 @@ object Experiments {
                 "Pull the CSV later and compare the spike column against your " +
                     "labels.",
             ),
-            reading = "The chart shows new devices per bin. The dashed line is the " +
-                "usual rate and red dots are bursts.",
-            limits = "It cannot tell a train from any other crowd. A bus, a school " +
-                "emptying or a delivery van will all raise the count.",
+            limits = "Counts devices, not people or carriages. A busy platform can look a lot like a " +
+                "train.",
         ),
         Experiment(
             id = SPEED,
             title = "Speed Estimator",
             blurb = "How fast something passed, from how its signal rose and fell.",
-            teaches = "A device going past is loudest when it draws level. Six dB below " +
-                "that peak is a known greater range, and a known range at a known distance " +
-                "from the track is a right-angled triangle - so the length of track " +
-                "between the two crossings falls out, and time gives speed.",
+            teaches = "A car going past is loudest as it draws level with you. How quickly the signal " +
+                "rises and falls gives you its speed.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             needs = "A known perpendicular distance to the road or track.",
@@ -343,19 +289,15 @@ object Experiments {
                 "Check one against something you know, a road with a speed limit will do, " +
                     "and adjust the path loss exponent until it agrees.",
             ),
-            reading = "Each row shows the peak signal, how long the crossing took and how " +
-                "many readings it rested on. Passes marked rough had lopsided approach and " +
-                "departure, which usually means something else was changing.",
-            limits = "It assumes a straight line at constant speed passing at the distance " +
-                "you gave. A device slowing down, stopping, or on a different track will " +
-                "still produce a number, and it will be wrong.",
+            limits = "Needs a clean pass with nothing in the way, and your distance to the road is " +
+                "an estimate rather than a measurement. Rough passes are marked as such.",
         ),
         Experiment(
             id = CROWD,
             title = "Crowd Counter",
             blurb = "Roughly how many people are around you.",
-            teaches = "Devices are a proxy for people, and a bad one until calibrated " +
-                "against a headcount you actually know.",
+            teaches = "Roughly how many people are around you, counted from the devices they carry. " +
+                "Calibrate it once against a headcount you actually know.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -366,49 +308,32 @@ object Experiments {
                     "number.",
                 "That figure is now roughly right for this kind of place.",
             ),
-            reading = "The radar shows what is present now, strongest at the center. " +
-                "The headline uses only devices heard in the last minute.",
-            limits = "It counts devices, not people. Laptops, televisions and " +
-                "printers belong to nobody, and one person can carry three " +
-                "advertisers.",
+            limits = "People carry different numbers of devices and some carry none. Until you " +
+                "calibrate it, treat the number as a trend rather than a count.",
         ),
         Experiment(
             id = FORENSICS,
             title = "Forensics",
-            blurb = "Records everything now so the question can be asked later.",
-            teaches = "Two hundred devices go past in three minutes and the one you care " +
-                "about is indistinguishable in the moment. Recording first and filtering " +
-                "afterwards turns an impossible live problem into an easy review.",
+            blurb = "Record a place now, so you can ask the question later.",
+            teaches = "Record a place, then go through it afterwards. Two hundred devices in three " +
+                "minutes is impossible to follow live and easy to review later.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             needs = "Somewhere with traffic, and a few minutes.",
             howTo = listOf(
-                "Start recording and leave it for as long as the thing you are after " +
-                    "might take to appear - three minutes for a street.",
-                "Stop, then subtract. Hide unchanged removes everything that sat there " +
-                    "doing nothing, which is usually most of it.",
-                "Hide known removes anything you have nicknamed or filed, so what is left " +
-                    "is what you have never named.",
-                "Went past only keeps the things that rose to a peak and fell away again " +
-                    "- the shape of a vehicle rather than a shop.",
-                "Tap a row for the full detail: vendor, swing, when it was audible, and " +
-                    "where its peak fell within its own visit.",
+                "Start recording, then carry the phone or leave it somewhere.",
+                "Stop when you are done. Nothing leaves the phone.",
+                "Go through the timeline afterwards and filter for whatever you care about.",
             ),
-            reading = "The bar on each row is the whole recording; the filled part is " +
-                "when that device was audible and the line inside it is its signal. " +
-                "Something that arrived halfway through and swelled in the middle is a " +
-                "pass. Something flat from edge to edge is furniture.",
-            limits = "Randomized addresses mean one phone driving past can appear as two " +
-                "or three separate devices. The recording lives in memory and is lost " +
-                "when you leave the screen unless you export it first.",
+            limits = "Only records what was actually advertising at the time. Your own devices are " +
+                "left out unless you ask for them.",
         ),
         Experiment(
             id = DWELL,
             title = "Dwell Time",
             blurb = "Who is passing through, and who lives here.",
-            teaches = "Sort devices by how long they stay. Under two minutes is traffic, " +
-                "over twenty is a fixture - and only the fixtures are trustworthy, " +
-                "because a phone changes address before it can become one.",
+            teaches = "Tells the people passing through from the things that live here. Under two " +
+                "minutes is traffic, over twenty is furniture.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -418,81 +343,54 @@ object Experiments {
                 "Tap any device for its full record, and to name, watch or mute " +
                     "it.",
             ),
-            reading = "Resident means a device held one address for over twenty " +
-                "minutes, which means fixed hardware. Those are the trustworthy " +
-                "rows.",
-            limits = "Passing counts are inflated by address randomization: one " +
-                "phone walking past can appear as several devices over an " +
-                "evening.",
+            limits = "Only fixed hardware can be a resident. Phones change address before they can " +
+                "become one, so they always look like traffic.",
         ),
         Experiment(
             id = MOTION,
             title = "RF Motion Detector",
             blurb = "Notices someone crossing a radio path.",
-            teaches = "A body reflects 2.4 GHz, so moving one changes how reflections add " +
-                "and cancel at the receiver. The signal becomes unstable long before it " +
-                "becomes weak, which is why this watches steadiness rather than strength.",
+            teaches = "Turn a radio path into a tripwire. Somebody crossing between two devices makes " +
+                "the signal jitter long before it gets any weaker.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             needs = "A few Bluetooth devices sitting still nearby to use as links.",
             howTo = listOf(
-                "Put the phone down where it will stay, somewhere with a television, " +
-                    "a speaker or earbuds within range.",
-                "Press Calibrate and then leave the room, or at least hold still, for " +
-                    "twenty-five seconds.",
-                "Anything moving during calibration is learned as normal, which is the " +
-                    "one way to make this useless.",
-                "Walk back in and watch the score cross the trigger.",
-                "If nothing fires unless you stand next to the phone, open Settings and " +
-                    "lower the noise floor - that is usually the culprit.",
-                "If you know where someone would walk, choose the links yourself: a " +
-                    "beacon on the far side of a doorway makes a tripwire.",
+                "Put a Bluetooth device on one side of the space and the phone on the other.",
+                "Hold still for a minute while it learns what calm looks like.",
+                "Walk between them. The score jumps well before the signal gets weaker.",
             ),
-            reading = "The score is how far the steadiest links have strayed from their " +
-                "own calm behavior, in standard deviations. Level and jitter are shown " +
-                "apart: level is someone blocking the path, jitter is someone moving " +
-                "anywhere in the room. Jitter is the sensitive one.",
-            limits = "It cannot tell you who, where, or how many - only that the room " +
-                "stopped being still. A fan, a door swinging or a cat will all trip it.",
+            limits = "Tells you something moved, never who or where. Doors, fans and lifts set it " +
+                "off too.",
         ),
         Experiment(
             id = PLACE,
             title = "Place Profiler",
             blurb = "How busy a place is hour by hour, from a phone left sitting there.",
-            teaches = "Somewhere busy and somewhere quiet look identical in a snapshot and " +
-                "nothing alike over an afternoon. A car park is flat and full overnight; " +
-                "a corridor is spiky and empty. The shape is the fingerprint.",
+            teaches = "Leave the phone somewhere for a few hours and read the shape of the day. A car " +
+                "park and a corridor look identical in a snapshot and nothing alike over an " +
+                "afternoon.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             needs = "A few hours, and a charger. The screen has to stay open.",
             howTo = listOf(
-                "Choose a slice length. Ten minutes over four hours gives twenty-four " +
-                    "slices, which is enough shape without every slice being noise.",
-                "Start it, plug the phone in, and leave it somewhere it will not be moved.",
-                "Come back hours later. Under an hour tells you almost nothing, and the " +
-                    "screen says so rather than drawing a confident chart of noise.",
-                "Read the residents list for what lives there, and the movers list for " +
-                    "anything that normally sits still and stopped doing so.",
+                "Leave the phone somewhere it can sit for a few hours, plugged in.",
+                "Come back and read the shape of the day.",
+                "Flat and full overnight is a car park. Spiky and empty is a corridor.",
             ),
-            reading = "Bars are devices present per slice; the marks underneath are how " +
-                "much arrived or left. A resident was around for several slices, a " +
-                "fixture for most of them. A fixture whose signal steps abruptly is the " +
-                "most interesting thing here - something that had been still was moved, " +
-                "or something large moved between it and the phone.",
-            limits = "The screen has to stay open, so this is not a background task. " +
-                "Randomized addresses make phones look like a stream of strangers rather " +
-                "than the same people staying, which inflates arrivals and departures - " +
-                "the fixtures are the trustworthy half. And a step in signal is not " +
-                "proof of movement, only of change.",
+            limits = "Counts devices rather than people, and a phone that changes address gets " +
+                "counted twice.",
         ),
         Experiment(
             id = "rhythm",
             title = "Daily Rhythm",
             blurb = "The week where you live, in device counts.",
-            teaches = "Commute peaks, quiet Sundays, the pub emptying. Long-run logging " +
-                "turns noise into a schedule.",
+            teaches = "The week where you live, in device counts. Commute peaks, quiet Sundays, the " +
+                "pub emptying.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.DEVELOPMENT,
+            limits = "Counts devices rather than people, and needs several days before the shape " +
+                "means anything.",
         ),
 
         // ----------------------------------------------------------- physics
@@ -500,222 +398,132 @@ object Experiments {
             id = BENCH,
             title = "RF Bench",
             blurb = "Measure what radio actually does in your rooms, and keep the numbers.",
-            teaches = "Every number the rest of this app quotes about distance rests on " +
-                "assumptions about how signal falls off, how much a wall takes, how much " +
-                "a body blocks. Those are not constants. They are properties of the " +
-                "building you are standing in, and they are measurable in a few minutes " +
-                "each. Seven measurements that share a method: hold a pose, watch the " +
-                "level, keep the result.",
+            teaches = "Radio behaves differently in every building. Seven quick measurements of what " +
+                "your walls, your body and your furniture actually do to a signal, and a " +
+                "notebook to keep them in.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "Bluetooth, a device to measure against, and for some of them a second " +
                 "phone or a tape measure. Each one says what it needs when you open it.",
             howTo = listOf(
-                "Pick the measurement. Path loss is the one to start with, because the " +
-                    "exponent it produces is the number every distance estimate in the " +
-                    "app is quietly assuming.",
-                "Each one saves its runs, so the useful question is not what the number " +
-                    "is but whether it has changed. Name a run before you move.",
-                "The notebook holds every run from every measurement in one place, which " +
-                    "is how you find out what you already know about a building.",
+                "Start with Path loss. The number it gives is what every distance in this app " +
+                    "is otherwise assuming.",
+                "Name and save each run. What a measurement says on its own matters less than " +
+                    "whether it has changed.",
+                "The notebook holds every run from all seven in one place.",
             ),
-            reading = "None of these produce a constant. They produce a property of one " +
-                "place, and the same measurement in the next room will differ - which is " +
-                "the finding, not the error.",
-            limits = "A phone's radio is not an instrument. It reports RSSI in whole " +
-                "decibels with no calibration and no guarantee that two phones agree, so " +
-                "these are good for comparing one reading against another on the same " +
-                "phone and poor for absolute numbers.",
+            limits = "A phone is not a calibrated instrument. These are good for comparing readings " +
+                "taken on this phone and poor as absolute numbers.",
         ),
         Experiment(
             id = DOPPLER,
             partOf = BENCH,
             title = "Doppler Walk",
-            blurb = "The path loss exponent where you are, paced out instead of assumed.",
-            teaches = "Signal turns into distance through one formula with one unknown in " +
-                "it, the path loss exponent. Every proximity feature ever shipped has " +
-                "guessed that number. Count your steps and you can measure it instead.",
+            blurb = "Measure how fast a signal fades with distance, by pacing it out.",
+            teaches = "Signal strength becomes distance through one formula with one unknown in it. " +
+                "Walk away counting your steps and you can measure that number instead of " +
+                "guessing it.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             needs = "Something that stays put, a straight line to walk, and ideally a step " +
                 "counter - most phones have one.",
             howTo = listOf(
-                "Set your stride length. About 0.415 times your height is the usual " +
-                    "estimate, but pacing out a known distance and dividing is better - " +
-                    "an error here goes straight into the answer.",
-                "Pick something fixed and leave it where it is. A beacon, a speaker, a " +
-                    "television.",
-                "Walk steadily away in a straight line. Fifteen meters is plenty.",
-                "Do not turn back before finishing. The fit reads a return trip as the " +
-                    "signal refusing to fall, and says so rather than reporting nonsense.",
-                "Try it again in a corridor, then through a wall. The number moves a long " +
-                    "way, which is the point.",
+                "Pick something to measure against and stand next to it.",
+                "Walk away in a straight line, counting your steps.",
+                "Tap at each step. Five or six points is plenty.",
+                "The slope of the line is the number you came for.",
             ),
-            reading = "The model is rssi = reference - 10 n log10(distance), so signal " +
-                "against the logarithm of distance is a straight line of slope -10n. Two " +
-                "is free space, three or so is a normal room, four is several walls, and " +
-                "below two means a corridor guiding the wave. Scatter about the line is " +
-                "multipath.",
-            limits = "The distance is only as good as the stride length, and the step " +
-                "counter needs physical activity permission or it returns nothing at all. " +
-                "A walk that curves, or one where the transmitter is not actually fixed, " +
-                "measures something other than path loss. Under a few meters of travel it " +
-                "declines to fit.",
+            limits = "Needs a straight, open path. Furniture and walls bend the line, which is " +
+                "itself worth seeing.",
         ),
         Experiment(
             id = POLARIZATION,
             partOf = BENCH,
             title = "Rotational Polarization",
             blurb = "How much signal is lost when two antennas stop lining up.",
-            teaches = "Radio has an orientation. Turn a receiving antenna across the field " +
-                "and it stops hearing, ten to twenty dB from nothing but a twist of the " +
-                "wrist. How deep that null goes tells you how much of the signal reached " +
-                "you without bouncing off anything on the way.",
+            teaches = "Radio waves have an orientation. Turn the phone over and the signal can drop " +
+                "ten decibels from nothing but a twist of the wrist.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "One chatty transmitter a few meters away, and an accelerometer - " +
                 "which every phone has. No compass, so nothing to calibrate.",
             howTo = listOf(
-                "Pick a source that talks at least twice a second, a few meters away " +
-                    "with a clear path. Too close and reflections fill the null in.",
-                "Hold the phone with its long axis level, pointing left and right in " +
-                    "front of you. Stood on end, gravity runs down that axis and there " +
-                    "is nothing left to measure roll against.",
-                "Roll it slowly about that axis, like turning a rolling pin - screen up, " +
-                    "screen sideways, screen down, all the way over and back. Keep it in " +
-                    "the same spot while you do.",
-                "Watch the plot go oval. The long way is aligned, the short way crossed.",
-                "Try it again on a different source. A phone tumbling in a pocket has no " +
-                    "fixed orientation to align with and gives almost nothing.",
+                "Prop the phone upright with a clear view of the device you are measuring.",
+                "Roll it slowly through a full turn without moving it anywhere.",
+                "The deepest dip is where the two antennas stopped lining up.",
             ),
-            reading = "Depth is the gap between the best and worst roll angle. Six dB or " +
-                "more, with the two extremes about ninety degrees apart, is polarization " +
-                "and nothing else in a room produces that shape. The deeper the null, the " +
-                "more of the signal arrived by one clean path - the same quantity " +
-                "Multipath Fading calls K, measured a completely different way.",
-            limits = "Stood on end the measurement is undefined and readings are dropped " +
-                "rather than plotted. Close in, or through walls, the null fills with " +
-                "reflections and the answer is honestly small rather than wrong. Moving " +
-                "the phone while rolling it measures distance instead. Some antennas are " +
-                "circularly polarized and simply have no null to find.",
+            limits = "Only works with a clear line of sight. In a room full of reflections the " +
+                "effect fills in and disappears.",
         ),
         Experiment(
             id = CONGESTION,
             title = "Channel Congestion",
             blurb = "Who is using the 2.4 GHz band, and whether Bluetooth has room to shout.",
-            teaches = "Bluetooth advertises on three fixed frequencies, picked to dodge " +
-                "Wi-Fi channels 1, 6 and 11. Park an access point anywhere else and it " +
-                "lands right on top of them. This shows you both halves at once.",
+            teaches = "See who is crowding the 2.4 GHz band and whether Bluetooth can get a word in. " +
+                "Bluetooth uses three fixed frequencies picked to dodge Wi-Fi, and a badly " +
+                "placed router lands right on top of them.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "Wi-Fi switched on - being connected is not required, being enabled " +
                 "is. Scan throttling off helps the chart keep up.",
             howTo = listOf(
-                "Open it and wait for the first Wi-Fi scan. The chart is drawn against " +
-                    "frequency rather than channel number, so the overlaps are visible.",
-                "Find the three tertiary markers. Those are Bluetooth advertising " +
-                    "channels 37, 38 and 39 - dashed when clear, solid when something is " +
-                    "sitting on them.",
-                "Look at what is arriving underneath. Each device's own advertising " +
-                    "interval says how often it transmits; the percentage is how much of " +
-                    "that reached the phone.",
-                "Walk to a different part of the building and watch both halves move " +
-                    "together. A router on channel 3 in the next room is visible in the " +
-                    "chart and audible in the percentages.",
+                "Open it anywhere with Wi-Fi around.",
+                "Bars show how busy each channel is. The shaded lanes are 1, 6 and 11.",
+                "Bluetooth lives in the gaps between those three, so a router parked in a gap " +
+                    "lands right on top of it.",
             ),
-            reading = "Bars are summed neighbor power on each 20 MHz channel, added as " +
-                "power rather than as decibels - two equal signals are 3 dB together, not " +
-                "twice the number. Shaded lanes are the non-overlapping 1, 6 and 11. A " +
-                "reception figure well under half means packets are being lost; compared " +
-                "against the best link in view, it rules out the phone itself.",
-            limits = "A phone cannot measure airtime, only who is present and how loud, " +
-                "so a single loud access point with no traffic reads as congestion. " +
-                "Android never says which advertising channel a packet arrived on, so " +
-                "reception is measured per device rather than per channel. Bluetooth " +
-                "Classic, microwaves, video senders and cordless phones are all in this " +
-                "band and none of them appear in a Wi-Fi scan.",
+            limits = "Only measures the networks it can hear. The microwave, the baby monitor and " +
+                "the cordless phone next door are all invisible to it.",
         ),
         Experiment(
             id = BANDS,
             partOf = BENCH,
             title = "Wall Penetration",
             blurb = "Measure how much more the building takes from 5 GHz than from 2.4.",
-            teaches = "Everyone has heard that 5 GHz does not go through walls as well. The " +
-                "two radios in one router already differ before any wall is involved, so " +
-                "the gap itself is not the measurement. How the gap changes when you " +
-                "walk is the measurement. What is left over is the building.",
+            teaches = "Measure what your building takes out of 5 GHz compared with 2.4. The two bands " +
+                "already differ before any wall is involved, so it is how the gap changes as " +
+                "you walk that tells you about the building.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "A dual-band access point broadcasting on both 2.4 and 5 GHz, which " +
                 "most routers of the last ten years do, and Wi-Fi switched on.",
             howTo = listOf(
-                "Stand where you can see the router, with nothing between you and it. " +
-                    "Wait for the pairs to settle - three scans each.",
-                "Set the baseline. That records what the two bands look like with no " +
-                    "building in the way, which is everything that is not the answer.",
-                "Walk. Another room, the next floor, the far end of the garden.",
-                "Read the excess. That is how much more the walls took from 5 GHz than " +
-                    "from 2.4 - the one number the phrase everybody repeats actually " +
-                    "refers to.",
-                "Save a spot in each room, and you have surveyed the building.",
+                "Find a router that broadcasts on both 2.4 and 5 GHz.",
+                "Measure next to it, with nothing in the way.",
+                "Walk to the far side of a wall and measure again.",
+                "How much the gap between the bands grew is what the wall cost.",
             ),
-            reading = "An antenna's effective area falls with the square of frequency, so " +
-                "5 GHz starts about 6.6 dB down on 2.4 in open air with nothing in the " +
-                "way. On top of that the regulations permit different transmit powers per " +
-                "band, the vendor may have chosen differently again, and the phone's two " +
-                "receive chains are not equally sensitive - all constant, all cancelled by " +
-                "the baseline. Under 3 dB of excess is scan noise; over 10 dB is " +
-                "structural; and a negative number means 2.4 GHz is being interfered with " +
-                "rather than 5 GHz being blocked.",
-            limits = "Pairs are matched by BSSID where two radios differ only in the last " +
-                "octet, which is one box saying so, and otherwise by network name and " +
-                "vendor - which in a building full of mesh nodes can pair two different " +
-                "boxes, and the screen marks those. Android's RSSI is uncalibrated and a " +
-                "single scan wanders several dB, so readings are averaged over several. " +
-                "Moving the baseline invalidates every saved spot, so it clears them.",
+            limits = "Needs a router broadcasting on both bands. The two bands are allowed different " +
+                "transmit powers, and that difference cannot be separated from the building.",
         ),
         Experiment(
             id = FADING,
             partOf = BENCH,
             title = "Multipath Fading",
             blurb = "How much a signal wanders on its own, with nothing moving.",
-            teaches = "Reflections add and cancel, so signal swings several dB with " +
-                "nothing moving. This is why signal strength is a poor ruler.",
+            teaches = "Stand perfectly still and watch the signal move anyway. Reflections add and " +
+                "cancel, which is why signal strength makes a poor ruler.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "One transmitter that advertises often - a few packets a second. " +
                 "Earbuds, a fitness band or a beacon are ideal; a sensor that speaks once " +
                 "a minute is not.",
             howTo = listOf(
-                "Pick a source from the list. The rate on the right matters more than " +
-                    "the signal strength - two packets a second or better.",
-                "Put the phone down and leave it alone for twenty or thirty seconds.",
-                "Save the spot, then move the phone about six centimetres - a hand's " +
-                    "width - in any direction and record again.",
-                "Do that three or four times, then compare. Indoors the spots will " +
-                    "disagree by several dB.",
-                "For the strongest effect, put a wall or a large metal object between " +
-                    "you and the source so no single path dominates.",
+                "Prop the phone up and pick a device to watch.",
+                "Stand well back and keep the room still.",
+                "Wait a minute. Everything you see moving is happening with nothing moving at " +
+                    "all.",
             ),
-            reading = "Swing is the gap between the best and worst reading. K is how much " +
-                "of the signal arrives by one dominant path rather than by reflections, " +
-                "in dB: above 10 is a clear line of sight, near 0 means everything has " +
-                "bounced. The distance range at the bottom is the same fading fed through " +
-                "the formula every proximity feature uses, which is the point of the " +
-                "experiment.",
-            limits = "It assumes nothing moved while you recorded. A person walking past, " +
-                "or the transmitter changing its own power, will look exactly like " +
-                "fading. The K factor is a method-of-moments estimate and wants a few " +
-                "hundred readings before it settles.",
+            limits = "Cannot tell a reflection from somebody walking past in the next room. Stand " +
+                "still, and keep the room still.",
         ),
         Experiment(
             id = ABSORPTION,
             partOf = BENCH,
             title = "Body Absorption",
             blurb = "How much of the signal your own body blocks, in decibels.",
-            teaches = "You are mostly water and water absorbs 2.4 GHz, so a notch appears " +
-                "when your torso sits between the phone and the source. Several dB of it " +
-                "is a body; much more means a wall joined in.",
+            teaches = "You are mostly water, and water soaks up 2.4 GHz. Turn slowly in a circle and " +
+                "find the shadow you cast in your own radio.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "A compass. Most phones have one, but it must be calibrated.",
@@ -723,58 +531,40 @@ object Experiments {
                 "Pick a chatty source. The list shows how many packets a second " +
                     "each one sends - anything under about three will not fill the " +
                     "sectors in time.",
-                "Hold the phone flat against your chest, screen facing out. " +
-                    "This matters more than anything else: your torso has to be " +
-                    "between the phone and the source.",
+                "Hold the phone flat against your chest, screen facing out. Your torso " +
+                    "has to be between the phone and the source.",
                 "Turn slowly on the spot, a full circle in about thirty " +
                     "seconds.",
                 "Run it at least twice from the same place, facing the same way " +
                     "to start.",
             ),
-            reading = "Radius is signal strength and north is up, so a notch is a " +
-                "direction something was absorbing from. The dB figure is the " +
-                "difference between the best and worst direction - a few dB is " +
-                "a body.",
-            limits = "One sweep cannot tell your body from the room, because a " +
-                "reflection makes a notch too. Only repeated sweeps can: yours " +
-                "turns with you, the room's stays put.",
+            limits = "Walls absorb too. A notch much deeper than a few decibels probably has a wall " +
+                "in it.",
         ),
         Experiment(
             id = WIFI,
             title = "Wi-Fi Survey",
             blurb = "Every network around you, and what its address gives away.",
-            teaches = "An access point announces itself continuously, and the first three " +
-                "bytes of its address name whoever registered the block. Hidden networks " +
-                "are still perfectly visible - hiding the name hides nothing else.",
+            teaches = "Every network in range, and what its name and address give away. Hiding a " +
+                "network name hides nothing else about it.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Wi-Fi switched on, or Wi-Fi scanning enabled in location settings.",
             howTo = listOf(
-                "Open it and leave it. A scan is requested every ten seconds.",
-                "Turn off Wi-Fi scan throttling in developer options first, or Android " +
-                    "caps you at four scans every two minutes and the picture updates far " +
-                    "more slowly than it looks like it should.",
-                "Use the Flagged filter for prefixes associated with surveillance " +
-                    "hardware, but read the caveat on each - most of them are component " +
-                    "vendors rather than the company you are looking for.",
-                "Hidden and Open are the other two filters worth a look: a hidden network " +
-                    "is not concealed, only unnamed, and an open one is unencrypted.",
+                "Open it anywhere. Every network in range is listed.",
+                "Tap one for its address, band and channel.",
+                "Hidden networks show up too, just without their names.",
             ),
-            reading = "Strong means the prefix is registered to the company itself. Weak " +
-                "means it is a component vendor whose modules are in a great many " +
-                "ordinary devices, and needs corroborating - is it fixed in place, is it " +
-                "outdoors, is it still there tomorrow.",
-            limits = "Access points only. The probe requests a phone sends out, naming " +
-                "networks it has joined before, are client frames and need monitor mode - " +
-                "a chipset, a driver and root. No app on a stock phone can capture them.",
+            limits = "An address prefix names whoever registered it, which is often the company that " +
+                "made the chip rather than the one that made the product.",
         ),
         Experiment(
             id = FARADAY,
             partOf = BENCH,
             title = "Faraday Cage Test",
             blurb = "What a tin, a fridge or a crisp packet really blocks, in decibels.",
-            teaches = "Shielding, apertures, and why the seams matter more than the metal. " +
-                "A gap far smaller than the wavelength still leaks, and 2.4 GHz is 12 cm.",
+            teaches = "Does a tin, a fridge or a crisp packet actually block anything? Measure it. " +
+                "The seams matter more than the metal.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "A small Bluetooth device you can put inside something, and something " +
@@ -789,21 +579,16 @@ object Experiments {
                 "Put it in, close the container properly, and measure again in the same " +
                     "spot.",
             ),
-            reading = "The number is how many dB the container took off. Under 3 is " +
-                "nothing, 10 to 25 is a real shield with a leaky seam, and no packets at " +
-                "all means a complete block that cannot be measured further.",
-            limits = "Once nothing gets through there is no way to tell how much further " +
-                "it would have gone - infinity here just means more than the phone can " +
-                "hear.",
+            limits = "A complete block cannot be measured, only reported as complete. Small " +
+                "containers change the signal just by being near the phone.",
         ),
         Experiment(
             id = MICROWAVE,
             partOf = BENCH,
             title = "Microwave Interference",
             blurb = "How much a microwave oven costs the 2.4 GHz band, if anything.",
-            teaches = "A consumer microwave leaks around 2.45 GHz, right in the middle of " +
-                "the band Bluetooth uses. Measure how many advertisements survive with " +
-                "it off, then with it on.",
+            teaches = "A microwave leaks right into the band Bluetooth uses. Count packets with it " +
+                "off, then with it on.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.ACTIVE,
             needs = "A microwave and something to heat in it.",
@@ -815,21 +600,16 @@ object Experiments {
                 "Start the microwave, then record the test phase for thirty seconds.",
                 "Stop, and compare.",
             ),
-            reading = "The measure is how many advertisements a second reach the " +
-                "phone. A microwave leaking into the band drowns them out, so " +
-                "the rate falls and the surviving packets read weaker.",
-            limits = "It cannot see the microwave directly, only the damage it does. A " +
-                "modern, well-sealed one may show almost nothing, which is itself the " +
-                "answer: your kitchen Wi-Fi problem is somewhere else.",
+            limits = "Ovens vary enormously. This measures yours, from where you happen to be " +
+                "standing.",
         ),
         Experiment(
             id = BLINK,
             title = "Blink",
             blurb = "Send a message between two phones using only silence and its absence.",
-            teaches = "A Bluetooth advertisement has a payload and this uses none of it. " +
-                "Every packet is identical and the message is carried entirely in whether " +
-                "the radio is transmitting during each half second, which is the same " +
-                "channel Follow Me and Defeating Randomization read by accident.",
+            teaches = "Send a message between two phones with no data in any packet at all. Every " +
+                "packet is identical and the meaning is carried in the gaps, like a lamp and a " +
+                "shutter.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.BETA,
             needs = "Two phones. One transmits and one listens, and some chipsets receive " +
@@ -842,24 +622,15 @@ object Experiments {
                 "Read the message as it arrives, a character every few seconds.",
                 "Send it again with a shorter slot and watch it start to break.",
             ),
-            reading = "Roughly two bits a second, which is about a character every three " +
-                "and a half seconds and slower than a person sending morse by hand. A " +
-                "character arriving with its parity wrong is drawn as a block rather than " +
-                "quietly becoming a different letter.",
-            limits = "This is a demonstration and not a way to communicate. It is slow, it " +
-                "carries no encryption of any kind, anything in range can read it, and a " +
-                "wall between the phones will break it. The one piece of content in the " +
-                "packet is a marker saying which device to watch, because the address " +
-                "rotates partway through a long message and the sender cannot be " +
-                "recognized by address.",
+            limits = "About two bits a second, which is slower than morse sent by hand. Some phones " +
+                "can receive Bluetooth but will not transmit it.",
         ),
         Experiment(
             id = WEATHER,
             title = "Radio Weather",
             blurb = "How much radio is landing on this phone, and what it is coming from.",
-            teaches = "Every transmitter in earshot, added up the only way decibels can be " +
-                "added, and split by which radio it came from. The shape matters more than " +
-                "the total: one cell tower usually outweighs every Wi-Fi and Bluetooth " +
+            teaches = "Add up every radio signal landing on this phone. The shape matters more than " +
+                "the total, and one cell tower usually outweighs every Wi-Fi and Bluetooth " +
                 "device in the building put together.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
@@ -872,97 +643,57 @@ object Experiments {
                 "Turn your own Wi-Fi off and watch nothing happen, because this counts " +
                     "other people's transmitters rather than yours.",
             ),
-            reading = "Busy and quiet differ by a factor of thousands in power and both sit " +
-                "far below any published exposure limit, which is why this says busy or " +
-                "quiet and never safe or unsafe. Decibels are logarithms: two transmitters " +
-                "at -70 arrive together as -67, not -140.",
-            limits = "This is not an exposure meter and cannot be turned into one. It " +
-                "ignores duty cycle, so an access point sitting idle and one running flat " +
-                "out read the same. RSSI is uncalibrated and moves several decibels with " +
-                "the hand holding the phone. And the largest transmitter near you is this " +
-                "phone's own uplink, which no application programming interface on any " +
-                "handset will report - so the thing people install a meter to measure is " +
-                "the one thing a phone cannot measure.",
+            limits = "Only counts what this phone has a radio for. Broadcast towers and radar are " +
+                "invisible to it, which is why it says busy or quiet and never safe or unsafe.",
         ),
         Experiment(
             id = SKY,
             title = "Satellites Overhead",
             blurb = "Every satellite your phone can hear, and which ones it trusts.",
-            teaches = "The faintest radio a phone receives by a wide margin, arriving from " +
-                "twenty thousand kilometres up weaker than the noise of the chip hearing " +
-                "it. The plot shows what is above you, what is in the fix, and the shape " +
-                "of whatever is standing in the way.",
+            teaches = "See every satellite your phone can hear, and which ones it actually trusts. " +
+                "This is the faintest signal a phone receives, arriving from twenty thousand " +
+                "kilometres up.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             howTo = listOf(
-                "Go outside, or stand at a window. Indoors this finds very little, which " +
-                    "is itself the demonstration.",
-                "Give it a minute. A receiver has to work out which satellites are up " +
-                    "there before it can place any of them.",
-                "Read the plot. The middle is straight up, the rim is the horizon, and a " +
-                    "bare patch is whatever is in the way on that side.",
-                "Look for the L5 marks in the list. A phone that hears a second frequency " +
-                    "is metres better in a city than one that does not.",
-                "Walk to the other side of a building and watch the bare patch move.",
+                "Go outside with a clear view of the sky.",
+                "Wait a minute or two while the phone finds them.",
+                "Filled dots are satellites in the fix. Hollow ones are heard but not trusted.",
             ),
-            reading = "The number that matters is how many are used rather than how many " +
-                "are heard. A position needs four: three for where you are and a fourth " +
-                "for how wrong the phone's own clock is. Carrier to noise is given in " +
-                "dB-Hz and is not comparable to the dBm anywhere else in this app - 45 " +
-                "dB-Hz is a strong satellite arriving at about -155 dBm.",
-            limits = "This reads what the receiver reports and cannot check it. A phone " +
-                "being deceived by a spoofed signal would show that signal here looking " +
-                "healthy, because the deception happens below anything an app can see. " +
-                "Elevation and azimuth come from the almanac rather than from measurement, " +
-                "so they are where a satellite should be. Nothing here requests a position " +
-                "or records one.",
+            limits = "Shows what the phone reports. Indoors you will see satellites listed that it " +
+                "cannot actually use.",
         ),
         Experiment(
             id = RTT,
             title = "True Ranging",
             blurb = "Distance by timing light, rather than by guessing from loudness.",
-            teaches = "Every other distance in this app is loudness put through a model " +
-                "whose key number was chosen rather than measured. 802.11mc times how long " +
-                "light took. Putting the two beside each other says how wrong the model is " +
-                "in this room, which is the only external check this app has.",
+            teaches = "Most distances in this app are guessed from loudness. This one times how long " +
+                "light took, then shows you how wrong the guess was.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.BETA,
             needs = "802.11mc on this phone and on the access point. Most phones do not " +
                 "have it, and most access points do not either - Pixels from the 3 onward " +
                 "mostly do, and Google Nest Wifi and a lot of recent mesh kit answer.",
             howTo = listOf(
-                "Stand somewhere with a few access points at different distances. Two in " +
-                    "the same room and one down the hall is ideal.",
-                "Wait for the count of willing access points to settle.",
-                "Press measure. The phone transmits for this one, which is the only " +
-                    "experiment here that does.",
-                "Read the bars. The bar is what the radio timed; the mark on it is where " +
-                    "loudness thought the same access point was.",
-                "Walk to a different spot and measure again. The exponent is fitted across " +
-                    "distances, so readings all taken at one range say nothing.",
+                "Needs a Wi-Fi router that supports timed ranging. The app checks and tells " +
+                    "you.",
+                "Stand a known distance away and measure.",
+                "Move and repeat two or three times.",
+                "It fits the timed distances against the loudness guess and shows you the gap.",
             ),
-            reading = "The exponent is the number the rest of the app assumes. Two is open " +
-                "air, three or so is a normal room, four is walls. Fitted against timed " +
-                "distances it becomes a measurement of this room rather than a convention, " +
-                "and a gap of more than about 0.3 from the assumed value is why proximity " +
-                "features have been putting things in the wrong place here.",
-            limits = "Both ends have to support 802.11mc, which most access points do not, " +
-                "and there is no way to talk one into it. A blocked direct path makes " +
-                "ranging read long rather than fail, because the first arrival went the " +
-                "long way round - so a large spread on a reading matters more than the " +
-                "reading. And this only ever ranges access points, so it says nothing " +
-                "directly about the Bluetooth distances everywhere else in the app; what " +
-                "it calibrates is the model they share.",
+            limits = "Needs a Wi-Fi router that supports timed ranging, and most do not. The app " +
+                "says so rather than guessing.",
         ),
         Experiment(
             id = "linkbudget",
             title = "Two-Phone Link Budget",
-            blurb = "Control both ends and watch the numbers line up.",
-            teaches = "Step the transmit power and the received signal tracks it one for " +
-                "one. The calibration rig for every other experiment here.",
+            blurb = "Two phones, a known distance, and what the link actually costs.",
+            teaches = "Two phones, a known distance, and what the link actually costs. The " +
+                "calibration rig for everything else here.",
             category = Experiment.Category.PHYSICS,
             status = Experiment.Status.DEVELOPMENT,
             needs = "A second Android device running SigEye.",
+            limits = "Needs two phones and a tape measure. Nothing here works alone.",
         ),
 
         // ----------------------------------------------------------- mapping
@@ -970,26 +701,29 @@ object Experiments {
             id = "deadzones",
             title = "Dead Zone Heatmap",
             blurb = "Walk the building, find where the signal dies.",
-            teaches = "Where the router should actually go, and how much one wall costs.",
+            teaches = "Walk a building and map where the signal dies. Shows where the router should " +
+                "actually go.",
             category = Experiment.Category.MAPPING,
             status = Experiment.Status.DEVELOPMENT,
+            limits = "Indoor position is rough, so the map is a sketch rather than a survey.",
         ),
         Experiment(
             id = "route",
             title = "Route Logger",
-            blurb = "Signal density along a journey.",
-            teaches = "Tunnels, stations, dead zones and platform geometry, plotted " +
-                "against a GPS track.",
+            blurb = "Signal strength plotted along a journey.",
+            teaches = "Plot signal against a GPS track. Tunnels, stations and dead zones all show up " +
+                "as shapes.",
             category = Experiment.Category.MAPPING,
             status = Experiment.Status.DEVELOPMENT,
+            limits = "GPS is what fails first in exactly the places worth logging. Tunnels have no " +
+                "position at all.",
         ),
         Experiment(
             id = CELLS,
             title = "Cell Handovers",
             blurb = "How often your phone changes tower.",
-            teaches = "Standing still, handovers are rare. On a train they come every " +
-                "minute or two, and a handover taken while signal was still strong is " +
-                "load balancing rather than lost coverage.",
+            teaches = "See how often your phone is handed to a different tower. Standing still it is " +
+                "rare, and on a train it happens every minute or two.",
             category = Experiment.Category.MAPPING,
             status = Experiment.Status.ACTIVE,
             needs = "A SIM. Nothing to read in aeroplane mode.",
@@ -999,12 +733,8 @@ object Experiments {
                     "control.",
                 "On a train or in a car they come every minute or two.",
             ),
-            reading = "Each row shows how long the previous cell was held and the " +
-                "signal you left it at. A handover taken at strong signal is " +
-                "load balancing, not lost coverage.",
-            limits = "Modems withhold cell identity regularly. Those readings are " +
-                "recorded but never counted as movement, so the total is a " +
-                "floor, not an exact count.",
+            limits = "Android reports the serving cell and little else. A handover taken at strong " +
+                "signal is load balancing rather than lost coverage.",
         ),
 
         // ----------------------------------------------------------- privacy
@@ -1012,11 +742,9 @@ object Experiments {
             id = SWEEP,
             title = "Camera Sweep",
             blurb = "Find license plate cameras as you walk or drive, and note where they are.",
-            teaches = "Cameras that watch a street are usually not hidden, just unlabelled. " +
-                "Many of them talk over Bluetooth, and one common model broadcasts the " +
-                "serial number printed on its own case - which means it can be recognized " +
-                "again weeks later, even though it changes its Bluetooth address to avoid " +
-                "exactly that.",
+            teaches = "Cameras watching a street are usually not hidden, just unlabelled. Many talk " +
+                "over Bluetooth, and one common model broadcasts the serial number printed on " +
+                "its own case, so it can be recognized again weeks later.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.BETA,
             needs = "Bluetooth, GPS and somewhere to go. Works on foot, better in a car.",
@@ -1026,144 +754,82 @@ object Experiments {
                     "it loudest, which is the closest you got to it.",
                 "Tap Export when you are done. You get a spreadsheet, one row per camera.",
             ),
-            reading = "Confirmed means the device said what it was. Likely and Possible " +
-                "mean look up and check. A serial number means the same camera will match " +
-                "this row again next time rather than becoming a new one.",
-            limits = "Only finds hardware that talks over Bluetooth, and only while it is " +
-                "talking. A camera that is hardwired, switched off, or from a maker SigEye " +
-                "does not know is invisible here. Finding nothing does not mean there is " +
-                "nothing.",
+            limits = "Only finds hardware that talks over Bluetooth, and only while it is talking. A " +
+                "camera that is hardwired, switched off, or from a maker SigEye does not know " +
+                "is invisible here. Finding nothing does not mean there is nothing.",
         ),
         Experiment(
             id = IDENTITY,
             title = "Identity",
             blurb = "Recognize a device after it changes the address meant to hide it.",
-            teaches = "Address randomization is one countermeasure against one attack, and " +
-                "everything else a radio gives away is untouched by it. The shape of an " +
-                "advertisement, how often it is sent, the signal fading as somebody walks " +
-                "off, the gap between one address going quiet and another arriving: none " +
-                "of those rotate. Four ways of using that, sharing one screen because " +
-                "they are one idea.",
+            teaches = "Changing a Bluetooth address is meant to stop you being followed, and it " +
+                "leaves plenty behind. The shape of a signal, how often it is sent, and how it " +
+                "fades as somebody walks away do not change. Four ways of using that.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Bluetooth, and for the more involved modes your own phone plus " +
                 "somewhere to walk. Every mode says what it needs when you open it.",
             howTo = listOf(
-                "Defeat starts you off. Pick your own phone, learn its fingerprint, and " +
-                    "watch what happens when the address changes. It explains itself as " +
-                    "it goes and it is the one to show somebody else.",
-                "Lab is the room rather than the device. It splits everything in range by " +
-                    "maker and times how often each fleet rotates, which is how you find " +
-                    "out that fifteen minutes is a default and not a rule.",
-                "Follow is the field exercise. Walk with somebody who agreed to it and " +
-                    "watch a whole street narrow down to the one phone that came along.",
-                "Watch is the quiet one. Put a name on a device and this keeps the name " +
-                    "attached across the changes, and says so when it cannot be sure.",
-                "A device pinned in one mode stays pinned in the others, so you can find " +
-                    "something in Lab and take it straight into Defeat.",
+                "Defeat is the one to start with. Pick your own phone and watch what survives " +
+                    "an address change.",
+                "Lab looks at the whole room instead, timing how often each maker rotates.",
+                "Follow is the field exercise, walking with somebody who agreed to it.",
+                "A device pinned in one tab stays pinned in all of them.",
             ),
-            reading = "Every mode reports confidence rather than a verdict, because none " +
-                "of this is proof. The walk-away test in Defeat is the only part that is " +
-                "not inference: if a link is real, carrying the phone out of range makes " +
-                "both addresses fade together, and a link it disproves is worth more than " +
-                "one it supports.",
-            limits = "A well-implemented device defeats all of this, and saying so is the " +
-                "point. iOS rotates its payload alongside its address on the same " +
-                "schedule, which is the correct way to do it. A plain advertisement " +
-                "carrying nothing distinctive cannot be matched at all, and the app says " +
-                "so rather than guessing.",
+            limits = "A well-built device defeats all of this, and saying so is the point. iPhones " +
+                "change their payload at the same moment as their address, which is the right " +
+                "way to do it.",
         ),
         Experiment(
             id = FOLLOW,
             partOf = IDENTITY,
             title = "Follow Me",
             blurb = "Narrow a whole street down to the one device traveling with you.",
-            teaches = "You do not need to know anything about a phone in advance to follow " +
-                "it, and you do not need special hardware. Walk somewhere together and " +
-                "everything that stayed behind drops out. That is nearly everything.",
+            teaches = "Walk with somebody who agreed to this and watch a whole street narrow down to " +
+                "the one phone that came along. Everything that stayed behind drops out, and " +
+                "that is nearly everything.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.BETA,
             needs = "Two people who both agree to this, one of them carrying a phone you " +
                 "own, and somewhere to walk. Twenty minutes and a mile is plenty.",
             howTo = listOf(
-                "Agree with the other person first. This is a demonstration of following " +
-                    "somebody, and running it on a stranger is the thing it exists to " +
-                    "warn about.",
-                "Start a standing leg where you meet. It cuts whatever walks past while " +
-                    "you are both still.",
-                "Start a moving leg and travel together. This is the one that does the " +
-                    "work - the shops, the parked cars and the other passengers all fall " +
-                    "out of range and out of the list.",
-                "Do that two or three times. Watch the survivor count against the number " +
-                    "of devices heard: that ratio is the whole finding.",
-                "Lock onto the survivor and let it rotate. If it changes address it will " +
-                    "be picked up again only when the evidence is unambiguous.",
-                "Check it by walking apart. If the thing you locked onto fades as the " +
-                    "other person leaves, you had the right one.",
+                "Agree with the other person first. Running this on a stranger is the thing it " +
+                    "exists to warn about.",
+                "Stand together while it takes a baseline of everything in range.",
+                "Walk. Anything that stayed behind drops off the list.",
+                "After a mile the list is short. It is a list, never a name.",
             ),
-            reading = "The honest answer is the short list and its denominator, never a " +
-                "name. Two survivors out of two hundred after three miles is a strong " +
-                "claim; forty out of two hundred after standing in a lobby is no claim at " +
-                "all. Moving legs count for far more than standing ones, because staying " +
-                "in range across a mile of city is something very few things can do.",
-            limits = "A device only survives a leg if it was heard during it, so a tunnel " +
-                "or a pocket costs you the target. Rotation is handled by the same " +
-                "machinery as Persistent Tracking and refuses just as readily - two " +
-                "equally good candidates stop it rather than one being picked. And a " +
-                "survivor is a hypothesis: the other person walking away from you is the " +
-                "only real test, which is why the walkthrough ends with it.",
+            limits = "Gives you a short list, never a name. Two survivors out of two hundred after " +
+                "three miles means something; forty out of two hundred means nothing.",
         ),
         Experiment(
             id = ROTATION_LAB,
             partOf = IDENTITY,
             title = "Rotation Lab",
-            blurb = "A whole room's address privacy, grouped by maker and measured by clock.",
-            teaches = "Rotation is a firmware decision, so a maker's whole fleet behaves the " +
-                "same way. And the fifteen minutes everyone quotes is a default rather " +
-                "than a rule. The timeout can be set anywhere from a second to an hour, " +
-                "and it runs from the last change rather than from a clock. That offset " +
-                "is an identifier every rotation carries across intact.",
+            blurb = "How often each maker's phones change their Bluetooth address.",
+            teaches = "Split a room up by manufacturer and time how often each one changes address. " +
+                "Fifteen minutes is a default rather than a rule, and the offset a device keeps " +
+                "is itself an identifier.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "A room with people in it. A cafe, a train, an office - somewhere with " +
                 "more than a handful of phones, and time to sit still.",
             howTo = listOf(
-                "Open it somewhere busy and leave it running. The first tab fills " +
-                    "immediately; the other two need patience.",
-                "Read the cohorts. Each maker's bar is how much of their fleet bothers " +
-                    "with a private address, and a bar that is entirely red is a fleet " +
-                    "anybody with a phone can follow indefinitely.",
-                "Wait for the middle tab. A period is the gap between two address " +
-                    "changes, so a device has to be followed through three addresses " +
-                    "before there is one - about half an hour on the usual timer.",
-                "Use the third tab to check the work. Put two or three tracks on one " +
-                    "chart and look at what the signal does at each marker.",
-                "Export when you have something. The CSV carries every track, its " +
-                    "measured period and its phase.",
+                "Open it somewhere busy and leave it running.",
+                "The first tab fills straight away. The other two need about twenty minutes.",
+                "Devices are grouped by maker, because how often they rotate is a firmware " +
+                    "decision.",
             ),
-            reading = "A phase is where in the cycle a device changes, measured against " +
-                "the epoch rather than a clock. Two phones on the same nine hundred " +
-                "second timer land on different phases and keep them, which makes the " +
-                "phase a handle that survives the thing designed to remove handles - " +
-                "until Bluetooth is toggled, flight mode is used, or the device reboots. " +
-                "Worth one slot in twenty on a fifteen minute cycle: useful next to other " +
-                "evidence, useless on its own.",
-            limits = "Counting manufacturers is safe, because a company identifier is a " +
-                "fact in the payload about a product. Linking two addresses into a track " +
-                "is an inference about a stranger, so only the strongest rating is drawn " +
-                "at all and a track remains a hypothesis - Defeating Randomization is " +
-                "where you test one, by walking a device you own out of range. A vendor " +
-                "read from an address prefix means nothing once the address is random, " +
-                "which is why much of any room stays unidentified.",
+            limits = "Needs a busy room and some patience. The first tab fills immediately and the " +
+                "others take a while.",
         ),
         Experiment(
             id = VULNERABILITY,
             title = "Exposure Scan",
-            blurb = "Insecure and over-sharing things in range, from what they broadcast.",
-            teaches = "Every network and every Bluetooth device describes its own security " +
-                "in beacons it sends to anyone listening. WPS, WEP, missing frame " +
-                "protection, a permanent address, somebody's name. You can read all of " +
-                "it without connecting to a thing.",
+            blurb = "What the networks and devices around you admit about their own security.",
+            teaches = "Every network and device describes its own security to anyone listening. Old " +
+                "encryption, permanent addresses, somebody's name in a device title. You can " +
+                "read all of it without connecting to anything.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Wi-Fi switched on to scan, which does not require being connected.",
@@ -1176,57 +842,35 @@ object Experiments {
                 "Use the neighbors as calibration. Once you know how common WPS and " +
                     "missing frame protection are, your own network stops being a guess.",
             ),
-            reading = "Critical and high are worth acting on today; medium is a decision " +
-                "worth making deliberately rather than by accident; low is hygiene. A " +
-                "finding marked good is there because getting it right deserves saying " +
-                "so - an open network running OWE is not the same as an open network.",
-            limits = "No CVEs are named. Matching a real vulnerability needs a model and " +
-                "a firmware version and neither is in a beacon, so a scanner that infers " +
-                "one from a vendor name is producing fiction that looks like a finding. " +
-                "Nothing is connected to either: whether a Bluetooth device accepts an " +
-                "unauthenticated connection cannot be established without making one, " +
-                "which is an active act against equipment that is probably not yours.",
+            limits = "Reads what is broadcast. It does not test anything, try any password, or touch " +
+                "a network.",
         ),
         Experiment(
             id = EXPLORER,
             title = "Bluetooth Explorer",
             blurb = "Ask a device what it has, and learn what the answers mean.",
-            teaches = "An advertisement is a device shouting into the room. A connection " +
-                "is a conversation, and devices will tell a stranger far more than most " +
-                "people expect - names, makers, model and serial numbers, firmware " +
-                "versions - with no pairing at all.",
+            teaches = "An advertisement is a device shouting into a room and a connection is a " +
+                "conversation. Ask a device what it can do and it will tell a stranger its " +
+                "maker, model, serial and firmware, with no pairing at all.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Something you own, or have permission to poke at. This is the only " +
                 "experiment here that transmits.",
             howTo = listOf(
-                "Pick a device from the list. It asks before connecting, because unlike " +
-                    "everything else in this app the connection is visible to the target.",
-                "Watch the commentary as it goes: connecting, discovering services, " +
-                    "reading values. Each line says what the word means.",
-                "Standard services and values are named from the Bluetooth registry. " +
-                    "Custom ones are flagged as custom, which is itself informative.",
-                "Try your own earbuds, a fitness band, a smart bulb and a tag - what each " +
-                    "hands over to a stranger varies enormously.",
-                "Most things that advertise will refuse the connection outright. Beacons " +
-                    "and tags broadcast one way and never accept callers.",
+                "Pick a device you own. Connecting to it is visible from its end.",
+                "It lists everything the device offers.",
+                "Device Information is the interesting one: maker, model, serial and firmware.",
             ),
-            reading = "Services are groups of related values. Device Information is the " +
-                "interesting one - maker, model, serial, firmware - and nothing verifies " +
-                "any of it. A serial number is worth noticing: unlike a randomized " +
-                "address it never changes, so a device that hands one out is identifiable " +
-                "for good.",
-            limits = "It only reads, never writes. Many values need a bonded pairing " +
-                "first and will simply refuse. A device that accepts the connection and " +
-                "then stops answering is normal, and the attempt gives up rather than " +
-                "hanging. Connecting is an active act and the other end can see it.",
+            limits = "Connecting is visible to the device you connect to. Nothing it tells you about " +
+                "itself is verified.",
         ),
         Experiment(
             id = BEACONS,
             title = "Beacon Decoder",
-            blurb = "Reads the beacon formats hiding in the noise.",
-            teaches = "iBeacon, Eddystone, AltBeacon and Apple's Continuity messages are " +
-                "structured data, not blobs. Decoded, they name themselves.",
+            blurb = "Decode the beacon formats hiding in the noise.",
+            teaches = "Beacons look like noise until you know the format. iBeacon, Eddystone and " +
+                "Apple's Continuity messages are structured data that names itself once " +
+                "decoded.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             howTo = listOf(
@@ -1235,48 +879,30 @@ object Experiments {
                 "Pause before tapping a row - beacons advertise fast and the " +
                     "list reorders.",
             ),
-            reading = "Each row names the protocol and decodes its fields. Apple Find " +
-                "My means an AirTag or a device advertising for the offline " +
-                "finding network.",
-            limits = "Most devices advertise nothing structured, so an empty list is " +
-                "normal in a quiet place. An unrecognised format falls back to " +
-                "naming the vendor.",
+            limits = "Decodes the formats it knows. A custom or encrypted beacon stays a blob.",
         ),
         Experiment(
             id = ROTATION,
             partOf = IDENTITY,
             title = "Defeating Randomization",
             blurb = "Follow one phone through its address changes, and check whether it worked.",
-            teaches = "An address changes every quarter of an hour, but the shape of the " +
-                "advertisement and the rate it is sent at do not - those are set by " +
-                "firmware, which the privacy scheme never touches. That is the gap, and " +
-                "this is how wide it actually is.",
+            teaches = "A phone changes its address every quarter of an hour, but the shape of its " +
+                "signal and how often it sends do not. That gap is set by firmware, which the " +
+                "privacy scheme never touches, and this shows how wide it is.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Your own phone, and somewhere you can carry it out of range and back.",
             howTo = listOf(
-                "Pick your own phone from the list. A randomized address is the point - a " +
-                    "fixed one has nothing to defeat.",
-                "Wait while its fingerprint is learned: how often it advertises, and what " +
-                    "shape the advertisement is.",
-                "Run a walk-away test. Carry it out of the room and watch the signal " +
-                    "collapse - that proves the app is watching the right thing before " +
-                    "anything clever is attempted.",
-                "Leave it alone and wait for the address to change. Many phones only " +
-                    "rotate with the screen off, so put it down and be patient.",
-                "When it rotates, the app names the replacement and says exactly why. " +
-                    "Then walk away again - if the new address fades too, the link held.",
+                "Pick your own phone from the list.",
+                "Wait while it learns the fingerprint: how often the phone advertises, and what " +
+                    "shape the packet is.",
+                "Carry it out of range and back. That proves the app is watching the right " +
+                    "thing before it tries anything clever.",
+                "Put it down and wait for the address to change. It names the replacement and " +
+                    "says exactly why.",
             ),
-            reading = "Four signals, none conclusive alone: the advertisement structure, " +
-                "the advertising interval, signal continuity across the swap, and the " +
-                "handover timing. The confidence is a sum of those. The walk-away test is " +
-                "the only part that is not inference, and a link it disproves is the most " +
-                "useful thing the experiment can produce.",
-            limits = "iOS is the hardest case, because it rotates the payload alongside " +
-                "the address on the same schedule - which is the correct way to implement " +
-                "this. A plain advertisement carrying nothing distinctive cannot be " +
-                "matched on at all and the app says so rather than guessing. Nothing here " +
-                "is proof, which is exactly why the walk-away test exists.",
+            limits = "Nothing here is proof. The walk-away test is the only part that is not " +
+                "inference, and a link it disproves is the most useful result you can get.",
         ),
     )
 
