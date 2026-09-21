@@ -37,6 +37,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CrashLog
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.evidence.Bundler
+import com.sigeye.core.evidence.Evidence
 import com.sigeye.core.Replay
 import com.sigeye.core.MyDevices
 import com.sigeye.core.SettingsStore
@@ -51,6 +53,7 @@ import com.sigeye.ui.Field
 import com.sigeye.ui.Section
 import java.util.Locale
 import kotlinx.coroutines.delay
+import java.io.File
 
 private const val HUB_TAG = "settings-detect"
 
@@ -190,6 +193,8 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        EvidenceSection()
+
         CaptureSection()
 
         Spacer(Modifier.height(16.dp))
@@ -484,6 +489,78 @@ private fun CrashSection() {
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Delete them") }
+    }
+}
+
+/**
+ * One zip with everything saved in it, plus what the app was doing at the time.
+ *
+ * See [com.sigeye.core.evidence.Evidence]. The numbers were already exportable; what was
+ * not was the conditions they were taken under, and a distance means nothing without the
+ * path loss exponent it assumed.
+ */
+@Composable
+private fun EvidenceSection() {
+    val context = LocalContext.current
+    var built by remember { mutableStateOf<String?>(null) }
+    var pickedCapture by remember { mutableStateOf<File?>(null) }
+
+    val captures = remember { Bundler.captures(context) }
+    val pieces = remember(pickedCapture) { Bundler.gather(context, pickedCapture) }
+
+    Section(
+        title = "Export everything",
+        summary = Evidence.summarize(pieces),
+    ) {
+        Text(
+            "One zip holding every saved run, every sweep, and a note of what the app " +
+                "was set to at the time. Each file is listed with a checksum, so anyone " +
+                "you send it to can tell whether it has been edited since.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+
+        if (captures.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Include a raw capture",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(
+                    selected = pickedCapture == null,
+                    onClick = { pickedCapture = null },
+                    label = { Text("None") },
+                )
+                captures.take(4).forEach { capture ->
+                    FilterChip(
+                        selected = pickedCapture == capture.file,
+                        onClick = { pickedCapture = capture.file },
+                        label = { Text("${capture.packets} packets") },
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = {
+                val file = Bundler.build(context, pieces, Bundler.provenance(context))
+                built = file?.name
+                file?.let { SweepExport.share(context, it) }
+            },
+            enabled = Evidence.worthExporting(pieces),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Build and share") }
+
+        built?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Wrote $it",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
