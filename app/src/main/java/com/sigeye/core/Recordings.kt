@@ -90,6 +90,7 @@ object Recordings {
         if (_follower == null) {
             _follower = Follower(DeviceBook.get(application), FollowStore.get(application))
         }
+        if (mine == null) mine = MyDevices.get(application)
         if (_ownKit == null) _ownKit = OwnKitWatcher(MyDevices.get(application))
         startFollowing()
     }
@@ -124,9 +125,34 @@ object Recordings {
             ?: advert.name?.takeIf { it.isNotBlank() }
             ?: advert.vendor
 
+    private var mine: MyDevices? = null
+
+    /** Whether this packet came from something the user has said is theirs. */
+    fun isMine(advert: Advert): Boolean = mine?.isMine(advert.address) == true
+
+    /**
+     * Whether a forensic recording includes the devices you said were yours.
+     *
+     * Off by default, like everywhere else. But a recording made to be gone through
+     * afterwards is the one place where leaving something out is its own kind of lie, and
+     * looking at your own phone is a reasonable thing to want to do - it is the device you
+     * are allowed to experiment on. So this one is a switch on the screen rather than a
+     * rule, and the screen says which way it is set.
+     *
+     * Deliberately not persisted. It is a decision about one recording.
+     */
+    @Volatile
+    var forensicsIncludesMine: Boolean = false
+
     /** Feeds one advertisement to whichever recordings are running. */
     fun onAdvert(advert: Advert, modes: Set<ScanService.Mode>) {
-        if (modes.contains(ScanService.Mode.FORENSICS)) {
+        // Your own watch is not a stranger, and every count below is a count of strangers.
+        // Forensics is the exception, and only when somebody has asked for it.
+        val yours = isMine(advert)
+
+        if (modes.contains(ScanService.Mode.FORENSICS) &&
+            (!yours || forensicsIncludesMine)
+        ) {
             forensics.observe(
                 address = advert.address,
                 rssi = advert.rssi,
@@ -148,6 +174,8 @@ object Recordings {
                 ),
             )
         }
+
+        if (yours) return
 
         if (modes.contains(ScanService.Mode.PLACE)) {
             place.observe(

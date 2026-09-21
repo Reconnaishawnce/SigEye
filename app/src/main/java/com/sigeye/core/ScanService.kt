@@ -225,13 +225,19 @@ class ScanService : Service() {
     private fun startPump() {
         if (pump == null) {
             pump = scope.launch {
-                BleScanHub.strangers.collect { advert ->
-                    trainSpotter?.onAdvert(advert)
-                    watch?.onAdvert(advert)
-                    Recordings.onAdvert(advert, modes)
-                    if (modes.contains(Mode.FOLLOW)) {
-                        FollowRunner.onAdvert(advert, Recordings.book())
+                // Raw, because Forensics can be asked to include your own devices and
+                // it cannot do that from a flow they have already been taken out of.
+                // Everything here that counts strangers checks for itself.
+                BleScanHub.adverts.collect { advert ->
+                    val mine = Recordings.isMine(advert)
+                    if (!mine) {
+                        trainSpotter?.onAdvert(advert)
+                        watch?.onAdvert(advert)
+                        if (modes.contains(Mode.FOLLOW)) {
+                            FollowRunner.onAdvert(advert, Recordings.book())
+                        }
                     }
+                    Recordings.onAdvert(advert, modes)
                 }
             }
         }

@@ -187,6 +187,17 @@ class ClockTest {
     }
 
     @Test
+    fun `the scan service checks for itself, since Forensics may be told to include yours`() {
+        // It reads the raw flow on purpose: a forensic recording can be asked to keep your
+        // own devices in, and it cannot do that from a flow they have been removed from.
+        // What it must not do is hand them to anything that counts strangers.
+        val service = File(SOURCE, "core/ScanService.kt").readText()
+
+        assertTrue(service.contains("BleScanHub.adverts.collect"))
+        assertTrue(service.contains("Recordings.isMine(advert)"))
+    }
+
+    @Test
     fun `the thing watching your own devices rotate still sees all of them`() {
         // The counter-case. Reading the filtered flow here would mean a marked device
         // disappears from the watcher the moment it is marked, so its rotation could never
@@ -217,7 +228,6 @@ class ClockTest {
             "experiments/radar/RadarScreen.kt",
             "experiments/speed/SpeedScreen.kt",
             "experiments/vulnerability/VulnerabilityScreen.kt",
-            "core/ScanService.kt",
         )
 
         /** Everything whose "now" is about the packets rather than about today. */

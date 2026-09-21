@@ -129,6 +129,35 @@ sealed interface Handoff {
  *
  * Pure and Android-free.
  */
+/**
+ * The thresholds [Handoffs.decide] judges by, as a value rather than as constants.
+ *
+ * Every number in here was chosen by reasoning about what ought to work, which is how you
+ * start and not where you should stop. Reasoning cannot tell you whether eighteen seconds
+ * of silence is the right line between a device that rotated and one that walked round a
+ * corner; only a walk where somebody knows the answer can tell you that.
+ *
+ * Making them a parameter is what lets a recorded walk be replayed against a range of
+ * values and the results compared. The defaults are exactly what the constants were, so
+ * nothing changes until a measurement says it should - see the calibration harness in the
+ * test sources.
+ */
+data class HandoffTuning(
+    val silenceMs: Long = Handoffs.SILENCE_MS,
+    val giveUpMs: Long = Handoffs.GIVE_UP_MS,
+    val appearedWithinMs: Long = Handoffs.APPEARED_WITHIN_MS,
+    val autoShare: Double = Handoffs.AUTO_SHARE,
+    val autoConfidence: LinkConfidence = Handoffs.AUTO_CONFIDENCE,
+    val askConfidence: LinkConfidence = Handoffs.ASK_CONFIDENCE,
+    val maxOptions: Int = Handoffs.MAX_OPTIONS,
+    val tooMany: Int = Handoffs.TOO_MANY,
+) {
+    companion object {
+        /** What ships. Anything else is an experiment. */
+        val DEFAULT = HandoffTuning()
+    }
+}
+
 object Handoffs {
 
     /** Silence after which an address counts as finished rather than quiet. */
@@ -279,9 +308,10 @@ object Handoffs {
         candidates: List<Identity>,
         nowMs: Long,
         taken: Set<String> = emptySet(),
+        tuning: HandoffTuning = HandoffTuning.DEFAULT,
     ): Handoff {
         val silence = nowMs - previous.lastSeenMs
-        if (silence < SILENCE_MS) return Handoff.Waiting
+        if (silence < tuning.silenceMs) return Handoff.Waiting
 
         if (!previous.isRandom) {
             return Handoff.Gone(
@@ -297,7 +327,7 @@ object Handoffs {
                     "matched would be a coincidence rather than a link.",
             )
         }
-        if (silence > GIVE_UP_MS) {
+        if (silence > tuning.giveUpMs) {
             return Handoff.Gone(
                 departure,
                 "Silent for ${silence / 60_000} minutes. Whatever turns up now carrying a " +
@@ -313,9 +343,9 @@ object Handoffs {
             .filter { it.address != previous.address }
             .filter { it.address !in taken }
             .filter { it.isRandom }
-            .filter { it.firstSeenMs >= previous.lastSeenMs - APPEARED_WITHIN_MS }
+            .filter { it.firstSeenMs >= previous.lastSeenMs - tuning.appearedWithinMs }
             .map { it to Fingerprint.score(previous, it) }
-            .filter { it.second.confidence.ordinal >= ASK_CONFIDENCE.ordinal }
+            .filter { it.second.confidence.ordinal >= tuning.askConfidence.ordinal }
             .sortedByDescending { it.second.points }
             .toList()
 
@@ -328,7 +358,7 @@ object Handoffs {
             )
         }
 
-        if (scored.size > TOO_MANY) {
+        if (scored.size > tuning.tooMany) {
             return Handoff.Gone(
                 departure,
                 "${scored.size} devices appeared at about the right moment and match about " +
@@ -341,7 +371,7 @@ object Handoffs {
         // summed to eighteen percent across three options, because thirteen others were
         // quietly in the denominator, is how this got put in front of somebody as three
         // six percent guesses.
-        val shown = scored.take(MAX_OPTIONS)
+        val shown = scored.take(tuning.maxOptions)
         val total = shown.sumOf { it.second.points }.toDouble()
         val options = shown.map { (identity, score) ->
             Successor(
@@ -358,8 +388,8 @@ object Handoffs {
         }
 
         val best = options.first()
-        val confident = best.confidence.ordinal >= AUTO_CONFIDENCE.ordinal
-        val alone = best.share >= AUTO_SHARE
+        val confident = best.confidence.ordinal >= tuning.autoConfidence.ordinal
+        val alone = best.share >= tuning.autoShare
 
         // Both halves, deliberately. Clearly ahead of three bad options is still bad, and
         // a strong match with an equally strong rival is exactly the room-full-of-iPhones

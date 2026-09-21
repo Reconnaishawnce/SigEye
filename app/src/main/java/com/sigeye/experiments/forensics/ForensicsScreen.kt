@@ -49,6 +49,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.ForensicStore
 import com.sigeye.core.Permissions
+import com.sigeye.core.MyDevices
 import com.sigeye.core.Recordings
 import com.sigeye.core.ScanService
 import com.sigeye.core.SnapshotStore
@@ -105,9 +106,77 @@ fun ForensicsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             ),
             footnote = "Nothing is transmitted. The recording stays on this phone.",
         ) {
+            OwnDevicesNotice()
+            Spacer(Modifier.height(10.dp))
             Live()
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * Says what is being left out, and offers to put it back.
+ *
+ * Everywhere else in the app, excluding your own devices is straightforwardly right: they
+ * are not strangers and counting them as such makes every number slightly wrong. A
+ * recording made to be gone through afterwards is the one place where that reasoning turns
+ * around, because a hole in a record is its own kind of lie, and because your own phone is
+ * the one device you are actually entitled to experiment on.
+ *
+ * So the exclusion stays the default and becomes visible and reversible, rather than
+ * becoming a rule somebody discovers later by noticing an absence.
+ */
+@Composable
+private fun OwnDevicesNotice() {
+    val context = LocalContext.current
+    val mine = remember { MyDevices.get(context) }
+    val owned by mine.devices.collectAsStateWithLifecycle()
+    var including by remember { mutableStateOf(Recordings.forensicsIncludesMine) }
+
+    if (owned.isEmpty()) return
+
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (including) {
+                MaterialTheme.colorScheme.tertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                if (including) {
+                    "Including your ${owned.size} own device" +
+                        (if (owned.size == 1) "" else "s")
+                } else {
+                    "Leaving out your ${owned.size} own device" +
+                        (if (owned.size == 1) "" else "s")
+                },
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                if (including) {
+                    "This recording has everything in it, yours included. Counts of who " +
+                        "was around will be high by the number of things in your pockets."
+                } else {
+                    "${owned.joinToString(", ") { it.label }} will not appear in this " +
+                        "recording. Turn it on to look at your own device, which is the " +
+                        "one you are allowed to experiment on."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            TextButton(
+                onClick = {
+                    including = !including
+                    Recordings.forensicsIncludesMine = including
+                },
+            ) { Text(if (including) "Leave mine out" else "Include mine") }
+        }
     }
 }
 
