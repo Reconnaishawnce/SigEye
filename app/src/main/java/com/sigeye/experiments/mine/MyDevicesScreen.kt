@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.sigeye.core.MyDevices
+import com.sigeye.core.Recordings
 import com.sigeye.core.Permissions
 import com.sigeye.core.analysis.identity.MyKit
 import com.sigeye.core.analysis.identity.Nearby
@@ -252,6 +253,8 @@ private fun Finder() {
         )
     }
 
+    AdoptionLog()
+
     Spacer(Modifier.height(18.dp))
     Section(
         title = "Marked as yours (${owned.size})",
@@ -299,6 +302,82 @@ private fun Finder() {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Every address change the app made on your behalf, and every one it declined.
+ *
+ * Not decoration. Moving a mark onto the wrong device would quietly exclude a stranger's
+ * phone from every count in the app, indefinitely, and a silent wrong exclusion is the one
+ * kind of error nobody goes looking for. So each one is written down with what convinced
+ * it, and each one can be undone by somebody who disagrees.
+ */
+@Composable
+private fun AdoptionLog() {
+    val watcher = Recordings.ownKit ?: return
+    // Recomposed off the device list, which is what changes when an adoption lands.
+    val mine = MyDevices.get(LocalContext.current)
+    val owned by mine.devices.collectAsStateWithLifecycle()
+    val adoptions = remember(owned) { watcher.adoptions() }
+    val declined = remember(owned) { watcher.declined() }
+
+    if (adoptions.isEmpty() && declined.isEmpty()) return
+
+    Spacer(Modifier.height(18.dp))
+    Section(
+        title = "Address changes followed (${adoptions.size})",
+        summary = "What the app moved on your behalf, and what it refused to.",
+        initiallyExpanded = adoptions.isNotEmpty(),
+    ) {
+        adoptions.forEach { adoption ->
+            Card(
+                Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(Modifier.padding(10.dp)) {
+                    Text(
+                        "${adoption.label} became ${adoption.toAddress}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        adoption.fromAddress,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "${adoption.confidence.label}. ${adoption.why} Heard at " +
+                            "${adoption.rssi} dBm.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { watcher.undo(adoption) }) {
+                        Text("That was not mine")
+                    }
+                }
+            }
+        }
+
+        if (declined.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Not followed",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            declined.forEach { refusal ->
+                Text(
+                    "${refusal.fromAddress}: ${refusal.why}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
+            }
+        }
     }
 }
 

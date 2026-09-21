@@ -165,6 +165,37 @@ class ClockTest {
         )
     }
 
+    /**
+     * Guards the other half of the whitelist: that it is honored everywhere.
+     *
+     * A master list that one screen forgets to apply is not a master list, and forgetting
+     * is a single character - `adverts` where `strangers` was meant. The compiler cannot
+     * tell the difference and neither can anyone reading a diff.
+     */
+    @Test
+    fun `everything that counts people counts strangers`() {
+        val offenders = COUNTING_FILES.filter { rel ->
+            File(SOURCE, rel).readText().contains("BleScanHub.adverts.collect")
+        }
+
+        assertTrue(
+            "These count or profile the people around you, so they have to read the flow " +
+                "with your own devices taken out: " + offenders.joinToString(", ") +
+                ". Use BleScanHub.strangers.",
+            offenders.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `the thing watching your own devices rotate still sees all of them`() {
+        // The counter-case. Reading the filtered flow here would mean a marked device
+        // disappears from the watcher the moment it is marked, so its rotation could never
+        // be seen and the mark could never follow it. The whitelist would empty itself.
+        val recordings = File(SOURCE, "core/Recordings.kt").readText()
+
+        assertTrue(recordings.contains("BleScanHub.adverts.collect"))
+    }
+
     @Test
     fun `the scan hub keeps its own wall clock, on purpose`() {
         // The counter-case, asserted so nobody "finishes the migration" by changing it. The
@@ -178,6 +209,16 @@ class ClockTest {
 
     companion object {
         private val SOURCE = File("src/main/java/com/sigeye")
+
+        /** Screens whose subject is the people around you rather than one device. */
+        private val COUNTING_FILES = listOf(
+            "experiments/population/PopulationScreen.kt",
+            "experiments/discovery/DiscoveryScreen.kt",
+            "experiments/radar/RadarScreen.kt",
+            "experiments/speed/SpeedScreen.kt",
+            "experiments/vulnerability/VulnerabilityScreen.kt",
+            "core/ScanService.kt",
+        )
 
         /** Everything whose "now" is about the packets rather than about today. */
         private val PACKET_TIME_FILES = listOf(

@@ -14,6 +14,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.MyDevices
 import com.sigeye.core.Replay
 import com.sigeye.core.ReplayClock
 import com.sigeye.core.Permissions
@@ -24,7 +25,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,6 +104,25 @@ object BleScanHub {
      * lose old packets rather than stall the radio callback thread.
      */
     val adverts: SharedFlow<Advert> = _adverts
+
+    /**
+     * Everything except the devices you have said are yours.
+     *
+     * The one place that answers "is this a stranger", so that marking your own watch
+     * excludes it from every count in the app rather than from whichever screen somebody
+     * remembered to wire it into.
+     *
+     * Deliberately a filter here and not a drop at [intake]. Dropping your own devices at
+     * the radio would be simpler and would break the thing that makes the whitelist worth
+     * having: a marked device has to be heard rotating for its mark to follow it onto the
+     * new address. Something has to watch your watch. So the raw flow carries everything,
+     * [OwnKitWatcher] reads that, and everything counting people reads this.
+     */
+    val strangers: Flow<Advert> = _adverts.filter { advert ->
+        myDevices?.isMine(advert.address) != true
+    }
+
+    private var myDevices: MyDevices? = null
 
     private val _health = MutableStateFlow(ScanHealth())
     val health: StateFlow<ScanHealth> = _health
@@ -205,6 +227,7 @@ object BleScanHub {
         if (initialized) return
         appContext = context.applicationContext
         ignoreList = IgnoreList.get(appContext)
+        myDevices = MyDevices.get(appContext)
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             appContext.registerReceiver(bluetoothReceiver, filter, Context.RECEIVER_NOT_EXPORTED)

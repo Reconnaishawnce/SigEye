@@ -62,6 +62,16 @@ object Recordings {
 
     private var _follower: Follower? = null
 
+    private var _ownKit: OwnKitWatcher? = null
+
+    /**
+     * Keeps the "this is mine" mark attached to a device that rotates its address.
+     *
+     * Another passenger. Does nothing while the whitelist is empty, which is the state
+     * most installs are in, so it costs nothing to have running.
+     */
+    val ownKit: OwnKitWatcher? get() = _ownKit
+
     /**
      * Keeps names attached to devices that rotate their address.
      *
@@ -80,6 +90,7 @@ object Recordings {
         if (_follower == null) {
             _follower = Follower(DeviceBook.get(application), FollowStore.get(application))
         }
+        if (_ownKit == null) _ownKit = OwnKitWatcher(MyDevices.get(application))
         startFollowing()
     }
 
@@ -94,11 +105,16 @@ object Recordings {
         if (pump != null) return
         pump = scope.launch {
             launch {
-                BleScanHub.adverts.collect { advert -> _follower?.onAdvert(advert) }
+                BleScanHub.adverts.collect { advert ->
+                    _follower?.onAdvert(advert)
+                    _ownKit?.onAdvert(advert)
+                }
             }
             while (isActive) {
                 delay(5_000)
-                _follower?.tick(Clock.nowMs())
+                val now = Clock.nowMs()
+                _follower?.tick(now)
+                _ownKit?.tick(now)
             }
         }
     }

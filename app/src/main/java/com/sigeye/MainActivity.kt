@@ -103,7 +103,7 @@ private const val ROTATION_PREFIX = "rotation:"
 
 /** Not an experiment, so it is routed by a reserved id rather than through the registry. */
 private const val SETTINGS = "settings"
-private const val MY_DEVICES = "mydevices"
+private val MY_DEVICES = com.sigeye.home.MY_DEVICES_ROUTE
 
 @Composable
 private fun SigEyeApp() {

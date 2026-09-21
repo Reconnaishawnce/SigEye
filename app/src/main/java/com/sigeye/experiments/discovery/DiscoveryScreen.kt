@@ -153,7 +153,7 @@ private fun Live() {
     }
 
     LaunchedEffect(Unit) {
-        BleScanHub.adverts.collect { advert ->
+        BleScanHub.strangers.collect { advert ->
             engine.observe(
                 address = advert.address,
                 rssi = advert.rssi,

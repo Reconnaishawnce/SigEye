@@ -163,7 +163,7 @@ private fun Live(onLocate: (String) -> Unit, initialQuery: String) {
     }
 
     LaunchedEffect(Unit) {
-        BleScanHub.adverts.collect { advert ->
+        BleScanHub.strangers.collect { advert ->
             latest[advert.address] = advert
             val estimator = estimators.getOrPut(advert.address) { ProximityEstimator() }
             readings[advert.address] = estimator.observe(advert.rssi, advert.atMs)

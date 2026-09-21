@@ -225,7 +225,7 @@ class ScanService : Service() {
     private fun startPump() {
         if (pump == null) {
             pump = scope.launch {
-                BleScanHub.adverts.collect { advert ->
+                BleScanHub.strangers.collect { advert ->
                     trainSpotter?.onAdvert(advert)
                     watch?.onAdvert(advert)
                     Recordings.onAdvert(advert, modes)

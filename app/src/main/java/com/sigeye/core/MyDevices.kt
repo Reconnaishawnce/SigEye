@@ -29,10 +29,14 @@ data class Mine(
  * follow that converges on somebody's own watch has not made a small error, it has
  * confirmed the method while getting the result exactly wrong.
  *
- * Addresses only, deliberately. A device that randomizes its address will need marking
- * again, and pretending otherwise by matching on payload shape would mute every identical
- * pair of earbuds in the building rather than the pair in this pocket. See [MyKit] for the
- * part that makes re-marking a ten-second job instead of a chore.
+ * Keyed on addresses, which rotate, so the list would empty itself by lunchtime if nothing
+ * maintained it. [OwnKitWatcher] watches each marked device for its own rotation and moves
+ * the mark onto the successor, under a much higher bar than a follow uses - see [OwnKit] for
+ * why an unattended wrong link is worse here than anywhere else in the app. When it declines,
+ * the mark lapses and [MyKit] makes re-marking a ten-second job.
+ *
+ * Matching on payload shape instead of address was the other option and is worse: it would
+ * mute every identical pair of earbuds in the building rather than the pair in this pocket.
  */
 class MyDevices private constructor(context: Context) {
 
@@ -56,6 +60,23 @@ class MyDevices private constructor(context: Context) {
         val key = address.uppercase()
         mutate { current ->
             current.filterNot { it.address == key } + Mine(key, label, nowMs)
+        }
+    }
+
+    /**
+     * Moves a mark from an address that has gone quiet onto the one that replaced it.
+     *
+     * The count stays the same: this is one device that changed its name, not two devices.
+     * Adding without removing would grow the list by one every rotation until it was
+     * mostly ghosts, and every ghost is an address that will eventually be handed to
+     * somebody else's phone.
+     */
+    fun replace(fromAddress: String, toAddress: String, label: String, nowMs: Long = System.currentTimeMillis()) {
+        val old = fromAddress.uppercase()
+        val new = toAddress.uppercase()
+        mutate { current ->
+            current.filterNot { it.address == old || it.address == new } +
+                Mine(new, label, nowMs)
         }
     }
 

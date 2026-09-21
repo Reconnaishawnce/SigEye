@@ -146,7 +146,7 @@ private fun Live(dwell: Boolean) {
     }
 
     LaunchedEffect(Unit) {
-        BleScanHub.adverts.collect { advert ->
+        BleScanHub.strangers.collect { advert ->
             tracker.observe(
                 address = advert.address,
                 rssi = advert.rssi,

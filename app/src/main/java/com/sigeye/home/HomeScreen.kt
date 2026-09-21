@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import com.sigeye.core.CheckLevel
 import com.sigeye.core.Contact
 import com.sigeye.core.Experiment
 import com.sigeye.core.Experiments
+import com.sigeye.core.MyDevices
 import com.sigeye.core.FavoriteStore
 import com.sigeye.core.FirstRun
 import com.sigeye.core.Preflight
@@ -106,6 +108,7 @@ fun HomeScreen(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
         }
         RadioStatus()
         Spacer(Modifier.height(10.dp))
+        OwnKitPrompt(onOpen = onOpen)
         PreflightCard()
         Spacer(Modifier.height(14.dp))
 
@@ -424,6 +427,57 @@ private fun Glyph(
  * only while its screen is open, whereas a background mode survives leaving the app and
  * keeps a notification in the status bar.
  */
+/**
+ * Asks once, on the way in, about the devices in your own pockets.
+ *
+ * It belongs here rather than inside an experiment because it is true of all of them. Your
+ * watch is in every count, every baseline and every follow, and a setting that only one
+ * screen respects is not a setting. Shown only while the list is empty, and dismissable,
+ * because a prompt that cannot be got rid of is worse than the problem it describes.
+ */
+@Composable
+private fun OwnKitPrompt(onOpen: (String) -> Unit) {
+    val context = LocalContext.current
+    val mine = remember { MyDevices.get(context) }
+    val owned by mine.devices.collectAsStateWithLifecycle()
+    var dismissed by rememberSaveable { mutableStateOf(false) }
+
+    if (owned.isNotEmpty() || dismissed) return
+
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "Which of these are yours?",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Your watch, earbuds and car are in range of every experiment in here, and " +
+                    "none of them is a stranger. Half a minute of listening sorts it, and " +
+                    "the marks follow the devices when they change address.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onOpen(MY_DEVICES_ROUTE) }) { Text("Find them") }
+                TextButton(onClick = { dismissed = true }) { Text("Not now") }
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+}
+
+/** Kept in step with the route in MainActivity, which a test asserts. */
+const val MY_DEVICES_ROUTE = "mydevices"
+
 @Composable
 private fun RadioStatus() {
     val health by BleScanHub.health.collectAsStateWithLifecycle()

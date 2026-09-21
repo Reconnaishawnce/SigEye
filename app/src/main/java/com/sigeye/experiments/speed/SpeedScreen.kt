@@ -138,7 +138,7 @@ private fun Live() {
 
     LaunchedEffect(watching) {
         if (!watching) return@LaunchedEffect
-        BleScanHub.adverts.collect { advert ->
+        BleScanHub.strangers.collect { advert ->
             watcher.observe(advert.address, advert.rssi, advert.atMs)
         }
     }
