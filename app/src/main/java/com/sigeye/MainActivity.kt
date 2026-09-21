@@ -45,6 +45,7 @@ import com.sigeye.experiments.population.PopulationScreen
 import com.sigeye.experiments.radar.RadarScreen
 import com.sigeye.experiments.ranging.RangingScreen
 import com.sigeye.experiments.identity.IdentityScreen
+import com.sigeye.experiments.mine.MyDevicesScreen
 import com.sigeye.experiments.identity.Mode
 import com.sigeye.experiments.settings.SettingsScreen
 import com.sigeye.experiments.sky.SkyScreen
@@ -100,6 +101,7 @@ private const val ROTATION_PREFIX = "rotation:"
 
 /** Not an experiment, so it is routed by a reserved id rather than through the registry. */
 private const val SETTINGS = "settings"
+private const val MY_DEVICES = "mydevices"
 
 @Composable
 private fun SigEyeApp() {
@@ -278,7 +280,10 @@ private fun Screen(
             BlinkScreen(onBack = goBack, modifier = inset)
 
         SETTINGS ->
-            SettingsScreen(onBack = goBack, modifier = inset)
+            SettingsScreen(onBack = goBack, onMyDevices = { open(MY_DEVICES) }, modifier = inset)
+
+        MY_DEVICES ->
+            MyDevicesScreen(onBack = goBack, modifier = inset)
 
         Experiments.MOTION ->
             MotionScreen(onBack = goBack, modifier = inset)

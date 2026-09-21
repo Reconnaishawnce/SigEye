@@ -54,6 +54,15 @@ fun RotationDialog(
     onPick: (String) -> Unit,
     onNone: () -> Unit,
     onLater: () -> Unit,
+    /**
+     * Stop interrupting for the rest of the run.
+     *
+     * Deliberately not a "never ask again" that throws the questions away. The rotations
+     * still queue and are still answerable; what stops is being stopped. Somebody walking
+     * a busy street needs that control within reach of the thing that is bothering them,
+     * not buried in settings they would have to stand still to open.
+     */
+    onQuiet: () -> Unit = {},
 ) {
     var chosen by remember(ask.departure.address) { mutableStateOf<String?>(null) }
 
@@ -104,6 +113,7 @@ fun RotationDialog(
         },
         dismissButton = {
             Row {
+                TextButton(onClick = onQuiet) { Text("Stop asking") }
                 TextButton(onClick = onLater) { Text("Later") }
                 OutlinedButton(onClick = onNone) { Text("None of these") }
             }

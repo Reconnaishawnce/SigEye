@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import com.sigeye.core.FollowLead
 import com.sigeye.core.FollowLibrary
 import com.sigeye.core.FollowRunner
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.MyDevices
 import com.sigeye.core.Permissions
 import com.sigeye.core.SavedFollow
 import com.sigeye.core.ScanService
@@ -58,6 +60,8 @@ import com.sigeye.core.SweepExport
 import com.sigeye.core.Takeaway
 import com.sigeye.core.TargetDevice
 import com.sigeye.core.TargetStore
+import com.sigeye.core.analysis.identity.AskPolicy
+import com.sigeye.core.analysis.identity.AskUrgency
 import com.sigeye.core.analysis.identity.CandidateWalkBy
 import com.sigeye.core.analysis.identity.CaseFile
 import com.sigeye.core.analysis.identity.FollowCandidate
@@ -258,6 +262,7 @@ private fun Live(
     val targetStore = remember { TargetStore.get(context) }
     val settings = remember { FollowSettings(context) }
     val ignoreList = remember { IgnoreList.get(context) }
+    val myDevices = remember { MyDevices.get(context) }
     val currentTarget = remember { CurrentTarget.get(context) }
     val feedback = remember { Feedback(context) }
 
@@ -319,6 +324,12 @@ private fun Live(
     var asking by remember { mutableStateOf<String?>(null) }
     val deferred = remember { mutableStateListOf<String>() }
 
+    /** When somebody was last stopped by a dialog, so they are not stopped twice over. */
+    var lastInterruptMs by remember { mutableLongStateOf(0L) }
+
+    /** Set when they have asked to be left alone for the rest of this run. */
+    var askingMuted by remember { mutableStateOf(false) }
+
     /**
      * Whether everything below the instruction is showing.
      *
@@ -350,9 +361,18 @@ private fun Live(
     val bars = remember { mutableStateListOf<Float>() }
     var lastWatched by remember { mutableStateOf(0) }
 
-    val ignored by ignoreList.addresses.collectAsStateWithLifecycle()
+    val mutedAddresses by ignoreList.addresses.collectAsStateWithLifecycle()
+    val myOwn by myDevices.devices.collectAsStateWithLifecycle()
+
+    // Your own kit walks with you by definition, so elimination by walking can never
+    // remove it. Left in, it survives every round and ends up looking like the answer.
+    // Muting is a preference about a screen; this is a standing fact, and it persists
+    // between follows so the same question is not asked every single walk.
+    val ignored = mutedAddresses + myOwn.map { it.address }
     val follows by library.follows.collectAsStateWithLifecycle()
     val targets by targetStore.targets.collectAsStateWithLifecycle()
+    val pinned by currentTarget.pinned.collectAsStateWithLifecycle()
+    val pinnedAddress = pinned?.address ?: state.target?.address
     val latest by rememberUpdatedState(state)
     val currentStep by rememberUpdatedState(step)
     val stepStarted by rememberUpdatedState(stepStartedMs)
@@ -517,14 +537,25 @@ private fun Live(
                 feedback.alert(AlertStyle.BOTH, urgent = false)
             }
 
-            // One question at a time. A second dialog stacking on the first during a walk
-            // is how somebody ends up tapping through both without reading either.
+            // Only questions somebody stands a chance of answering are allowed to stop
+            // them. The rest wait in the tray, where they are exactly as answerable later.
+            // See AskPolicy for why this is not a threshold that wanted tuning.
             if (asking == null) {
-                next.questions.firstOrNull { it.departure.address !in deferred }
-                    ?.let { question ->
-                        asking = question.departure.address
-                        feedback.alert(AlertStyle.BOTH, urgent = true)
-                    }
+                next.questions.firstOrNull { question ->
+                    question.departure.address !in deferred &&
+                        AskPolicy.urgencyOf(
+                            departureAddress = question.departure.address,
+                            pinnedAddress = pinnedAddress,
+                            poolSize = next.stillIn.size,
+                            lastInterruptMs = lastInterruptMs,
+                            nowMs = now,
+                            muted = askingMuted,
+                        ) == AskUrgency.INTERRUPT
+                }?.let { question ->
+                    asking = question.departure.address
+                    lastInterruptMs = now
+                    feedback.alert(AlertStyle.BOTH, urgent = true)
+                }
             }
 
             // One bar a second, of whatever the screen is about at the time.
@@ -597,7 +628,8 @@ private fun Live(
             },
             onMine = {
                 acting = null
-                ignoreList.add(candidate.address)
+                myDevices.add(candidate.address, candidate.label ?: candidate.vendor
+                    ?: candidate.address)
             },
             onRadar = {
                 acting = null
@@ -659,6 +691,12 @@ private fun Live(
                     deferred.add(address)
                     asking = null
                 },
+                onQuiet = {
+                    askingMuted = true
+                    asking = null
+                    log = (listOf("Interruptions off. Rotations still queue in the tray.") +
+                        log).take(LOG_LINES)
+                },
             )
         } ?: run { asking = null }
     }
@@ -674,6 +712,23 @@ private fun Live(
                 showSettings = false
             },
         )
+    }
+
+    // Everything the policy held back, with a count and a reason. Nothing is discarded;
+    // this is the difference between a question deferred and a question suppressed.
+    val waiting = state.questions.filter { it.departure.address !in deferred }
+    if (waiting.isNotEmpty() && asking == null) {
+        RotationTray(
+            waiting = waiting.size,
+            why = AskPolicy.whyWaiting(state.stillIn.size, askingMuted),
+            muted = askingMuted,
+            onOpen = {
+                asking = waiting.first().departure.address
+                lastInterruptMs = System.currentTimeMillis()
+            },
+            onMute = { askingMuted = it },
+        )
+        Spacer(Modifier.height(10.dp))
     }
 
     when (step) {
@@ -778,6 +833,7 @@ private fun Live(
                 if (kind in kindFilter) kindFilter.remove(kind) else kindFilter.add(kind)
             },
             ownKit = ownKit,
+            savedOwnKit = myOwn.size,
             onOwnKit = { ownKit = it },
             onAutoMute = { level ->
                 val updated = tuning.copy(autoMuteAboveDbm = level)
@@ -815,7 +871,7 @@ private fun Live(
             onHold = { acting = it },
             onPromote = { candidate -> targetStore.add(candidate.asTarget(followName)) },
             onKeep = { keeping = it },
-            onMine = { ignoreList.add(it.address) },
+            onMine = { myDevices.add(it.address, it.label ?: it.vendor ?: it.address) },
             onTargets = { goTo(Step.TARGETS) },
             onSettings = { showSettings = true },
             onFinish = {
@@ -1305,6 +1361,8 @@ private fun Following(
     onMark: (Mark) -> Unit,
     onCaseFile: () -> Unit,
     ownKit: OwnKit,
+    /** How many devices are already on the standing list, so the question is not re-asked. */
+    savedOwnKit: Int,
     onOwnKit: (OwnKit) -> Unit,
     onAutoMute: (Int) -> Unit,
     stitchLog: List<Stitch>,
@@ -1537,12 +1595,21 @@ private fun Following(
                 "not where it has been on average.",
         )
 
-        if (ownKit == OwnKit.UNASKED && state.autoMuting == null) {
+        if (ownKit == OwnKit.UNASKED && state.autoMuting == null && savedOwnKit == 0) {
             Spacer(Modifier.height(12.dp))
             OwnKitChooser(
                 tuning = state.tuning,
                 onSkip = { onOwnKit(OwnKit.DECIDED) },
                 onAutoMute = onAutoMute,
+            )
+        }
+        if (savedOwnKit > 0) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "$savedOwnKit of your own devices are on the saved list and were left out " +
+                    "of this follow before it started.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 

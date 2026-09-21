@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CrashLog
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.MyDevices
 import com.sigeye.core.SettingsStore
 import com.sigeye.core.SweepExport
 import com.sigeye.core.Vendors
@@ -52,7 +53,11 @@ import kotlinx.coroutines.delay
 private const val HUB_TAG = "settings-detect"
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onMyDevices: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val settings = remember { SettingsStore.get(context) }
     val ignore = remember { IgnoreList.get(context) }
@@ -91,6 +96,8 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         )
 
         Spacer(Modifier.height(16.dp))
+        MyDevicesSection(onOpen = onMyDevices)
+
         DensitySection(
             density = density,
             detected = detected,
@@ -205,6 +212,42 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 // --------------------------------------------------------------------------- density
+
+/**
+ * The way into marking your own kit.
+ *
+ * Next to the mute list because they look similar and are not. Muting is a preference
+ * about a screen; this is a fact about the world, and the follow experiments treat it as
+ * one. See [com.sigeye.core.MyDevices].
+ */
+@Composable
+private fun MyDevicesSection(onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val mine = remember { MyDevices.get(context) }
+    val owned by mine.devices.collectAsStateWithLifecycle()
+
+    Section(
+        title = "Your own devices (${owned.size})",
+        summary = "What you are carrying, so the app stops counting it as a stranger.",
+        emphasis = owned.isEmpty(),
+    ) {
+        Text(
+            if (owned.isEmpty()) {
+                "Nothing marked. Every count in the app currently includes your own watch, " +
+                    "earbuds and car, and in a follow your own kit never drops out of the " +
+                    "pool because it goes everywhere you go."
+            } else {
+                owned.joinToString(", ") { it.label }
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+            Text(if (owned.isEmpty()) "Find my devices" else "Manage")
+        }
+    }
+}
 
 @Composable
 private fun DensitySection(
