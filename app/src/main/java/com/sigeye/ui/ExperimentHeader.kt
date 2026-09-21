@@ -115,7 +115,7 @@ private fun ExperimentInfoDialog(experiment: Experiment, onDismiss: () -> Unit) 
                 experiment.limits?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "WHAT IT CANNOT TELL YOU",
+                        "LIMITATIONS",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                     )

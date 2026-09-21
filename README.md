@@ -2,7 +2,7 @@
 
 Experiments for the radio signals around you. Phyphox, but for Bluetooth and Wi-Fi.
 
-Thirty-nine of them, from *how many dB does a crisp packet block* to *follow one phone
+Forty of them, from *how many dB does a crisp packet block* to *follow one phone
 through the address changes designed to stop you*. Everything runs on the phone. No
 network code, no accounts, no analytics, nothing leaves the device.
 
@@ -17,7 +17,7 @@ Every experiment carries one of three states, and the home screen shows it.
 - **Active** — run on real hardware, in the real world, and behaved.
   29 of them are.
 - **Beta** — complete and tested, but never yet run anywhere but a build server.
-  6 of them are, marked *(beta)* below.
+  7 of them are, marked *(beta)* below.
 - **In development** — described and not built, and tapping one does nothing.
   4 of them are, marked *(soon)* below. They are listed on purpose: a list of what is
   planned is more honest than a list that pretends the app is finished.
@@ -77,6 +77,7 @@ home screen.
 
 | | |
 |---|---|
+| **Camera Sweep** *(beta)* | Find license plate cameras as you walk or drive, and note where they are. |
 | **Identity** | Recognize a device after it changes the address meant to hide it. One screen, four modes: |
 | &nbsp;&nbsp;↳ **Defeating Randomization** | Follow one phone through its address changes, and check whether it worked. |
 | &nbsp;&nbsp;↳ **Rotation Lab** | A whole room's address privacy, grouped by maker and measured by clock. |

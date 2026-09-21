@@ -41,6 +41,7 @@ import com.sigeye.experiments.bench.Bench
 import com.sigeye.experiments.bench.BenchScreen
 import com.sigeye.experiments.identity.IdentityScreen
 import com.sigeye.experiments.mine.MyDevicesScreen
+import com.sigeye.experiments.sweep.SweepScreen
 import com.sigeye.experiments.identity.Mode
 import com.sigeye.experiments.settings.SettingsScreen
 import com.sigeye.experiments.sky.SkyScreen
@@ -280,6 +281,9 @@ private fun Screen(
 
         MY_DEVICES ->
             MyDevicesScreen(onBack = goBack, modifier = inset)
+
+        Experiments.SWEEP ->
+            SweepScreen(onBack = goBack, modifier = inset)
 
         Experiments.MOTION ->
             MotionScreen(onBack = goBack, modifier = inset)

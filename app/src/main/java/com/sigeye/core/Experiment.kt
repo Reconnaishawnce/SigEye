@@ -114,6 +114,7 @@ object Experiments {
     const val FOLLOW = "follow"
     const val IDENTITY = "identity"
     const val BENCH = "bench"
+    const val SWEEP = "sweep"
     const val RTT = "rtt"
     const val SKY = "sky"
     const val WEATHER = "weather"
@@ -1008,6 +1009,32 @@ object Experiments {
 
         // ----------------------------------------------------------- privacy
         Experiment(
+            id = SWEEP,
+            title = "Camera Sweep",
+            blurb = "Find license plate cameras as you walk or drive, and note where they are.",
+            teaches = "Cameras that watch a street are usually not hidden, just unlabelled. " +
+                "Many of them talk over Bluetooth, and one common model broadcasts the " +
+                "serial number printed on its own case - which means it can be recognized " +
+                "again weeks later, even though it changes its Bluetooth address to avoid " +
+                "exactly that.",
+            category = Experiment.Category.PRIVACY,
+            status = Experiment.Status.BETA,
+            needs = "Bluetooth, GPS and somewhere to go. Works on foot, better in a car.",
+            howTo = listOf(
+                "Tap Start and put the phone down somewhere it can see the sky.",
+                "Drive or walk. Anything it recognizes is added with the spot you heard " +
+                    "it loudest, which is the closest you got to it.",
+                "Tap Export when you are done. You get a spreadsheet, one row per camera.",
+            ),
+            reading = "Confirmed means the device said what it was. Likely and Possible " +
+                "mean look up and check. A serial number means the same camera will match " +
+                "this row again next time rather than becoming a new one.",
+            limits = "Only finds hardware that talks over Bluetooth, and only while it is " +
+                "talking. A camera that is hardwired, switched off, or from a maker SigEye " +
+                "does not know is invisible here. Finding nothing does not mean there is " +
+                "nothing.",
+        ),
+        Experiment(
             id = IDENTITY,
             title = "Identity",
             blurb = "Recognize a device after it changes the address meant to hide it.",
@@ -1319,6 +1346,7 @@ object Experiments {
         FOLLOW to "Narrow a street down to the one phone that is coming with you.",
         IDENTITY to "Follow a phone through the address changes meant to stop you.",
         BENCH to "Measure what your walls, your body and your building do to a signal.",
+        SWEEP to "Drive around and come back with a list of the cameras watching the street.",
     )
 
     /**
