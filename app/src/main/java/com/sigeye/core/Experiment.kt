@@ -367,9 +367,8 @@ object Experiments {
             id = PLACE,
             title = "Place Profiler",
             blurb = "How busy a place is hour by hour, from a phone left sitting there.",
-            teaches = "Leave the phone somewhere for a few hours and read the shape of the day. A car " +
-                "park and a corridor look identical in a snapshot and nothing alike over an " +
-                "afternoon.",
+            teaches = "Leave the phone somewhere for a few hours and read the shape of the day. Bluetooth " +
+                "shows the people moving through, and Wi-Fi shows the routers that stay put.",
             category = Experiment.Category.SENSING,
             status = Experiment.Status.ACTIVE,
             needs = "A few hours, and a charger. The screen has to stay open.",
@@ -378,8 +377,8 @@ object Experiments {
                 "Come back and read the shape of the day.",
                 "Flat and full overnight is a car park. Spiky and empty is a corridor.",
             ),
-            limits = "Counts devices rather than people, and a phone that changes address gets " +
-                "counted twice.",
+            limits = "Counts devices rather than people, and a phone that changes address is counted " +
+                "twice. Wi-Fi sees routers and hotspots, never phones.",
         ),
         Experiment(
             id = "rhythm",

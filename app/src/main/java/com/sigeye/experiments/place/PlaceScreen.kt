@@ -42,6 +42,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Permissions
 import com.sigeye.core.Recordings
+import com.sigeye.core.wifi.WifiScanHub
 import com.sigeye.core.ScanService
 import com.sigeye.core.analysis.presence.PlaceReport
 import com.sigeye.core.analysis.presence.Resident
@@ -100,8 +101,11 @@ private fun Live() {
     val activeModes by ScanService.activeModes.collectAsStateWithLifecycle()
     val running = activeModes.contains(ScanService.Mode.PLACE)
     var report by remember { mutableStateOf(PlaceReport(emptyList(), emptyList(), 0, 0)) }
+    var wifiReport by remember { mutableStateOf(PlaceReport(emptyList(), emptyList(), 0, 0)) }
+    val wifiState by WifiScanHub.state.collectAsStateWithLifecycle()
     // Held by the service, so a four-hour profile survives the screen being closed.
     val profile = Recordings.place
+    val wifiProfile = Recordings.placeWifi
     var startedAtMs by remember { mutableStateOf(0L) }
 
     DisposableEffect(Unit) {
@@ -120,6 +124,7 @@ private fun Live() {
         while (running) {
             delay(TICK_MS)
             report = profile.report(Clock.nowMs())
+            wifiReport = wifiProfile.report(Clock.nowMs())
         }
     }
 
@@ -177,6 +182,10 @@ private fun Live() {
                 profile.bucketMs = (sliceMinutes.roundToInt() * 60_000).toLong()
                 profile.start(startedAtMs)
                 report = profile.report(startedAtMs)
+                // Same slices, so the two charts line up hour for hour.
+                wifiProfile.bucketMs = profile.bucketMs
+                wifiProfile.start(startedAtMs)
+                wifiReport = wifiProfile.report(startedAtMs)
                 ScanService.start(context, ScanService.Mode.PLACE)
             },
             modifier = Modifier.fillMaxWidth(),
@@ -299,6 +308,8 @@ private fun Live() {
         }
     }
 
+    WifiSection(wifiReport, throttled = wifiState.throttled)
+
     if (report.residents.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         Text(
@@ -324,14 +335,14 @@ private fun Live() {
  * low. They look nothing alike, which is the point.
  */
 @Composable
-private fun ActivityChart(report: PlaceReport) {
+private fun ActivityChart(report: PlaceReport, noun: String = "devices") {
     val bars = MaterialTheme.colorScheme.primary
     val churnColour = MaterialTheme.colorScheme.tertiary
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
 
     val spoken = buildString {
-        append("Devices per slice across ${report.buckets.size} slices. ")
-        report.busiest?.let { append("Busiest slice held ${it.devices} devices. ") }
+        append("${noun.replaceFirstChar { it.uppercase() }} per slice across ${report.buckets.size} slices. ")
+        report.busiest?.let { append("Busiest slice held ${it.devices} $noun. ") }
         report.quietest?.let { append("Quietest held ${it.devices}. ") }
         report.mostChurn?.let { append("Most turnover was ${it.churn} in one slice.") }
     }
@@ -372,12 +383,86 @@ private fun ActivityChart(report: PlaceReport) {
         }
     }
     Text(
-        "Bars are how many devices were present in each slice. The marks along the bottom " +
-            "are how much arrived or left. Empty slices are drawn faint - those are gaps " +
-            "in the recording rather than quiet periods.",
+        "Bars are how many $noun were present in each slice. Marks along the bottom are " +
+            "how many arrived or left. Faint slices are gaps in the recording, not quiet times.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * The Wi-Fi half of the profile.
+ *
+ * Routers barely ever change address and rarely move, so they draw the outline of a place:
+ * the same networks in every slice, all day. What comes and goes is the interesting part -
+ * phone hotspots, a bus, a car with its own Wi-Fi - and a router whose signal suddenly
+ * steps means something big moved between it and the phone.
+ */
+@Composable
+private fun WifiSection(report: PlaceReport, throttled: Boolean) {
+    Spacer(Modifier.height(16.dp))
+    Text("Wi-Fi", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    Text(
+        "Routers stay put, so they show the outline of the place. Hotspots and cars come and go.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    if (throttled) {
+        Text(
+            "Android is limiting Wi-Fi scans to four every two minutes. Turn off Wi-Fi scan " +
+                "throttling in developer options for a finer picture.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+
+    if (report.totalDevices == 0) {
+        Text(
+            "Waiting for the first Wi-Fi scan.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        return
+    }
+
+    val passing = report.totalDevices - report.residents.size
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Stat("Networks", "${report.totalDevices}", "ever heard")
+        Stat("Fixtures", "${report.fixtures.size}", "here throughout")
+        Stat("Passing", "$passing", "came and went")
+    }
+    Spacer(Modifier.height(10.dp))
+    ActivityChart(report, noun = "networks")
+
+    if (report.movers.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Signal stepped",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        report.movers.take(4).forEach { mover ->
+            Text(
+                mover.label + ": " + String.format(Locale.US, "%.0f dB", mover.shiftDb) +
+                    (if (mover.shiftDb > 0) " stronger" else " weaker") + " at " +
+                    clockFor(report.buckets.getOrNull(mover.shiftedAtBucket ?: 0)?.startMs ?: 0L),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+
+    if (report.fixtures.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Fixtures",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        report.fixtures.take(10).forEach { ResidentRow(it) }
+    }
 }
 
 @Composable

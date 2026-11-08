@@ -86,7 +86,16 @@ data class AccessPoint(
 }
 
 data class WifiScanState(
+    /** Everything heard since the hub was cleared, strongest first. */
     val results: List<AccessPoint> = emptyList(),
+    /**
+     * Only what the most recent scan returned.
+     *
+     * Separate from [results], which keeps access points that have since gone quiet.
+     * Anything counting what is here now, slice by slice, has to read this one or a router
+     * switched off at noon would still be counted at midnight.
+     */
+    val latest: List<AccessPoint> = emptyList(),
     val scanning: Boolean = false,
     val scans: Int = 0,
     val lastScanAtMs: Long = 0,
@@ -200,10 +209,11 @@ object WifiScanHub {
         val wifi = manager ?: return
         val now = System.currentTimeMillis()
         val results: List<ScanResult> = runCatching { wifi.scanResults }.getOrNull().orEmpty()
+        val thisScan = ArrayList<AccessPoint>(results.size)
 
         results.forEach { result ->
             val bssid = result.BSSID ?: return@forEach
-            known[bssid.uppercase()] = AccessPoint(
+            val point = AccessPoint(
                 bssid = bssid.uppercase(),
                 ssid = ssidOf(result),
                 rssi = result.level,
@@ -213,10 +223,13 @@ object WifiScanHub {
                 channelWidthMhz = Spectrum.widthFromAndroid(result.channelWidth),
                 centerFreqMhz = result.centerFreq0,
             )
+            known[point.bssid] = point
+            thisScan += point
         }
 
         _state.value = _state.value.copy(
             results = known.values.sortedByDescending { it.rssi },
+            latest = thisScan,
             scans = _state.value.scans + 1,
             lastScanAtMs = now,
             throttled = false,

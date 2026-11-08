@@ -16,6 +16,7 @@ import androidx.core.app.ServiceCompat
 import com.sigeye.MainActivity
 import com.sigeye.R
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.wifi.WifiScanHub
 import com.sigeye.experiments.trainspotter.Bin
 import com.sigeye.experiments.trainspotter.TrainSpotterEngine
 import com.sigeye.experiments.watchlist.WatchEngine
@@ -62,6 +63,7 @@ class ScanService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var pump: Job? = null
     private var ticker: Job? = null
+    private var wifiFeed: Job? = null
 
     private val modes = mutableSetOf<Mode>()
 
@@ -162,7 +164,9 @@ class ScanService : Service() {
             // away - which for a follow is most of it.
             Mode.ROTATION_LAB -> Recordings.startRotationLab(now)
 
-            Mode.FORENSICS, Mode.PLACE, Mode.CONVOY, Mode.FOLLOW -> Unit
+            Mode.PLACE -> startWifiForPlace()
+
+            Mode.FORENSICS, Mode.CONVOY, Mode.FOLLOW -> Unit
         }
 
         BleScanHub.acquire(HUB_TAG)
@@ -190,7 +194,8 @@ class ScanService : Service() {
             // screen decides what to do with it.
             // The lab keeps what it has for the same reason: half an hour of a carriage is
             // not something to throw away because somebody stopped the scan.
-            Mode.PLACE, Mode.CONVOY, Mode.FOLLOW, Mode.ROTATION_LAB -> Unit
+            Mode.PLACE -> stopWifiForPlace()
+            Mode.CONVOY, Mode.FOLLOW, Mode.ROTATION_LAB -> Unit
         }
         publishModes()
         if (modes.isEmpty()) {
@@ -206,7 +211,50 @@ class ScanService : Service() {
         stopSelf()
     }
 
+    /**
+     * A Wi-Fi scan every quarter of a minute, fed into the place profile.
+     *
+     * Slower than Bluetooth by nature: each scan is a snapshot, and Android allows four every
+     * two minutes unless throttling is turned off in developer options. For ten-minute slices
+     * that is plenty. Skipped during a replay, because a live router in a recorded afternoon
+     * would describe neither.
+     */
+    private fun startWifiForPlace() {
+        if (wifiFeed != null) return
+        WifiScanHub.acquire(this, WIFI_TAG)
+        wifiFeed = scope.launch {
+            launch {
+                var seen = WifiScanHub.state.value.scans
+                WifiScanHub.state.collect { state ->
+                    if (state.scans == seen) return@collect
+                    seen = state.scans
+                    if (Replay.active) return@collect
+                    val now = Clock.nowMs()
+                    state.latest.forEach { point ->
+                        Recordings.placeWifi.observe(
+                            address = point.bssid,
+                            rssi = point.rssi,
+                            atMs = now,
+                            label = point.ssid ?: "Hidden network",
+                        )
+                    }
+                }
+            }
+            while (isActive) {
+                WifiScanHub.requestScan()
+                delay(WIFI_SCAN_EVERY_MS)
+            }
+        }
+    }
+
+    private fun stopWifiForPlace() {
+        wifiFeed?.cancel()
+        wifiFeed = null
+        WifiScanHub.release(this, WIFI_TAG)
+    }
+
     private fun shutdownInternals() {
+        stopWifiForPlace()
         pump?.cancel()
         ticker?.cancel()
         pump = null
@@ -401,6 +449,8 @@ class ScanService : Service() {
         private const val TAG = "SigEye/Service"
         private const val CHANNEL_ONGOING = "scan"
         private const val CHANNEL_TRAIN = "alerts"
+        private const val WIFI_TAG = "place"
+        private const val WIFI_SCAN_EVERY_MS = 15_000L
         private const val NOTIF_ONGOING = 1
         private const val NOTIF_TRAIN = 2
         private const val HUB_TAG = "service"

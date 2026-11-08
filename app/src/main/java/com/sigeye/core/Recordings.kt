@@ -37,6 +37,15 @@ object Recordings {
 
     val forensics = ForensicRecorder()
     val place = PlaceProfile()
+
+    /**
+     * The same profile, of Wi-Fi access points instead of Bluetooth devices.
+     *
+     * Its own instance rather than mixed in, so that a slice's device count still means
+     * Bluetooth devices. Routers barely ever change address and rarely move, which makes
+     * them the stable outline of a place; Bluetooth is the people moving through it.
+     */
+    val placeWifi = PlaceProfile()
     val convoy = ConvoyTracker()
 
     /**
@@ -241,7 +250,7 @@ object Recordings {
             add("Rotation Lab: ${rotationLab.addressCount} addresses")
         }
         if (modes.contains(ScanService.Mode.PLACE)) {
-            add("Place Profiler: ${place.deviceCount} devices")
+            add("Place Profiler: ${place.deviceCount} devices, ${placeWifi.deviceCount} networks")
         }
         if (modes.contains(ScanService.Mode.CONVOY)) {
             add("Journey: leg ${convoy.legCount}")
