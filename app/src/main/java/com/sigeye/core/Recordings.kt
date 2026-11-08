@@ -5,6 +5,7 @@ import com.sigeye.core.analysis.identity.RotationLab
 import com.sigeye.core.analysis.presence.ConvoyTracker
 import com.sigeye.core.analysis.presence.PlaceProfile
 import com.sigeye.core.analysis.presence.SeenNetwork
+import com.sigeye.core.analysis.surveillance.Surveillance
 import com.sigeye.core.analysis.record.ForensicRecorder
 import com.sigeye.core.analysis.record.TrackDetail
 import com.sigeye.core.ble.Advert
@@ -102,6 +103,7 @@ object Recordings {
             _follower = Follower(DeviceBook.get(application), FollowStore.get(application))
         }
         if (mine == null) mine = MyDevices.get(application)
+        if (prefs == null) prefs = application.getSharedPreferences("recordings", Context.MODE_PRIVATE)
         if (_ownKit == null) _ownKit = OwnKitWatcher(MyDevices.get(application))
         startFollowing()
     }
@@ -156,6 +158,22 @@ object Recordings {
     var forensicsIncludesMine: Boolean = false
 
     /**
+     * Whether a forensic recording also scans Wi-Fi.
+     *
+     * A choice made before recording rather than a fixed rule: Wi-Fi makes the record more
+     * complete, and some people want the smaller, Bluetooth-only file. Remembered between
+     * recordings, because the answer is usually the same each time.
+     */
+    var forensicsIncludesWifi: Boolean
+        get() = prefs?.getBoolean(KEY_FORENSICS_WIFI, true) ?: true
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_FORENSICS_WIFI, value)?.apply()
+        }
+
+    private var prefs: android.content.SharedPreferences? = null
+    private const val KEY_FORENSICS_WIFI = "forensics_wifi"
+
+    /**
      * Feeds one Wi-Fi scan to whichever recordings want it.
      *
      * Networks you have marked as yours are left out of the journey, the same way your
@@ -169,6 +187,23 @@ object Recordings {
                     rssi = point.rssi,
                     atMs = nowMs,
                     label = point.ssid ?: "Hidden network",
+                )
+            }
+        }
+        if (modes.contains(ScanService.Mode.FORENSICS) && forensicsIncludesWifi) {
+            points.forEach { point ->
+                // Your own hotspot follows the same rule as your own Bluetooth: left out
+                // unless the recording was asked to include it.
+                if (mine?.isMine(point.bssid) == true && !forensicsIncludesMine) return@forEach
+                forensics.observeWifi(
+                    bssid = point.bssid,
+                    rssi = point.rssi,
+                    atMs = nowMs,
+                    ssid = point.ssid,
+                    vendor = OuiRegistry.lookup(Surveillance.ouiOf(point.bssid)),
+                    isPrivate = ConvoyTracker.isPrivateBssid(point.bssid),
+                    note = Surveillance.fromWifi(point.bssid, point.ssid)
+                        ?.let { "${it.product}: ${it.why}" },
                 )
             }
         }

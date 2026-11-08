@@ -23,6 +23,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -201,6 +202,12 @@ private fun Live() {
     var reviewing by remember { mutableStateOf(false) }
     var elapsedMs by remember { mutableStateOf(0L) }
     var devices by remember { mutableStateOf(0) }
+    var networks by remember { mutableStateOf(0) }
+    var includeWifi by remember { mutableStateOf(Recordings.forensicsIncludesWifi) }
+    var reviewingWifi by remember { mutableStateOf(false) }
+    // The Wi-Fi tab opens on what came and went, because a city recording is otherwise
+    // hundreds of routers that sat there the whole time.
+    var wifiHideFurniture by remember { mutableStateOf(true) }
     var packets by remember { mutableStateOf(0) }
     var startedAtMs by remember { mutableStateOf(0L) }
 
@@ -234,6 +241,7 @@ private fun Live() {
             delay(TICK_MS)
             elapsedMs = Clock.nowMs() - startedAtMs
             devices = recorder.deviceCount
+            networks = recorder.networkCount
             packets = recorder.packetCount
         }
     }
@@ -267,11 +275,36 @@ private fun Live() {
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Include Wi-Fi", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Adds routers, hotspots and cars. Checked every 15 seconds, so it shows " +
+                        "what was there better than exactly when.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = includeWifi,
+                onCheckedChange = {
+                    includeWifi = it
+                    Recordings.forensicsIncludesWifi = it
+                },
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
                 startedAtMs = Clock.nowMs()
                 recorder.start(startedAtMs)
+                reviewingWifi = false
                 elapsedMs = 0L
                 selected = null
                 exported = null
@@ -293,7 +326,7 @@ private fun Live() {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             Stat("Elapsed", formatSpan(elapsedMs), "recording")
             Stat("Devices", "$devices", "seen")
-            Stat("Packets", "$packets", "captured")
+            if (includeWifi) Stat("Networks", "$networks", "Wi-Fi") else Stat("Packets", "$packets", "captured")
         }
         Spacer(Modifier.height(16.dp))
         Card(
@@ -330,8 +363,10 @@ private fun Live() {
             .map { it.value.uppercase(Locale.US) }
             .toSet()
     }
+    val hasWifi = recorder.networkCount > 0
+    val onWifi = hasWifi && reviewingWifi
     val filter = ForensicFilter(
-        hideFurniture = hideFurniture,
+        hideFurniture = if (onWifi) wifiHideFurniture else hideFurniture,
         hideKnown = hideKnown,
         passesOnly = passesOnly,
         fixedOnly = fixedOnly,
@@ -355,6 +390,7 @@ private fun Live() {
     }
 
     val shown = recorder.review(filter, sort, knownAddresses)
+        .filter { it.wifi == onWifi }
         .filter { track ->
             val familiar = provenances[track.address]?.familiar == true
             when {
@@ -363,21 +399,40 @@ private fun Live() {
                 else -> true
             }
         }
-    val census = recorder.census()
+    val census = recorder.census(wifi = onWifi)
     val familiarCount = provenances.values.count { it.familiar }
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Stat("Recorded", formatSpan(recorder.spanMs), "of radio")
         Stat("Devices", "${recorder.deviceCount}", "in total")
+        if (hasWifi) Stat("Networks", "${recorder.networkCount}", "Wi-Fi")
         Stat("Showing", "${shown.size}", "after filters")
+    }
+
+    if (hasWifi) {
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(
+                selected = !reviewingWifi,
+                onClick = { reviewingWifi = false; selected = null },
+                label = { Text("Bluetooth") },
+            )
+            FilterChip(
+                selected = reviewingWifi,
+                onClick = { reviewingWifi = true; selected = null },
+                label = { Text("Wi-Fi") },
+            )
+        }
     }
 
     Spacer(Modifier.height(12.dp))
     Text("Narrow it down", style = MaterialTheme.typography.labelLarge)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilterChip(
-            selected = hideFurniture,
-            onClick = { hideFurniture = !hideFurniture },
+            selected = if (onWifi) wifiHideFurniture else hideFurniture,
+            onClick = {
+                if (onWifi) wifiHideFurniture = !wifiHideFurniture else hideFurniture = !hideFurniture
+            },
             label = { Text("Hide unchanged", style = MaterialTheme.typography.labelSmall) },
         )
         FilterChip(
@@ -461,9 +516,16 @@ private fun Live() {
                 "devices",
             )
         },
-        footnote = "A pass is the most specific thing that can be said about a device, so " +
-            "it is tested first. Anything unremarkable falls through to unchanged. " +
-            "$familiarCount of ${tracks.size} devices here have a history in this app.",
+        footnote = if (onWifi) {
+            "Wi-Fi is checked every 15 seconds, so something that drove past may be one " +
+                "or two readings and is easy to miss. Routers that never left are hidden " +
+                "unless you turn off Hide unchanged."
+        } else {
+            "A pass is the most specific thing that can be said about a device, so it is " +
+                "tested first. Anything unremarkable falls through to unchanged. " +
+                "$familiarCount of ${tracks.size} devices and networks here have a history " +
+                "in this app."
+        },
     )
 
     if (shown.isEmpty()) {
@@ -724,7 +786,11 @@ private fun TrackCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        track.address + if (track.isRandom) "  (random)" else "",
+                        track.address + when {
+                            track.wifi && track.isRandom -> "  (private)"
+                            track.isRandom -> "  (random)"
+                            else -> ""
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -796,9 +862,15 @@ private fun TrackCard(
                         track.peakFraction * 100,
                     ),
                 )
-                Detail("Rate", String.format(Locale.US, "%.1f/s", track.packetsPerSecond))
-                Detail("Typical gap", "${track.medianGapMs} ms")
-                Detail("Cadence", track.cadence.label)
+                // Timing says something about a Bluetooth device. For Wi-Fi it only says how
+                // often the phone scanned, so it is left out rather than misread.
+                if (!track.wifi) {
+                    Detail("Rate", String.format(Locale.US, "%.1f/s", track.packetsPerSecond))
+                    Detail("Typical gap", "${track.medianGapMs} ms")
+                    Detail("Cadence", track.cadence.label)
+                } else {
+                    Detail("Scans heard in", "${track.packets}")
+                }
                 track.detail.companyId?.let {
                     Detail("Company ID", Vendors.companyIdHex(it) +
                         (Vendors.byCompanyId(it)?.let { name -> "  $name" } ?: ""))
@@ -809,12 +881,14 @@ private fun TrackCard(
                     Detail("Services", "${track.detail.serviceUuids.size} advertised")
                 }
 
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    track.cadence.meaning,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (!track.wifi) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        track.cadence.meaning,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 track.detail.surveillanceNote?.let {
                     Spacer(Modifier.height(6.dp))
@@ -843,13 +917,16 @@ private fun TrackCard(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
-                DeviceActions(
-                    address = track.address,
-                    displayName = track.label,
-                    isRandomAddress = track.isRandom,
-                    onRequestNewList = onRequestNewList,
-                )
+                // Locate, lists and the rest are Bluetooth actions. A network has none of them.
+                if (!track.wifi) {
+                    Spacer(Modifier.height(12.dp))
+                    DeviceActions(
+                        address = track.address,
+                        displayName = track.label,
+                        isRandomAddress = track.isRandom,
+                        onRequestNewList = onRequestNewList,
+                    )
+                }
             } else {
                 Text(
                     "Tap for detail",

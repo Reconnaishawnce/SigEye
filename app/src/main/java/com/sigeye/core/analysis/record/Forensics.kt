@@ -21,6 +21,11 @@ enum class Behavior(val label: String, val meaning: String) {
         "Was here and left",
         "Present from the start, gone before the end.",
     ),
+    VISITED(
+        "Came and went",
+        "Turned up partway through and left before the end, without the rise and fall of " +
+            "something going past. Somebody who stopped for a while, or a hotspot switched on.",
+    ),
     THROUGHOUT_STEADY(
         "Here the whole time, unchanging",
         "Present from start to finish with a signal that barely moved. Furniture - and " +
@@ -80,6 +85,13 @@ data class Track(
     val recordingStartMs: Long,
     val recordingEndMs: Long,
     val detail: TrackDetail = TrackDetail(),
+    /**
+     * A Wi-Fi network rather than a Bluetooth device. [address] is then its BSSID.
+     *
+     * Its readings are one per scan, every fifteen seconds or so, so the even spacing that
+     * makes a Bluetooth beacon "metronomic" means nothing here and is not shown.
+     */
+    val wifi: Boolean = false,
 ) {
     val packets: Int get() = pings.size
     val firstSeenMs: Long get() = pings.firstOrNull()?.atMs ?: recordingStartMs
@@ -126,6 +138,10 @@ data class Track(
         get() = when {
             packets < MIN_PACKETS -> Behavior.GLIMPSED
             looksLikePass -> Behavior.PASSED
+            // Here for a while in the middle without passing. This used to fall through
+            // to unchanging furniture, which is the one thing it is not, so Hide unchanged
+            // hid exactly the visitors somebody was looking for.
+            !presentFromStart && !presentToEnd -> Behavior.VISITED
             !presentFromStart && presentToEnd -> Behavior.ARRIVED
             presentFromStart && !presentToEnd -> Behavior.LEFT
             rangeDb >= MOVING_RANGE_DB -> Behavior.THROUGHOUT_VARYING
@@ -272,6 +288,10 @@ class ForensicRecorder(
     private val maxPingsPerDevice: Int = 3_000,
 ) {
 
+    private companion object {
+        const val WIFI_KEY = "wifi:"
+    }
+
     private class Builder(
         var label: String,
         var vendor: String?,
@@ -279,6 +299,7 @@ class ForensicRecorder(
         var detail: TrackDetail = TrackDetail(),
         val pings: MutableList<Ping> = mutableListOf(),
         var dropped: Int = 0,
+        val wifi: Boolean = false,
     )
 
     private val builders = LinkedHashMap<String, Builder>()
@@ -286,7 +307,11 @@ class ForensicRecorder(
     private var lastAtMs = 0L
     private var recording = false
 
-    val deviceCount: Int get() = builders.size
+    /** Bluetooth devices recorded. */
+    val deviceCount: Int get() = builders.values.count { !it.wifi }
+
+    /** Wi-Fi networks recorded. */
+    val networkCount: Int get() = builders.values.count { it.wifi }
     val packetCount: Int get() = builders.values.sumOf { it.pings.size + it.dropped }
     val isRecording: Boolean get() = recording
 
@@ -346,10 +371,40 @@ class ForensicRecorder(
         if (atMs > lastAtMs) lastAtMs = atMs
     }
 
+    /**
+     * One access point from one Wi-Fi scan.
+     *
+     * Kept under its own key, so a network can never be mistaken for a Bluetooth device
+     * whose address happens to match.
+     */
+    @Synchronized
+    fun observeWifi(
+        bssid: String,
+        rssi: Int,
+        atMs: Long,
+        ssid: String?,
+        vendor: String? = null,
+        isPrivate: Boolean = false,
+        note: String? = null,
+    ) {
+        if (!recording || atMs < startedAtMs) return
+        val key = WIFI_KEY + bssid.uppercase(Locale.US)
+        val name = ssid?.takeIf { it.isNotBlank() } ?: "Hidden network"
+        val builder = builders.getOrPut(key) {
+            Builder(name, vendor, isPrivate, wifi = true)
+        }
+        builder.label = name
+        vendor?.let { builder.vendor = it }
+        builder.isRandom = isPrivate
+        note?.let { builder.detail = builder.detail.copy(surveillanceNote = it) }
+        builder.pings.add(Ping(atMs, rssi))
+        if (atMs > lastAtMs) lastAtMs = atMs
+    }
+
     @Synchronized
     fun tracks(): List<Track> = builders.map { (address, builder) ->
         Track(
-            address = address,
+            address = address.removePrefix(WIFI_KEY),
             label = builder.label,
             vendor = builder.vendor,
             isRandom = builder.isRandom,
@@ -357,6 +412,7 @@ class ForensicRecorder(
             recordingStartMs = startedAtMs,
             recordingEndMs = lastAtMs,
             detail = builder.detail,
+            wifi = builder.wifi,
         )
     }
 
@@ -386,26 +442,29 @@ class ForensicRecorder(
             }
     }
 
-    /** How many of each behavior, for the summary. */
+    /** How many of each behavior, for the summary, for one radio at a time. */
     @Synchronized
-    fun census(): Map<Behavior, Int> =
-        tracks().groupingBy { it.behavior }.eachCount()
+    fun census(wifi: Boolean = false): Map<Behavior, Int> =
+        tracks().filter { it.wifi == wifi }.groupingBy { it.behavior }.eachCount()
 
     /** Every reading, flattened, for export. */
     @Synchronized
     fun csv(): String = buildString {
         append("# SigEye forensic recording\n")
-        append("# devices=").append(builders.size)
+        append("# devices=").append(deviceCount)
+            .append(" networks=").append(networkCount)
             .append(" span_ms=").append(spanMs).append('\n')
-        append("elapsed_ms,address,label,rssi_dbm,behavior\n")
+        append("elapsed_ms,address,label,rssi_dbm,behavior,radio\n")
         tracks().forEach { track ->
             val behavior = track.behavior.name
+            val radio = if (track.wifi) "wifi" else "bluetooth"
             track.pings.forEach { ping ->
                 append(ping.atMs - startedAtMs).append(',')
                     .append(track.address).append(',')
                     .append(track.label.replace(',', ' ')).append(',')
                     .append(ping.rssi).append(',')
-                    .append(behavior).append('\n')
+                    .append(behavior).append(',')
+                    .append(radio).append('\n')
             }
         }
     }

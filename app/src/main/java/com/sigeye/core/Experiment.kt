@@ -316,7 +316,7 @@ object Experiments {
             title = "Forensics",
             blurb = "Record a place now, so you can ask the question later.",
             teaches = "Record a place, then go through it afterwards. Two hundred devices in three " +
-                "minutes is impossible to follow live and easy to review later.",
+                "minutes is impossible to follow live and easy to review later, Wi-Fi included.",
             category = Experiment.Category.TOOLS,
             status = Experiment.Status.ACTIVE,
             needs = "Somewhere with traffic, and a few minutes.",
@@ -325,8 +325,9 @@ object Experiments {
                 "Stop when you are done. Nothing leaves the phone.",
                 "Go through the timeline afterwards and filter for whatever you care about.",
             ),
-            limits = "Only records what was actually advertising at the time. Your own devices are " +
-                "left out unless you ask for them.",
+            limits = "Only records what was advertising at the time, and leaves out your own devices " +
+                "unless asked. Wi-Fi is checked every 15 seconds, so it shows what was there " +
+                "more than exactly when.",
         ),
         Experiment(
             id = DWELL,

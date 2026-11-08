@@ -165,8 +165,9 @@ class ScanService : Service() {
             Mode.ROTATION_LAB -> Recordings.startRotationLab(now)
 
             Mode.PLACE, Mode.CONVOY -> startWifiFeed()
+            Mode.FORENSICS -> if (Recordings.forensicsIncludesWifi) startWifiFeed()
 
-            Mode.FORENSICS, Mode.FOLLOW -> Unit
+            Mode.FOLLOW -> Unit
         }
 
         BleScanHub.acquire(HUB_TAG)
@@ -188,7 +189,10 @@ class ScanService : Service() {
                 watch = null
             }
 
-            Mode.FORENSICS -> Recordings.forensics.stop(Clock.nowMs())
+            Mode.FORENSICS -> {
+                Recordings.forensics.stop(Clock.nowMs())
+                if (!wantsWifi()) stopWifiFeed()
+            }
             // Place, Convoy and Follow keep whatever they have: stopping the service should
             // not throw away four hours of profile or half an hour of walking, and the
             // screen decides what to do with it.
@@ -196,9 +200,7 @@ class ScanService : Service() {
             // not something to throw away because somebody stopped the scan.
             // The Wi-Fi scan is shared by the two experiments that use it, so it only
             // stops once neither is running.
-            Mode.PLACE, Mode.CONVOY -> {
-                if (Mode.PLACE !in modes && Mode.CONVOY !in modes) stopWifiFeed()
-            }
+            Mode.PLACE, Mode.CONVOY -> if (!wantsWifi()) stopWifiFeed()
             Mode.FOLLOW, Mode.ROTATION_LAB -> Unit
         }
         publishModes()
@@ -242,6 +244,11 @@ class ScanService : Service() {
             }
         }
     }
+
+    /** Whether anything still running wants the Wi-Fi scan. */
+    private fun wantsWifi(): Boolean =
+        Mode.PLACE in modes || Mode.CONVOY in modes ||
+            (Mode.FORENSICS in modes && Recordings.forensicsIncludesWifi)
 
     private fun stopWifiFeed() {
         wifiFeed?.cancel()

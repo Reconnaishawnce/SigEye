@@ -284,7 +284,7 @@ class ForensicsTest {
         recorder.observe("A", -60, 1_000L, label = "Bob, the printer")
         recorder.stop(2_000L)
         recorder.csv().trim().lines().drop(3).forEach {
-            assertEquals("wrong column count in: $it", 5, it.split(',').size)
+            assertEquals("wrong column count in: $it", 6, it.split(',').size)
         }
     }
 }
