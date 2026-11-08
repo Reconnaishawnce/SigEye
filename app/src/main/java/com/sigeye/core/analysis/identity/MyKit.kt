@@ -1,5 +1,6 @@
 package com.sigeye.core.analysis.identity
 
+import com.sigeye.core.analysis.presence.ConvoyTracker
 import kotlin.math.abs
 
 /** One advertiser as heard over a short window, before anything has been decided about it. */
@@ -21,6 +22,10 @@ data class Owned(
     val label: String,
     val medianRssi: Int,
     val why: String,
+    /** A Wi-Fi network rather than a Bluetooth device. [address] is then its BSSID. */
+    val wifi: Boolean = false,
+    /** A Wi-Fi network on a private address, which is what phone hotspots usually use. */
+    val privateAddress: Boolean = false,
 )
 
 /**
@@ -108,6 +113,47 @@ object MyKit {
             why = "$middle dBm and steady to within $wander dB for the whole window. " +
                 "Something across a room does not hold that still while you move.",
         )
+    }
+
+    /** Loud enough for a hotspot in your pocket or the car you are sitting in. */
+    const val WIFI_ON_PERSON_DBM = -55
+
+    /** Scans needed before anything is said. One reading proves nothing. */
+    const val WIFI_MIN_SCANS = 2
+
+    /**
+     * Wi-Fi networks that look like they are yours: a phone hotspot, a car, a travel router.
+     *
+     * A different test from Bluetooth, because Wi-Fi arrives as one reading per scan and
+     * half a minute holds three or four of them. So the bar is loud and present in almost
+     * every scan, rather than steady over dozens of packets. A router you happen to be
+     * standing next to passes too, which is why these are suggestions and why one on a
+     * public address is not pre-ticked.
+     *
+     * @param scans how many Wi-Fi scans completed during the window.
+     */
+    fun wifiCandidates(seen: List<Nearby>, scans: Int): List<Owned> {
+        if (scans < WIFI_MIN_SCANS) return emptyList()
+        val needed = maxOf(WIFI_MIN_SCANS, scans - 1)
+        return seen.mapNotNull { network ->
+            if (network.packets < needed) return@mapNotNull null
+            val middle = medianOf(network.rssis) ?: return@mapNotNull null
+            if (middle < WIFI_ON_PERSON_DBM) return@mapNotNull null
+            if (wanderOf(network.rssis) > MAX_WANDER_DB) return@mapNotNull null
+
+            val private = ConvoyTracker.isPrivateBssid(network.address)
+            Owned(
+                address = network.address,
+                label = network.name?.takeIf { it.isNotBlank() } ?: "Hidden network",
+                medianRssi = middle,
+                why = "Wi-Fi at $middle dBm in ${network.packets} of $scans scans. A hotspot " +
+                    "in your pocket or the car you are in looks like this, and so does a " +
+                    "router you are standing next to." +
+                    if (private) " It uses a private address, like most phone hotspots." else "",
+                wifi = true,
+                privateAddress = private,
+            )
+        }.sortedByDescending { it.medianRssi }
     }
 
     fun medianOf(values: List<Int>): Int? {

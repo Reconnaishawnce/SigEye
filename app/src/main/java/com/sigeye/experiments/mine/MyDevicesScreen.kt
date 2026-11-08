@@ -41,6 +41,7 @@ import com.sigeye.core.analysis.identity.MyKit
 import com.sigeye.core.analysis.identity.Nearby
 import com.sigeye.core.analysis.identity.Owned
 import com.sigeye.core.ble.BleScanHub
+import com.sigeye.core.wifi.WifiScanHub
 import com.sigeye.ui.PermissionGate
 import com.sigeye.ui.PermissionReason
 import com.sigeye.ui.Section
@@ -50,6 +51,9 @@ private const val HUB_TAG = "mydevices"
 
 /** How long to listen before deciding. Long enough that somebody turns around once. */
 private const val WINDOW_MS = 30_000L
+
+/** How often to ask for a Wi-Fi scan. The hub refuses anything faster anyway. */
+private const val WIFI_EVERY_MS = 8_000L
 
 /**
  * Marking the devices you are carrying, so the rest of the app stops counting them.
@@ -122,12 +126,53 @@ private fun Finder() {
     var found by remember { mutableStateOf<List<Owned>>(emptyList()) }
     val picked = remember { mutableStateMapOf<String, Boolean>() }
     val heard = remember { mutableStateMapOf<String, Nearby>() }
+    val networks = remember { mutableStateMapOf<String, Nearby>() }
+    var wifiScans by remember { mutableStateOf(0) }
 
     if (listening) {
         DisposableEffect(Unit) {
             BleScanHub.init(context)
             BleScanHub.acquire(HUB_TAG)
-            onDispose { BleScanHub.release(HUB_TAG) }
+            WifiScanHub.acquire(context, HUB_TAG)
+            onDispose {
+                BleScanHub.release(HUB_TAG)
+                WifiScanHub.release(context, HUB_TAG)
+            }
+        }
+
+        // Wi-Fi alongside Bluetooth, for your hotspot and your car. Each finished scan is
+        // one reading per network; whatever the phone already had cached is skipped,
+        // because it may be from somewhere else entirely.
+        LaunchedEffect(Unit) {
+            networks.clear()
+            wifiScans = 0
+            var seen = WifiScanHub.state.value.scans
+            WifiScanHub.state.collect { state ->
+                if (state.scans == seen) return@collect
+                seen = state.scans
+                wifiScans++
+                state.latest.forEach { point ->
+                    val existing = networks[point.bssid]
+                    networks[point.bssid] = existing?.copy(
+                        name = point.ssid ?: existing.name,
+                        rssis = existing.rssis + point.rssi,
+                        lastSeenMs = point.seenAtMs,
+                    ) ?: Nearby(
+                        address = point.bssid,
+                        name = point.ssid,
+                        rssis = listOf(point.rssi),
+                        firstSeenMs = point.seenAtMs,
+                        lastSeenMs = point.seenAtMs,
+                    )
+                }
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                WifiScanHub.requestScan()
+                delay(WIFI_EVERY_MS)
+            }
         }
 
         LaunchedEffect(Unit) {
@@ -162,9 +207,13 @@ private fun Finder() {
                 elapsedMs = System.currentTimeMillis() - startedAt
                 if (elapsedMs >= WINDOW_MS) break
             }
-            found = MyKit.candidates(heard.values.toList(), WINDOW_MS)
-                .filterNot { mine.isMine(it.address) }
-            found.forEach { picked[it.address] = true }
+            found = (
+                MyKit.candidates(heard.values.toList(), WINDOW_MS) +
+                    MyKit.wifiCandidates(networks.values.toList(), wifiScans)
+                ).filterNot { mine.isMine(it.address) }
+            // A router you are standing next to looks the same as your own hotspot, so only
+            // Bluetooth and private-address networks start ticked.
+            found.forEach { picked[it.address] = !it.wifi || it.privateAddress }
             listening = false
         }
     }
@@ -190,7 +239,7 @@ private fun Finder() {
             Spacer(Modifier.height(6.dp))
             Text(
                 "${(WINDOW_MS - elapsedMs).coerceAtLeast(0L) / 1000}s left, " +
-                    "${heard.size} devices heard",
+                    "${heard.size} devices and ${networks.size} networks heard",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -244,10 +293,10 @@ private fun Finder() {
     if (!listening && found.isEmpty() && elapsedMs >= WINDOW_MS) {
         Spacer(Modifier.height(14.dp))
         Text(
-            "Nothing behaved like it was on you. That is a real answer rather than a " +
-                "failure: if your watch is paired and idle it may not have advertised at " +
-                "all in that window. Try again with the watch screen woken up, or with " +
-                "earbuds taken out of the case.",
+            "Nothing behaved like it was on you. A paired, idle watch may not have " +
+                "advertised in that window, and a hotspot only shows up while it is on. " +
+                "Wake the watch, take the earbuds out of the case, or turn the hotspot on, " +
+                "and try again.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -404,6 +453,13 @@ private fun CandidateRow(candidate: Owned, checked: Boolean, onCheck: (Boolean) 
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
+                if (candidate.wifi) {
+                    Text(
+                        if (candidate.privateAddress) "Wi-Fi network, private address" else "Wi-Fi network",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Text(
                     candidate.address,
                     style = MaterialTheme.typography.labelSmall,
