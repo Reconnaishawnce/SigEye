@@ -4,9 +4,11 @@ import android.content.Context
 import com.sigeye.core.analysis.identity.RotationLab
 import com.sigeye.core.analysis.presence.ConvoyTracker
 import com.sigeye.core.analysis.presence.PlaceProfile
+import com.sigeye.core.analysis.presence.SeenNetwork
 import com.sigeye.core.analysis.record.ForensicRecorder
 import com.sigeye.core.analysis.record.TrackDetail
 import com.sigeye.core.ble.Advert
+import com.sigeye.core.wifi.AccessPoint
 import com.sigeye.core.ble.BeaconDecoder
 import com.sigeye.core.ble.BleScanHub
 import com.sigeye.core.ble.shape
@@ -152,6 +154,33 @@ object Recordings {
      */
     @Volatile
     var forensicsIncludesMine: Boolean = false
+
+    /**
+     * Feeds one Wi-Fi scan to whichever recordings want it.
+     *
+     * Networks you have marked as yours are left out of the journey, the same way your
+     * Bluetooth devices are: your own hotspot and your car follow you by definition.
+     */
+    fun onWifiScan(points: List<AccessPoint>, nowMs: Long, modes: Set<ScanService.Mode>) {
+        if (modes.contains(ScanService.Mode.PLACE)) {
+            points.forEach { point ->
+                placeWifi.observe(
+                    address = point.bssid,
+                    rssi = point.rssi,
+                    atMs = nowMs,
+                    label = point.ssid ?: "Hidden network",
+                )
+            }
+        }
+        if (modes.contains(ScanService.Mode.CONVOY)) {
+            convoy.wifiScan(
+                networks = points
+                    .filterNot { mine?.isMine(it.bssid) == true }
+                    .map { SeenNetwork(it.bssid, it.ssid, it.rssi) },
+                atMs = nowMs,
+            )
+        }
+    }
 
     /** Feeds one advertisement to whichever recordings are running. */
     fun onAdvert(advert: Advert, modes: Set<ScanService.Mode>) {

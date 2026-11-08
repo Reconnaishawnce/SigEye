@@ -212,8 +212,8 @@ object Experiments {
             id = CONVOY,
             title = "Traveling Companions",
             blurb = "The devices that turned up in every place you recorded, not just one.",
-            teaches = "Record two or three places, then see what turned up in all of them. Anything " +
-                "in every one of them came with you rather than living in any of them.",
+            teaches = "Record two or three places, then see what turned up in all of them. Anything in " +
+                "every one came with you, including Wi-Fi from a hotspot or a car.",
             category = Experiment.Category.PRIVACY,
             status = Experiment.Status.ACTIVE,
             needs = "Genuinely different places, and enough time between them. File your " +
@@ -224,8 +224,8 @@ object Experiments {
                 "Do it once more, somewhere else again.",
                 "Anything that turned up in all three came with you.",
             ),
-            limits = "Only devices with a fixed address prove anything. A randomized address " +
-                "appearing twice is usually two different devices.",
+            limits = "Only fixed addresses prove anything; a randomized one appearing twice is usually " +
+                "two different devices. Wi-Fi finds hotspots and cars, not phones in pockets.",
         ),
         Experiment(
             id = WATCHLIST,

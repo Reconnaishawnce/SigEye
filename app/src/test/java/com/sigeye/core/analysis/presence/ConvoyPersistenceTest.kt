@@ -118,7 +118,7 @@ class ConvoyPersistenceTest {
     @Test
     fun `the export names every device in every leg`() {
         val csv = journey().csv()
-        assertTrue(csv.contains("leg,leg_label,address,label,packets,best_rssi_dbm,random"))
+        assertTrue(csv.contains("leg,leg_label,radio,address,label,packets,best_rssi_dbm,random"))
         assertTrue(csv.contains("FOLLOWER"))
         assertTrue(csv.contains("Home"))
         assertTrue(csv.contains("Work"))
@@ -131,7 +131,7 @@ class ConvoyPersistenceTest {
         tracker.observe("A", -60, 1_000L, label = "Bob, the printer")
         tracker.closeLeg(minute)
         tracker.csv().trim().lines().drop(2).forEach {
-            assertEquals("wrong column count in: $it", 7, it.split(',').size)
+            assertEquals("wrong column count in: $it", 8, it.split(',').size)
         }
     }
 

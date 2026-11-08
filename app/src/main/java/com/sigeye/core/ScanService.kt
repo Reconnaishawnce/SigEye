@@ -164,9 +164,9 @@ class ScanService : Service() {
             // away - which for a follow is most of it.
             Mode.ROTATION_LAB -> Recordings.startRotationLab(now)
 
-            Mode.PLACE -> startWifiForPlace()
+            Mode.PLACE, Mode.CONVOY -> startWifiFeed()
 
-            Mode.FORENSICS, Mode.CONVOY, Mode.FOLLOW -> Unit
+            Mode.FORENSICS, Mode.FOLLOW -> Unit
         }
 
         BleScanHub.acquire(HUB_TAG)
@@ -194,8 +194,12 @@ class ScanService : Service() {
             // screen decides what to do with it.
             // The lab keeps what it has for the same reason: half an hour of a carriage is
             // not something to throw away because somebody stopped the scan.
-            Mode.PLACE -> stopWifiForPlace()
-            Mode.CONVOY, Mode.FOLLOW, Mode.ROTATION_LAB -> Unit
+            // The Wi-Fi scan is shared by the two experiments that use it, so it only
+            // stops once neither is running.
+            Mode.PLACE, Mode.CONVOY -> {
+                if (Mode.PLACE !in modes && Mode.CONVOY !in modes) stopWifiFeed()
+            }
+            Mode.FOLLOW, Mode.ROTATION_LAB -> Unit
         }
         publishModes()
         if (modes.isEmpty()) {
@@ -212,14 +216,14 @@ class ScanService : Service() {
     }
 
     /**
-     * A Wi-Fi scan every quarter of a minute, fed into the place profile.
+     * A Wi-Fi scan every quarter of a minute, for Place Profiler and Traveling Companions.
      *
      * Slower than Bluetooth by nature: each scan is a snapshot, and Android allows four every
      * two minutes unless throttling is turned off in developer options. For ten-minute slices
-     * that is plenty. Skipped during a replay, because a live router in a recorded afternoon
-     * would describe neither.
+     * and multi-minute legs that is plenty. Skipped during a replay, because a live router in
+     * a recorded afternoon would describe neither.
      */
-    private fun startWifiForPlace() {
+    private fun startWifiFeed() {
         if (wifiFeed != null) return
         WifiScanHub.acquire(this, WIFI_TAG)
         wifiFeed = scope.launch {
@@ -229,15 +233,7 @@ class ScanService : Service() {
                     if (state.scans == seen) return@collect
                     seen = state.scans
                     if (Replay.active) return@collect
-                    val now = Clock.nowMs()
-                    state.latest.forEach { point ->
-                        Recordings.placeWifi.observe(
-                            address = point.bssid,
-                            rssi = point.rssi,
-                            atMs = now,
-                            label = point.ssid ?: "Hidden network",
-                        )
-                    }
+                    Recordings.onWifiScan(state.latest, Clock.nowMs(), modes.toSet())
                 }
             }
             while (isActive) {
@@ -247,14 +243,14 @@ class ScanService : Service() {
         }
     }
 
-    private fun stopWifiForPlace() {
+    private fun stopWifiFeed() {
         wifiFeed?.cancel()
         wifiFeed = null
         WifiScanHub.release(this, WIFI_TAG)
     }
 
     private fun shutdownInternals() {
-        stopWifiForPlace()
+        stopWifiFeed()
         pump?.cancel()
         ticker?.cancel()
         pump = null

@@ -12,6 +12,8 @@ data class JourneyDevice(
     val firstSeenMs: Long = 0,
     val lastSeenMs: Long = 0,
     val bestRssi: Int = -127,
+    /** A Wi-Fi network rather than a Bluetooth device. [address] is then its BSSID. */
+    val wifi: Boolean = false,
 )
 
 /** A leg, with everything it heard, as written to disk. */
@@ -21,7 +23,12 @@ data class JourneyLeg(
     val startedAtMs: Long,
     val endedAtMs: Long,
     val devices: List<JourneyDevice>,
+    /** Wi-Fi scans taken during the leg. Zero means Wi-Fi was not looked at, not that it was empty. */
+    val wifiScans: Int = 0,
 )
+
+/** One access point in one Wi-Fi scan. */
+data class SeenNetwork(val bssid: String, val ssid: String?, val rssi: Int)
 
 /** One place, or one stretch of a journey. */
 data class Leg(
@@ -58,6 +65,8 @@ data class Follower(
     val presences: List<LegPresence>,
     val totalLegs: Int,
     val yours: Boolean = false,
+    /** A Wi-Fi network carried with you, rather than a Bluetooth device. */
+    val wifi: Boolean = false,
 ) {
     val legsShared: Int get() = presences.size
 
@@ -106,14 +115,27 @@ data class Follower(
             out.add("You have filed this as one of yours, so it is excluded.")
             return out
         }
-        out.add("Seen in $legsShared of $totalLegs legs.")
+        out.add(
+            if (wifi) "Heard in $legsShared of the $totalLegs legs that scanned Wi-Fi."
+            else "Seen in $legsShared of $totalLegs legs.",
+        )
         if (spanMs >= LONG_SPAN_MS) {
             out.add(String.format(Locale.US, "Across %.0f minutes.", spanMs / 60_000.0))
         }
         if (gaps > 0) {
             out.add("Absent for $gaps leg${if (gaps == 1) "" else "s"} in between.")
         }
-        if (isRandom) {
+        if (wifi) {
+            out.add(
+                if (isRandom) {
+                    "This network uses a private address, which some phone hotspots change " +
+                        "now and then. It still looks carried, but it cannot be rated higher."
+                } else {
+                    "The network's address is fixed, so it is the same one each time. " +
+                        "Something carried it with you: a phone hotspot, a car or a portable router."
+                },
+            )
+        } else if (isRandom) {
             out.add(
                 "The address is randomized, which normally changes every fifteen minutes " +
                     "or so. Seeing the same one across several legs means either it is " +
@@ -136,7 +158,12 @@ data class Follower(
 data class ConvoyReport(
     val legs: List<Leg>,
     val followers: List<Follower>,
+    /** Bluetooth devices heard anywhere. */
     val devicesSeen: Int,
+    /** Wi-Fi networks heard anywhere. */
+    val networksSeen: Int = 0,
+    /** Legs that took at least one Wi-Fi scan. */
+    val wifiLegs: Int = 0,
 ) {
     val candidates: List<Follower>
         get() = followers.filter { it.confidence != FollowConfidence.NONE }
@@ -211,6 +238,27 @@ data class ConvoyReport(
  */
 class ConvoyTracker {
 
+    companion object {
+        /** Internal key prefix, so a BSSID and a Bluetooth address can never collide. */
+        private const val WIFI_KEY = "wifi:"
+
+        /** Scans a network must appear in, within one leg, to count as really there. */
+        const val WIFI_MIN_SCANS = 2
+
+        private fun isWifiKey(key: String) = key.startsWith(WIFI_KEY)
+
+        /**
+         * Whether a BSSID is a private, locally assigned address rather than one built in.
+         *
+         * Wi-Fi marks it with one bit of the first byte. Phone hotspots set it when they use
+         * a private address; ordinary routers almost never do.
+         */
+        fun isPrivateBssid(bssid: String): Boolean {
+            val first = bssid.take(2).toIntOrNull(16) ?: return false
+            return first and 0x02 != 0
+        }
+    }
+
     private class LegBuilder(
         val index: Int,
         var label: String,
@@ -221,6 +269,7 @@ class ConvoyTracker {
         val labels = LinkedHashMap<String, String>()
         val vendors = LinkedHashMap<String, String?>()
         val randoms = LinkedHashMap<String, Boolean>()
+        var wifiScans = 0
     }
 
     private val legs = mutableListOf<LegBuilder>()
@@ -275,8 +324,10 @@ class ConvoyTracker {
                     firstSeenMs = presence.firstSeenMs,
                     lastSeenMs = presence.lastSeenMs,
                     bestRssi = presence.bestRssi,
-                )
+                    wifi = isWifiKey(address),
+                ).let { if (it.wifi) it.copy(address = address.removePrefix(WIFI_KEY)) else it }
             },
+            wifiScans = leg.wifiScans,
         )
     }
 
@@ -287,8 +338,9 @@ class ConvoyTracker {
         current = null
         journey.sortedBy { it.index }.forEach { saved ->
             val builder = LegBuilder(legs.size, saved.label, saved.startedAtMs, saved.endedAtMs)
+            builder.wifiScans = saved.wifiScans
             saved.devices.forEach { device ->
-                val key = device.address.uppercase(Locale.US)
+                val key = (if (device.wifi) WIFI_KEY else "") + device.address.uppercase(Locale.US)
                 builder.seen[key] = LegPresence(
                     legIndex = builder.index,
                     packets = device.packets,
@@ -336,12 +388,13 @@ class ConvoyTracker {
     @Synchronized
     fun csv(): String = buildString {
         appendLine("# SigEye journey")
-        appendLine("leg,leg_label,address,label,packets,best_rssi_dbm,random")
+        appendLine("leg,leg_label,radio,address,label,packets,best_rssi_dbm,random")
         legs.forEach { leg ->
             leg.seen.forEach { (address, presence) ->
                 append(leg.index).append(',')
                     .append(leg.label.replace(',', ' ')).append(',')
-                    .append(address).append(',')
+                    .append(if (isWifiKey(address)) "wifi" else "bluetooth").append(',')
+                    .append(address.removePrefix(WIFI_KEY)).append(',')
                     .append((leg.labels[address] ?: address).replace(',', ' ')).append(',')
                     .append(presence.packets).append(',')
                     .append(presence.bestRssi).append(',')
@@ -377,6 +430,34 @@ class ConvoyTracker {
     }
 
     /**
+     * One Wi-Fi scan, folded into the leg being recorded.
+     *
+     * The scan is counted even when it is empty, because "Wi-Fi was looked at and nothing
+     * followed" and "Wi-Fi was never looked at" are different answers, and only the first
+     * should count against a network that was heard everywhere else.
+     */
+    @Synchronized
+    fun wifiScan(networks: List<SeenNetwork>, atMs: Long) {
+        val leg = current ?: return
+        leg.wifiScans++
+        networks.forEach { network ->
+            val bssid = network.bssid.uppercase(Locale.US)
+            val key = WIFI_KEY + bssid
+            val existing = leg.seen[key]
+            leg.seen[key] = LegPresence(
+                legIndex = leg.index,
+                packets = (existing?.packets ?: 0) + 1,
+                firstSeenMs = existing?.firstSeenMs ?: atMs,
+                lastSeenMs = atMs,
+                bestRssi = maxOf(network.rssi, existing?.bestRssi ?: network.rssi),
+            )
+            leg.labels[key] = network.ssid?.takeIf { it.isNotBlank() } ?: "Hidden network"
+            leg.randoms[key] = isPrivateBssid(bssid)
+        }
+        if (atMs > leg.endedAtMs) leg.endedAtMs = atMs
+    }
+
+    /**
      * @param mine addresses filed as belonging to the user, which follow them by design.
      * @param minPackets how many readings inside a leg count as having really been there,
      *   so a single stray packet from three streets away does not make something a
@@ -392,30 +473,45 @@ class ConvoyTracker {
         val byAddress = LinkedHashMap<String, MutableList<LegPresence>>()
         legs.forEach { leg ->
             leg.seen.forEach { (address, presence) ->
-                if (presence.packets >= minPackets) {
+                // Wi-Fi arrives as one reading per scan, every fifteen seconds, so asking
+                // for as many readings as a Bluetooth device sends in a second would throw
+                // away every network heard during a short stop.
+                val needed = if (isWifiKey(address)) WIFI_MIN_SCANS else minPackets
+                if (presence.packets >= needed) {
                     byAddress.getOrPut(address) { mutableListOf() }.add(presence)
                 }
             }
         }
 
+        // A network can only be judged against the legs that looked for networks. A leg
+        // added from an old Bluetooth snapshot never scanned Wi-Fi, and counting it would
+        // mean no network could ever be "in every leg".
+        val wifiLegs = legs.count { it.wifiScans > 0 }
+
         val followers = byAddress
             .filterValues { it.size >= 2 }
             .map { (address, presences) ->
+                val wifi = isWifiKey(address)
+                val plain = address.removePrefix(WIFI_KEY)
                 Follower(
-                    address = address,
-                    label = legs.firstNotNullOfOrNull { it.labels[address] } ?: address,
+                    address = plain,
+                    label = legs.firstNotNullOfOrNull { it.labels[address] } ?: plain,
                     vendor = legs.firstNotNullOfOrNull { it.vendors[address] },
                     isRandom = legs.any { it.randoms[address] == true },
                     presences = presences.sortedBy { it.legIndex },
-                    totalLegs = legs.size,
-                    yours = mineUpper.contains(address),
+                    totalLegs = if (wifi) wifiLegs else legs.size,
+                    yours = mineUpper.contains(plain),
+                    wifi = wifi,
                 )
             }
 
+        val keys = legs.flatMap { it.seen.keys }.distinct()
         return ConvoyReport(
             legs = closed,
             followers = followers,
-            devicesSeen = legs.flatMap { it.seen.keys }.distinct().size,
+            devicesSeen = keys.count { !isWifiKey(it) },
+            networksSeen = keys.count { isWifiKey(it) },
+            wifiLegs = wifiLegs,
         )
     }
 }

@@ -16,8 +16,9 @@ data class SavedJourney(
     val legs: List<JourneyLeg>,
 ) {
     val legCount: Int get() = legs.size
-    val deviceCount: Int get() = legs.flatMap { leg -> leg.devices.map { it.address } }
-        .distinct().size
+    val deviceCount: Int
+        get() = legs.flatMap { leg -> leg.devices.filterNot { it.wifi }.map { it.address } }
+            .distinct().size
 }
 
 /**
@@ -98,7 +99,8 @@ class JourneyStore private constructor(context: Context) {
                         .put("packets", device.packets)
                         .put("first", device.firstSeenMs)
                         .put("last", device.lastSeenMs)
-                        .put("best", device.bestRssi),
+                        .put("best", device.bestRssi)
+                        .put("wifi", device.wifi),
                 )
             }
             legs.put(
@@ -107,7 +109,8 @@ class JourneyStore private constructor(context: Context) {
                     .put("label", leg.label)
                     .put("started", leg.startedAtMs)
                     .put("ended", leg.endedAtMs)
-                    .put("devices", devices),
+                    .put("devices", devices)
+                    .put("wifiScans", leg.wifiScans),
             )
         }
         return JSONObject()
@@ -129,6 +132,7 @@ class JourneyStore private constructor(context: Context) {
                     label = leg.optString("label", "Leg ${index + 1}"),
                     startedAtMs = leg.optLong("started"),
                     endedAtMs = leg.optLong("ended"),
+                    wifiScans = leg.optInt("wifiScans", 0),
                     devices = (0 until devices.length()).map { position ->
                         val device = devices.getJSONObject(position)
                         JourneyDevice(
@@ -142,6 +146,7 @@ class JourneyStore private constructor(context: Context) {
                             firstSeenMs = device.optLong("first"),
                             lastSeenMs = device.optLong("last"),
                             bestRssi = device.optInt("best", -127),
+                            wifi = device.optBoolean("wifi", false),
                         )
                     },
                 )

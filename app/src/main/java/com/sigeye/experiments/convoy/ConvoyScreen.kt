@@ -40,6 +40,7 @@ import com.sigeye.core.DeviceBook
 import com.sigeye.core.Experiments
 import com.sigeye.core.Feedback
 import com.sigeye.core.JourneyStore
+import com.sigeye.core.MyDevices
 import com.sigeye.core.Permissions
 import com.sigeye.core.Recordings
 import com.sigeye.core.SavedJourney
@@ -128,8 +129,10 @@ private fun Live() {
     var exported by remember { mutableStateOf<String?>(null) }
     var restored by remember { mutableStateOf(false) }
 
-    val mine = remember(notes) {
-        notes.filterValues { it.lists.contains(MINE_LIST) }.keys
+    val myDevices = remember { MyDevices.get(context) }
+    val owned by myDevices.devices.collectAsStateWithLifecycle()
+    val mine = remember(notes, owned) {
+        notes.filterValues { it.lists.contains(MINE_LIST) }.keys + owned.map { it.address }
     }
 
 
@@ -194,10 +197,9 @@ private fun Live() {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Before you start: file your own earbuds, watch and car under a list " +
-                        "called \"$MINE_LIST\" in Device Inspector. They follow you " +
-                        "perfectly, and without that the list is forty rows of your own " +
-                        "belongings.",
+                    "Your own earbuds, watch, hotspot and car will show up too, because " +
+                        "they follow you. Tap one and choose This is mine, and it stays out " +
+                        "of every journey after that.",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -221,6 +223,7 @@ private fun Live() {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             Stat("Legs", "${tracker.legCount}", "recorded")
             Stat("Devices", "${report.devicesSeen}", "heard anywhere")
+            Stat("Networks", "${report.networksSeen}", "Wi-Fi heard")
             Stat("Candidates", "${report.candidates.size}", "in more than one")
         }
 
@@ -312,21 +315,52 @@ private fun Live() {
             }
         }
 
-        report.candidates.forEach { follower ->
+        val (wifiCandidates, bluetoothCandidates) = report.candidates.partition { it.wifi }
+
+        bluetoothCandidates.forEach { follower ->
             Spacer(Modifier.height(8.dp))
             FollowerCard(
                 follower = follower,
-                legs = report.legs.size,
                 expanded = expanded == follower.address,
                 onToggle = {
                     expanded = if (expanded == follower.address) null else follower.address
                 },
-                onMine = {
-                    book.createList(MINE_LIST)
-                    book.toggleList(follower.address, MINE_LIST)
-                },
+                onMine = { myDevices.add(follower.address, follower.label) },
                 onRequestNewList = { newListFor = follower.address },
             )
+        }
+
+        // Networks carried with you: hotspots, cars, portable routers. A router stays at
+        // its building, so one heard in several unrelated places was brought along.
+        if (report.wifiLegs >= 2) {
+            Spacer(Modifier.height(16.dp))
+            Text("Wi-Fi carried with you", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Routers stay put, so a network heard in more than one place was brought along. " +
+                    "This finds hotspots and cars, not phones in pockets.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (wifiCandidates.isEmpty()) {
+                Text(
+                    "No network turned up in more than one leg.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            wifiCandidates.forEach { follower ->
+                Spacer(Modifier.height(8.dp))
+                FollowerCard(
+                    follower = follower,
+                    expanded = expanded == "wifi:" + follower.address,
+                    onToggle = {
+                        val key = "wifi:" + follower.address
+                        expanded = if (expanded == key) null else key
+                    },
+                    onMine = { myDevices.add(follower.address, follower.label) },
+                    onRequestNewList = {},
+                )
+            }
         }
 
         if (snapshots.isNotEmpty()) {
@@ -568,7 +602,6 @@ private fun Live() {
 @Composable
 private fun FollowerCard(
     follower: Follower,
-    legs: Int,
     expanded: Boolean,
     onToggle: () -> Unit,
     onMine: () -> Unit,
@@ -598,7 +631,11 @@ private fun FollowerCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        follower.address + if (follower.isRandom) "  (random)" else "",
+                        follower.address + when {
+                            follower.wifi && follower.isRandom -> "  (private)"
+                            follower.isRandom -> "  (random)"
+                            else -> ""
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -606,7 +643,7 @@ private fun FollowerCard(
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "${follower.legsShared}/$legs",
+                        "${follower.legsShared}/${follower.totalLegs}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -658,13 +695,16 @@ private fun FollowerCard(
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                Spacer(Modifier.height(6.dp))
-                DeviceActions(
-                    address = follower.address,
-                    displayName = follower.label,
-                    isRandomAddress = follower.isRandom,
-                    onRequestNewList = onRequestNewList,
-                )
+                // Locate, lists and the rest are Bluetooth actions. A network has none of them.
+                if (!follower.wifi) {
+                    Spacer(Modifier.height(6.dp))
+                    DeviceActions(
+                        address = follower.address,
+                        displayName = follower.label,
+                        isRandomAddress = follower.isRandom,
+                        onRequestNewList = onRequestNewList,
+                    )
+                }
             } else {
                 Text(
                     "Tap for why",
