@@ -35,6 +35,11 @@
          Vibrator.vibrate() throws a SecurityException that costs nothing to ignore and
          silently does nothing - which is exactly what it did until someone noticed. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+      Held only while a long Train Spotter recording is running, so the once-a-second row
+      keeps coming with the screen off. Released the moment the recording stops.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />

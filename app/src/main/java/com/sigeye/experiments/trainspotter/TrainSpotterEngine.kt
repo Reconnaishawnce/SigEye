@@ -87,10 +87,14 @@ class TrainSpotterEngine(
 
     fun onAdvert(advert: Advert) {
         aggregator.observe(advert.address, advert.rssi, advert.atMs)
+        TrainRecorder.onAdvert(advert.address, advert.rssi, advert.atMs)
     }
 
     /** Called on the service tick. Closes a bin when one is due. */
     fun tick(nowMs: Long) {
+        // The long recording rides on this scan and this timer rather than running its own.
+        TrainRecorder.tick(nowMs)
+
         // A backwards clock jump would otherwise park the next boundary in the far
         // future and stall binning indefinitely.
         if (nextCloseAtMs - nowMs > config.binMillis * 2) {
@@ -164,6 +168,9 @@ class TrainSpotterEngine(
     }
 
     fun stop() {
+        // No scan, nothing to record. Closing the file here means stopping the Train
+        // Spotter can never leave a recording open and a wake lock held.
+        TrainRecorder.stop()
         csv.close()
         PulseState.update { it.copy(running = false, currentCount = 0) }
     }

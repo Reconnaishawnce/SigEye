@@ -334,6 +334,11 @@ private fun Monitor() {
     // Days of recording, which also went into the CSV and nowhere else. The live chart
     // shows the last ten minutes; this shows what the place does, which is what leaving a
     // phone on a windowsill for a fortnight was for.
+    // Hours or days of it, one row a second, drawn as a single picture with the trains
+    // and the rush hour picked out.
+    Spacer(Modifier.height(12.dp))
+    LongRecordingCard()
+
     Spacer(Modifier.height(12.dp))
     DayStripCard(state.config)
 
