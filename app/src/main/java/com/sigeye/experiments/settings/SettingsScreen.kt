@@ -18,6 +18,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sigeye.core.CrashLog
 import com.sigeye.core.DeviceBook
 import com.sigeye.core.IgnoreList
+import com.sigeye.core.diagnostics.Diagnostics
 import com.sigeye.core.evidence.Bundler
 import com.sigeye.core.evidence.Evidence
 import com.sigeye.core.Replay
@@ -198,6 +200,8 @@ fun SettingsScreen(
         CaptureSection()
 
         Spacer(Modifier.height(16.dp))
+        ReportSection()
+
         CrashSection()
 
         Spacer(Modifier.height(10.dp))
@@ -424,6 +428,41 @@ private fun DensitySection(
  * network anywhere in it. A crash on somebody else's phone used to be invisible forever;
  * now there is a file, and they can decide whether to send it.
  */
+/** The shake switch, and a button for anybody who would rather not shake their phone. */
+@Composable
+private fun ReportSection() {
+    var shake by remember { mutableStateOf(Diagnostics.shakeToReport) }
+    Section(
+        title = "Report a slowdown",
+        summary = if (shake) "Shake your phone to send a report." else "Shake to report is off.",
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Shake to report", style = MaterialTheme.typography.bodyMedium)
+            Switch(
+                checked = shake,
+                onCheckedChange = {
+                    shake = it
+                    Diagnostics.shakeToReport = it
+                },
+            )
+        }
+        Text(
+            "SigEye keeps a note of every freeze and stutter it notices. A report sends those, " +
+                "with the app's state at the time, and nothing about the devices around you.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = { Diagnostics.requestReport() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Send a report now")
+        }
+    }
+}
+
 @Composable
 private fun CrashSection() {
     val context = LocalContext.current

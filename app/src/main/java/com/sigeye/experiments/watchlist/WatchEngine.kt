@@ -48,7 +48,7 @@ class WatchEngine(
                 atMs = advert.atMs,
             )
             store.recordHit(hit)
-            Log.i(TAG, "watch hit: ${rule.label} -> ${hit.displayName} @ ${advert.rssi}")
+            Log.i(TAG, "watch hit: ${rule.label} @ ${advert.rssi}")
             if (rule.notify) onAlert(hit)
         }
     }

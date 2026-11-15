@@ -2,6 +2,7 @@ package com.sigeye
 
 import android.app.Application
 import com.sigeye.core.CrashLog
+import com.sigeye.core.diagnostics.Diagnostics
 
 /**
  * The first thing that runs, which is why the crash handler is installed here.
@@ -15,5 +16,7 @@ class SigEyeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        // Freeze watching starts here too, so a slow cold start is caught as well.
+        Diagnostics.install(this)
     }
 }

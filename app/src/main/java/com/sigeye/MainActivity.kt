@@ -54,13 +54,33 @@ import com.sigeye.experiments.wifi.WifiScreen
 import com.sigeye.home.HomeScreen
 import com.sigeye.ui.SigEyeTheme
 import com.sigeye.core.ble.BleScanHub
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sigeye.core.diagnostics.Diagnostics
+import com.sigeye.core.diagnostics.ShakeWatcher
 import com.sigeye.ui.ReplayBanner
+import com.sigeye.ui.ReportDialog
 import com.sigeye.ui.TargetBar
 import com.sigeye.ui.TargetRoutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private val shake by lazy { ShakeWatcher(this) { Diagnostics.requestReport() } }
+
+    override fun onResume() {
+        super.onResume()
+        shake.start()
+        Diagnostics.watchFrames(window)
+    }
+
+    override fun onPause() {
+        shake.stop()
+        Diagnostics.stopFrames(window)
+        super.onPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // A megabyte off disk, so not on the main thread. Everything that asks for a vendor
@@ -115,6 +135,13 @@ private fun SigEyeApp() {
     val open: (String) -> Unit = { stack.add(it) }
 
     BackHandler(enabled = stack.isNotEmpty(), onBack = goBack)
+
+    // Which screen a freeze happened on is half of every report.
+    val current = stack.lastOrNull()
+    LaunchedEffect(current) { Diagnostics.onScreen(current) }
+
+    val reporting by Diagnostics.asking.collectAsStateWithLifecycle()
+    if (reporting) ReportDialog(onDismiss = { Diagnostics.dismiss() })
 
     Scaffold { padding ->
         Column(Modifier.padding(padding)) {
